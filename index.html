@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>AI Chat UI Demo</title>
+    <!-- Tailwind CSS (保留布局基础) -->
+    <script src="tailwindcss.js"></script>
+    <!-- Lucide Icons -->
+    <script src="lucide.js"></script>
+    <!-- Marked.js -->
+    <script src="marked.js"></script>
+    <!-- Highlight.js (深色代码块) -->
+    <link rel="stylesheet" href="github-dark.min.css">
+    <script src="highlight.js"></script>
+    <style>
+
+        /* ========== 液态玻璃样式 (基于主题类) ========== */
+        body {
+            transition: background 0.2s ease;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        /* ----- 浅色模式 (默认) 背景图片 + 白色半透明叠加层 ----- */
+        body.theme-light {
+            background: linear-gradient(145deg, rgba(255,255,255,0.7), rgba(255,255,255,0.3)), url('1.JPG') center/cover fixed;
+            color: #1f1f1f;
+        }
+        body.theme-light .sidebar {
+            background: rgba(255, 255, 255, 0.6) !important;
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border-right: 1px solid rgba(255,255,255,0.7);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.05);
+        }
+        body.theme-light header {
+            background: rgba(255, 255, 255, 0.5) !important;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.8) !important;
+        }
+        body.theme-light .input-area {
+            background: rgba(255, 255, 255, 0.7) !important;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.9) !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+        }
+        body.theme-light .msg-bubble.ai-bubble {
+            background: rgba(255, 255, 255, 0.55) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.7) !important;
+            color: #1f1f1f;
+        }
+        body.theme-light .msg-bubble.user-bubble {
+            background: rgba(220, 230, 255, 0.7) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.7) !important;
+            color: #1f1f1f;
+        }
+        body.theme-light #model-select,
+        body.theme-light #retry-model-select {
+            background: rgba(255,255,255,0.7) !important;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.6) !important;
+            color: #1f1f1f;
+        }
+        body.theme-light .sidebar button {
+            color: #1e1e1e;
+        }
+        body.theme-light .sidebar button:hover {
+            background: rgba(0,0,0,0.1) !important;
+        }
+        body.theme-light .active-chat {
+            background: rgba(255, 255, 255, 0.5) !important;
+        }
+        body.theme-light .action-btn {
+            color: #3a3a3a;
+            background: rgba(255,255,255,0.3);
+            border-radius: 6px;
+        }
+        /* 悬停效果：去掉放大，仅微调背景色 / 亮度 */
+        body.theme-light .action-btn:hover {
+            background: rgba(0,0,0,0.1) !important;
+            filter: brightness(1.02) !important;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transform: none !important;
+        }
+        body.theme-light pre {
+            background: rgba(20, 20, 30, 0.8) !important;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        body.theme-light .code-copy-btn {
+            background: rgba(255,255,255,0.4);
+            color: #1f1f1f;
+        }
+        body.theme-light #settings-modal > div {
+            background: rgba(255, 255, 255, 0.7) !important;
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border: 1px solid rgba(255,255,255,0.6);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        body.theme-light #retry-popover {
+            background: rgba(255, 255, 255, 0.7) !important;
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.6);
+            color: #1f1f1f;
+        }
+        body.theme-light .temp-btn {
+            background: rgba(255,255,255,0.3);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: #1f1f1f;
+        }
+        body.theme-light .temp-btn.active {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+        /* 字体按钮样式与温度按钮完全一致 */
+        body.theme-light .font-btn {
+            background: rgba(255,255,255,0.3);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: #1f1f1f;
+            flex: 1;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        body.theme-light .font-btn.active {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+        body.theme-light .sync-dot {
+            background-color: #10b981;
+        }
+        body.theme-light .text-gray-200,
+        body.theme-light .text-gray-300,
+        body.theme-light .text-gray-400,
+        body.theme-light .text-gray-500 {
+            color: #2c2c2e !important;
+        }
+        body.theme-light #active-chat-title {
+            color: #1f1f1f !important;
+        }
+        body.theme-light #settings-modal textarea {
+            background: rgba(255,255,255,0.8) !important;
+            color: #1f1f1f !important;
+            border: 1px solid rgba(0,0,0,0.1) !important;
+        }
+        /* 浅色模式删除按钮悬停 */
+        body.theme-light .delete-chat-btn:hover {
+            background: rgba(0,0,0,0.15) !important;
+        }
+
+        /* ----- 深色模式 背景图片 + 黑色半透明叠加层 ----- */
+        body.theme-dark {
+            background: linear-gradient(145deg, rgba(0,0,0,0.7), rgba(0,0,0,0.3)), url('1.JPG') center/cover fixed;
+            color: #f0f0f0;
+        }
+        body.theme-dark .sidebar {
+            background: rgba(20, 20, 25, 0.7) !important;
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border-right: 1px solid rgba(255,255,255,0.15);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        body.theme-dark header {
+            background: rgba(20, 20, 25, 0.5) !important;
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255,255,255,0.1) !important;
+        }
+        body.theme-dark .input-area {
+            background: rgba(30, 30, 35, 0.7) !important;
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+        body.theme-dark .msg-bubble.ai-bubble {
+            background: rgba(45, 45, 55, 0.6) !important;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            color: #f0f0f0;
+        }
+        body.theme-dark .msg-bubble.user-bubble {
+            background: rgba(30, 60, 90, 0.6) !important;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            color: #f0f0f0;
+        }
+        body.theme-dark #model-select,
+        body.theme-dark #retry-model-select {
+            background: rgba(30,30,35,0.8) !important;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            color: #f0f0f0;
+        }
+        body.theme-dark .sidebar button {
+            color: #eaeaea;
+        }
+        body.theme-dark .sidebar button:hover {
+            background: rgba(255,255,255,0.2) !important;
+        }
+        body.theme-dark .active-chat {
+            background: rgba(255, 255, 255, 0.12) !important;
+        }
+        body.theme-dark .action-btn {
+            color: #aaa;
+            background: rgba(255,255,255,0.06);
+        }
+        /* 悬停效果：去掉放大，仅微调背景色 / 亮度 */
+        body.theme-dark .action-btn:hover {
+            background: rgba(255,255,255,0.15) !important;
+            filter: brightness(1.05) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            transform: none !important;
+        }
+        body.theme-dark pre {
+            background: rgba(0, 0, 0, 0.7) !important;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        body.theme-dark .code-copy-btn {
+            background: rgba(50,50,60,0.9);
+            color: #ccc;
+        }
+        body.theme-dark #settings-modal > div {
+            background: rgba(30, 30, 35, 0.8) !important;
+            backdrop-filter: blur(40px);
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+        body.theme-dark #retry-popover {
+            background: rgba(30, 30, 35, 0.8) !important;
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #f0f0f0;
+        }
+        body.theme-dark .temp-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ddd;
+        }
+        body.theme-dark .temp-btn.active {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+        /* 字体按钮样式与温度按钮完全一致 */
+        body.theme-dark .font-btn {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #ddd;
+            flex: 1;
+            padding: 0.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        body.theme-dark .font-btn.active {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+        body.theme-dark .text-gray-200,
+        body.theme-dark .text-gray-300,
+        body.theme-dark .text-gray-400,
+        body.theme-dark .text-gray-500 {
+            color: #c0c0c0 !important;
+        }
+        body.theme-dark #active-chat-title {
+            color: #ffffff !important;
+        }
+        body.theme-dark #settings-modal textarea {
+            background: rgba(30,30,35,0.9) !important;
+            color: #f0f0f0 !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+        }
+        /* 深色模式删除按钮悬停 */
+        body.theme-dark .delete-chat-btn:hover {
+            background: rgba(255,255,255,0.2) !important;
+        }
+
+        /* ========== 全局悬停强化 (移除所有放大，仅保留背景/亮度变化) ========== */
+        button:hover, 
+        .action-btn:hover, 
+        .sidebar button:hover, 
+        #chat-history button:hover, 
+        #send-btn:hover, 
+        #stop-btn:hover, 
+        .temp-btn:hover, 
+        .font-btn:hover,
+        .theme-btn:hover, 
+        select:hover,
+        .model-selector-container select:hover,
+        .delete-chat-btn:hover {
+            transition: all 0.18s ease !important;
+            filter: brightness(1.05) !important;   /* 轻微亮度变化模拟底色改变 */
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important;
+            cursor: pointer;
+            transform: none !important;            /* 确保无放大 */
+        }
+
+        /* 移除之前专门的 transform 规则（如果有重复） */
+        .sidebar button:hover,
+        #chat-history button:hover,
+        .action-btn:hover,
+        #send-btn:hover,
+        #stop-btn:hover,
+        .temp-btn:hover,
+        .font-btn:hover,
+        .theme-btn:hover,
+        select:hover {
+            transform: none !important;
+        }
+
+        textarea:hover, textarea:focus {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        .sidebar button,
+        .action-btn,
+        #send-btn,
+        #stop-btn,
+        .temp-btn,
+        .font-btn,
+        .theme-btn,
+        select {
+            will-change: auto;
+        }
+
+        /* ========== 移动端标题绝对居中 ========== */
+        @media (max-width: 768px) {
+            header {
+                position: relative !important;
+                padding-left: 52px !important;
+                padding-right: 52px !important;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            header > button:first-child {
+                position: absolute !important;
+                left: 8px !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                margin-right: 0 !important;
+                z-index: 10;
+            }
+            #sync-status {
+                position: absolute !important;
+                right: 8px !important;
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+                z-index: 10;
+            }
+            #active-chat-title {
+                flex-grow: 0 !important;
+                width: 100% !important;
+                text-align: center !important;
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+                margin: 0 !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                z-index: 5;
+            }
+        }
+
+        /* ========== 保留原有布局样式 ========== */
+        .sidebar { width: 260px; transition: transform 0.3s ease; z-index: 50; }
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; height: 100%; transform: translateX(-100%); }
+            .sidebar.active { transform: translateX(0); }
+            .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 40; }
+            .sidebar-overlay.active { display: block; }
+        }
+        .chat-row { display: flex; gap: 1rem; width: 100%; max-width: 1000px; margin: 0 auto; padding: 0 1rem; }
+        .ai-row { flex-direction: row; align-items: flex-start; }
+        .user-row { flex-direction: row; align-items: flex-start; justify-content: flex-end; }
+        .msg-bubble { padding: 0.85rem 1.25rem; border-radius: 1.25rem; line-height: 1.6; max-width: 85%; word-wrap: break-word; position: relative; }
+        .ai-bubble { border-top-left-radius: 0.25rem; }
+        .user-bubble { border-top-right-radius: 0.25rem; }
+        .avatar { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 0.25rem; background: rgba(128,128,128,0.3); }
+        .input-area { border-radius: 1.5rem; border-top-left-radius: 0; }
+        pre { padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; overflow-x: auto; position: relative; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .action-btn { display: flex; align-items: center; gap: 4px; font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; transition: all 0.2s; }
+        #model-select { border-bottom: none; border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; padding: 6px 16px; font-size: 0.85rem; outline: none; cursor: pointer; }
+        .code-copy-btn { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; cursor: pointer; opacity: 0; transition: opacity 0.2s; }
+        pre:hover .code-copy-btn { opacity: 1; }
+        @keyframes pulse-ring { 0% { transform: scale(0.33); opacity: 1; } 80%, 100% { opacity: 0; } }
+        .sync-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; position: relative; }
+        .sync-dot::after { content: ''; position: absolute; width: 24px; height: 24px; top: -8px; left: -8px; border-radius: 50%; border: 2px solid #10b981; animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite; }
+        #retry-popover { position: fixed; border-radius: 0.75rem; padding: 0.75rem; min-width: 220px; z-index: 100; }
+        .temp-btn, .font-btn { flex: 1; padding: 0.5rem; text-align: center; font-size: 0.875rem; border-radius: 0.5rem; transition: all 0.2s; cursor: pointer; }
+        #settings-modal { background-color: rgba(0,0,0,0.4); display: none; backdrop-filter: blur(8px); }
+        #settings-modal.flex { display: flex; }
+        .theme-btn { flex: 1; padding: 0.5rem; text-align: center; font-size: 0.875rem; border-radius: 0.5rem; transition: all 0.2s; cursor: pointer; }
+        .theme-btn.active { background: #10b981 !important; border-color: #10b981 !important; color: white !important; }
+
+        /* ========== 新增字体大小调节类 ========== */
+        .font-size-small .msg-bubble { font-size: 0.875rem; }
+        .font-size-medium .msg-bubble { font-size: 1rem; }
+        .font-size-large .msg-bubble { font-size: 1.125rem; }
+        .font-size-small #user-input { font-size: 0.875rem; }
+        .font-size-medium #user-input { font-size: 1rem; }
+        .font-size-large #user-input { font-size: 1.125rem; }
+
+        /* 搜索框样式 */
+        .search-box {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            backdrop-filter: blur(4px);
+        }
+        .theme-dark .search-box {
+            background: rgba(0,0,0,0.3);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .search-box input {
+            background: transparent;
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 0.9rem;
+        }
+        .theme-light .search-box input { color: #1f1f1f; }
+        .theme-dark .search-box input { color: #f0f0f0; }
+
+        /* 垃圾桶按钮基础样式 */
+        .delete-chat-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.375rem;
+            padding: 0.25rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden theme-light font-size-medium" onclick="closeRetryMenu(event)">
+
+    <!-- 侧边栏遮罩 -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+
+    <!-- 侧边栏 -->
+    <aside id="sidebar" class="sidebar h-full flex flex-col p-3 flex-shrink-0">
+        <button onclick="createNewChat()" class="flex items-center gap-3 px-3 py-3 border border-gray-600 rounded-md hover:bg-gray-800 transition-colors mb-4">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span class="text-sm font-medium">开启新对话</span>
+        </button>
+
+        <!-- 新增：对话搜索框 -->
+        <div class="search-box">
+            <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+            <input type="text" id="chat-search" placeholder="搜索对话..." oninput="filterChats()">
+        </div>
+
+        <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
+
+        <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
+            <button onclick="syncData()" class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-md transition-colors text-emerald-400">
+                <i data-lucide="cloud-download" class="w-5 h-5"></i>
+                <span class="text-sm font-medium">立即同步云端</span>
+            </button>
+            <button onclick="toggleSettings()" class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-md transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="text-sm">设置</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- 主聊天区 -->
+    <main class="flex-grow flex flex-col relative chat-container w-full min-w-0">
+        <header class="p-3 flex items-center border-b border-gray-800 bg-[#212121] z-10">
+            <button onclick="toggleSidebar(true)" class="md:hidden p-2 hover:bg-gray-800 rounded-md mr-2"><i data-lucide="menu"></i></button>
+            <div id="active-chat-title" class="flex-grow text-center font-medium text-gray-200 truncate px-4">新对话</div>
+            <div id="sync-status" class="hidden flex items-center gap-2 pr-2">
+                <span class="sync-dot"></span>
+                <span class="text-[10px] text-emerald-400 font-bold uppercase">同步中</span>
+            </div>
+        </header>
+
+        <div id="messages-wrapper" class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar scroll-smooth">
+            <div id="welcome-view" class="h-full flex flex-col items-center justify-center text-center opacity-50">
+                <h1 class="text-2xl font-bold mb-2">有什么可以帮你的？</h1>
+            </div>
+        </div>
+
+        <!-- 重试浮层 -->
+        <div id="retry-popover" class="hidden" onclick="event.stopPropagation()">
+            <span class="text-[10px] text-gray-400 px-2 pt-1 font-bold uppercase tracking-wider">选择模型并重试</span>
+            <div class="flex gap-1 mt-1">
+                <select id="retry-model-select" class="bg-[#171717] border border-gray-700 rounded-lg p-1.5 text-xs flex-grow outline-none text-white"></select>
+                <button onclick="confirmRetry()" class="bg-white text-black px-2 rounded-lg hover:bg-gray-200 transition-colors">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 底部输入区 -->
+        <footer class="p-4 md:pb-8 w-full">
+            <div class="max-w-4xl mx-auto relative flex flex-col items-start">
+                <div class="model-selector-container">
+                    <select id="model-select" onchange="syncRetrySelect()">
+                        <option value="deepseek-v3.2-thinking" selected>deepseek-v3.2-thinking</option>
+                        <option value="gpt-5.2-2025-12-11">gpt-5.2-2025-12-11（不稳定）</option>
+                        <option value="gpt-5.2">gpt-5.2（不稳定）</option>
+                        <option value="gpt-5-all">gpt-5-all（不稳定）</option>
+						<option value="gpt-5.2-medium">gpt-5.2-medium（不稳定）</option>
+						<option value="gpt-5.2-high">gpt-5.2-high（不稳定）</option>
+						<option value="gpt-5-nano">gpt-5-nano（不稳定）</option>
+                        <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                        <option value="gemini-3-flash-preview-thinking">gemini-3-flash-preview-thinking</option>
+                        <option value="gemini-3.1-pro-preview-search">gemini-3.1-pro-preview-search</option>
+                        <option value="gemini-3.1-pro-preview-high">gemini-3.1-pro-preview-high</option>
+                        <option value="gemini-3.1-pro-preview-thinking">gemini-3.1-pro-preview-thinking</option>
+                        <option value="grok-4.1">grok-4.1</option>
+						<option value="grok-4">grok-4</option>
+                        <option value="grok-3">grok-3</option>
+                        <option value="grok-3-deepersearch">grok-3-deepersearch</option>
+                        <option value="grok-3-deepsearch">grok-3-deepsearch</option>
+                        <option value="grok-3-reasoner">grok-3-reasoner</option>
+                        <option value="deepseek-v3.2">deepseek-v3.2</option>
+                        <option value="deepseek-r1-search">deepseek-r1-search</option>
+                        <option value="deepseek-v3-search">deepseek-v3-search</option>
+                        <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+                    </select>
+                </div>
+                <div class="input-area p-3 flex items-end gap-2 w-full shadow-lg">
+                    <textarea id="user-input" rows="1" placeholder="给 AI 发送消息..." class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none py-1 px-2 text-sm md:text-base" oninput="autoResize(this)"></textarea>
+                    <!-- 发送/停止按钮动态切换 -->
+                    <button id="send-btn" onclick="sendMessage()" class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">
+                        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                    </button>
+                    <button id="stop-btn" onclick="stopGeneration()" class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 hidden">
+                        <i data-lucide="square" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- 设置弹窗 (新增字体大小调整) -->
+    <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
+        <div class="bg-[#2f2f2f] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-white">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-xl font-semibold">偏好设置</h2>
+                <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i data-lucide="x"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
+                    <textarea id="sys-prompt" class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors" rows="4"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">回复倾向 (Temperature)</label>
+                    <div class="flex gap-2">
+                        <button class="temp-btn" data-temp="0.2" onclick="setTemp(0.2, this)">更严谨</button>
+                        <button class="temp-btn" data-temp="0.7" onclick="setTemp(0.7, this)">适中</button>
+                        <button class="temp-btn" data-temp="1.2" onclick="setTemp(1.2, this)">创造力</button>
+                    </div>
+                </div>
+
+                <!-- 新增：字体大小调整 (按钮样式已与温度按钮一致) -->
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">字体大小</label>
+                    <div class="flex gap-2">
+                        <button class="font-btn" data-size="small" onclick="setFontSize('small', this)">小</button>
+                        <button class="font-btn" data-size="medium" onclick="setFontSize('medium', this)">中</button>
+                        <button class="font-btn" data-size="large" onclick="setFontSize('large', this)">大</button>
+                    </div>
+                </div>
+
+                <!-- 外观主题切换 -->
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">外观主题</label>
+                    <div class="flex gap-2">
+                        <button class="theme-btn" data-theme="light" onclick="setTheme('light')">浅色</button>
+                        <button class="theme-btn" data-theme="dark" onclick="setTheme('dark')">深色</button>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
+                    <button onclick="toggleSettings()" class="px-4 py-2 hover:bg-gray-800 rounded-md text-sm">取消</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors text-sm font-medium">保存设置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 配置 ====================
+        const API_KEY = 'sk-XXXXXXXXXXXXXXXXX';
+        const BASE_URL = 'https://XXXXXXXXXXXXXXXXXXX';
+        
+        // LeanCloud 配置 (已包含masterKey，用于强制删除)
+        const LC_CONFIG = {
+            id: 'XXXXXXXXXX',
+            key: 'XXXXXXXXXX',
+            masterKey: 'XXXXXXXXXXX',   // 用户提供的masterKey
+            base: 'https://XXXXXXXXXXXXXXXXXXXX'
+        };
+
+        // ==================== 全局变量 ====================
+        let chats = JSON.parse(localStorage.getItem('ai_chats') || '[]');
+        let activeChatId = null;
+        let systemPrompt = localStorage.getItem('sys_prompt') || "You are a helpful assistant.";
+        let currentTemp = parseFloat(localStorage.getItem('chat_temp')) || 0.7;
+        let currentFontSize = localStorage.getItem('font_size') || 'medium';
+
+        let abortController = null;
+        let isGenerating = false;
+
+        let filteredChats = [];
+
+        // ==================== 初始化 ====================
+        window.onload = async () => {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            setTheme(savedTheme, false);
+
+            document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large');
+            document.body.classList.add(`font-size-${currentFontSize}`);
+
+            lucide.createIcons();
+            document.getElementById('sys-prompt').value = systemPrompt;
+            updateTempUI();
+            syncRetrySelect();
+            renderChatHistory(); 
+            
+            await syncData();
+            
+            if (chats.length === 0) {
+                createNewChat();
+            } else {
+                switchChat(chats[0].id);
+            }
+
+            const input = document.getElementById('user-input');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            highlightFontBtn(currentFontSize);
+        };
+
+        // ==================== 搜索功能 ====================
+        function filterChats() {
+            const searchTerm = document.getElementById('chat-search').value.toLowerCase().trim();
+            if (!searchTerm) {
+                filteredChats = chats; 
+            } else {
+                filteredChats = chats.filter(chat => chat.title.toLowerCase().includes(searchTerm));
+            }
+            renderFilteredHistory();
+        }
+
+        function renderFilteredHistory() {
+            const container = document.getElementById('chat-history');
+            container.innerHTML = '';
+            (filteredChats.length ? filteredChats : chats).forEach(chat => {
+                const btn = document.createElement('button');
+                btn.className = `w-full flex items-center gap-3 px-3 py-3 rounded-md transition-colors text-sm ${activeChatId === chat.id ? 'active-chat' : ''}`;
+                // 内部结构：左侧图标+标题，右侧垃圾桶
+                btn.innerHTML = `
+                    <i data-lucide="message-square" class="w-4 h-4 text-gray-400 flex-shrink-0"></i>
+                    <span class="truncate text-left flex-grow">${chat.title}</span>
+                    <span class="delete-chat-btn p-1" data-chat-id="${chat.id}" onclick="event.stopPropagation(); deleteChat('${chat.id}')">
+                        <i data-lucide="trash-2" class="w-4 h-4 text-gray-400"></i>
+                    </span>
+                `;
+                btn.onclick = () => {
+                    switchChat(chat.id);
+                };
+                container.appendChild(btn);
+            });
+            lucide.createIcons();
+        }
+
+        function renderChatHistory() {
+            filteredChats = chats; 
+            renderFilteredHistory();
+        }
+
+        // ==================== 删除对话 (本地+云端，使用masterKey强制删除) ====================
+        async function deleteChat(chatId) {
+            if (!confirm('确定删除此对话吗？')) return;
+
+            const chat = chats.find(c => c.id === chatId);
+            if (!chat) return;
+
+            // 1. 如果存在云端ID，尝试使用masterKey删除云端记录
+            if (chat.lcObjectId) {
+                try {
+                    // 使用master权限删除
+                    const deleteUrl = `${LC_CONFIG.base}/${chat.lcObjectId}`;
+                    const res = await fetch(deleteUrl, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-LC-Id': LC_CONFIG.id,
+                            'X-LC-Key': `${LC_CONFIG.masterKey},master`,  // master key 认证
+                            'Content-Type': 'application/json'
+                        }
+                    });
+
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        throw new Error(`云端删除失败 (${res.status}): ${errText}`);
+                    }
+                    console.log('云端记录已删除', chat.lcObjectId);
+                } catch (e) {
+                    console.error('删除云端记录失败', e);
+                    alert('云端删除失败，请稍后重试。本地删除已取消。');
+                    return; // 云端删除失败，终止本地删除，避免数据不一致
+                }
+            }
+
+            // 2. 从本地数组中移除
+            const index = chats.findIndex(c => c.id === chatId);
+            if (index !== -1) chats.splice(index, 1);
+
+            localStorage.setItem('ai_chats', JSON.stringify(chats));
+
+            // 3. 如果删除的是当前活跃聊天，切换到其他或新建
+            if (activeChatId === chatId) {
+                if (chats.length > 0) {
+                    switchChat(chats[0].id);
+                } else {
+                    createNewChat();
+                }
+            }
+
+            // 4. 重新过滤并渲染（保留搜索词状态）
+            filterChats();
+
+            // 5. 可选：再次同步确保云端状态（但云端已经删了，本地也删了，不需要）
+        }
+
+        // ==================== 停止生成 ====================
+        function stopGeneration() {
+            if (abortController) {
+                abortController.abort();
+                abortController = null;
+                isGenerating = false;
+                document.getElementById('send-btn').classList.remove('hidden');
+                document.getElementById('stop-btn').classList.add('hidden');
+            }
+        }
+
+        // ==================== 主题切换 ====================
+        function setTheme(theme, save = true) {
+            document.body.classList.remove('theme-light', 'theme-dark');
+            document.body.classList.add(`theme-${theme}`);
+            if (save) {
+                localStorage.setItem('theme', theme);
+            }
+            const themeBtns = document.querySelectorAll('.theme-btn');
+            themeBtns.forEach(btn => {
+                const btnTheme = btn.getAttribute('data-theme');
+                btn.classList.toggle('active', btnTheme === theme);
+            });
+            lucide.createIcons();
+        }
+
+        // ==================== 字体大小 ====================
+        function setFontSize(size, btn) {
+            currentFontSize = size;
+            document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large');
+            document.body.classList.add(`font-size-${size}`);
+            highlightFontBtn(size);
+        }
+
+        function highlightFontBtn(size) {
+            document.querySelectorAll('.font-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.size === size);
+            });
+        }
+
+        // ==================== 云端同步 (普通权限) ====================
+        async function lcFetch(path = '', options = {}) {
+            const url = path ? `${LC_CONFIG.base}/${path}` : LC_CONFIG.base;
+            const defaultHeaders = {
+                'X-LC-Id': LC_CONFIG.id,
+                'X-LC-Key': options.master ? `${LC_CONFIG.masterKey},master` : LC_CONFIG.key, // 支持master
+                'Content-Type': 'application/json'
+            };
+            return fetch(url, { ...options, headers: { ...defaultHeaders, ...options.headers } });
+        }
+
+        async function syncData() {
+            setSyncUI(true);
+            try {
+                const res = await lcFetch();
+                if (!res.ok) throw new Error(`云端拉取失败: ${res.status}`);
+                const data = await res.json();
+                const cloudChats = data.results || [];
+
+                let localChats = JSON.parse(localStorage.getItem('ai_chats') || '[]');
+                let hasLocalChange = false;
+
+                const cloudMap = new Map(cloudChats.map(c => [c.chatId, c]));
+                const localMap = new Map(localChats.map(c => [c.id, c]));
+
+                for (const c of cloudChats) {
+                    const l = localMap.get(c.chatId);
+                    if (!l || (c.updatedAtMs || 0) > (l.updatedAt || 0)) {
+                        const newLocal = {
+                            id: c.chatId,
+                            title: c.title,
+                            messages: c.messages,
+                            updatedAt: c.updatedAtMs || 0,
+                            lcObjectId: c.objectId
+                        };
+                        if (!l) localChats.push(newLocal);
+                        else Object.assign(l, newLocal);
+                        hasLocalChange = true;
+                    }
+                }
+
+                const pushPromises = [];
+
+                for (const l of localChats) {
+                    const c = cloudMap.get(l.id);
+                    if (!c) {
+                        pushPromises.push(pushToCloud(l, 'POST'));
+                    } else if ((l.updatedAt || 0) > (c.updatedAtMs || 0)) {
+                        l.lcObjectId = c.objectId;
+                        pushPromises.push(pushToCloud(l, 'PUT'));
+                    }
+                }
+
+                await Promise.all(pushPromises);
+
+                if (hasLocalChange) {
+                    localChats.sort((a,b) => b.updatedAt - a.updatedAt);
+                    chats = localChats;
+                    localStorage.setItem('ai_chats', JSON.stringify(chats));
+                    renderChatHistory();
+                    if (activeChatId) {
+                        const currentChat = chats.find(c => c.id === activeChatId);
+                        if (currentChat) renderMessages(currentChat.messages);
+                    }
+                }
+            } catch (err) {
+                console.error("同步异常:", err);
+            } finally {
+                setSyncUI(false);
+            }
+        }
+
+        async function pushToCloud(chat, method) {
+            const body = {
+                chatId: chat.id,
+                title: chat.title,
+                messages: chat.messages,
+                updatedAtMs: chat.updatedAt || Date.now()
+            };
+            const path = method === 'PUT' ? chat.lcObjectId : '';
+            try {
+                const res = await lcFetch(path, { method, body: JSON.stringify(body) });
+                const result = await res.json();
+                if (method === 'POST') chat.lcObjectId = result.objectId;
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+            } catch (e) { 
+                console.error("推送失败", e); 
+                throw e;
+            }
+        }
+
+        function setSyncUI(isSyncing) {
+            document.getElementById('sync-status').classList.toggle('hidden', !isSyncing);
+        }
+
+        // ==================== 界面控制 ====================
+        function toggleSidebar(show) {
+            document.getElementById('sidebar').classList.toggle('active', show);
+            document.getElementById('sidebar-overlay').classList.toggle('active', show);
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            modal.classList.toggle('flex');
+            modal.classList.toggle('hidden');
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            const themeBtns = document.querySelectorAll('.theme-btn');
+            themeBtns.forEach(btn => {
+                const btnTheme = btn.getAttribute('data-theme');
+                btn.classList.toggle('active', btnTheme === currentTheme);
+            });
+            highlightFontBtn(currentFontSize);
+        }
+
+        function setTemp(val, btn) {
+            currentTemp = val;
+            document.querySelectorAll('.temp-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function updateTempUI() {
+            document.querySelectorAll('.temp-btn').forEach(btn => {
+                btn.classList.toggle('active', parseFloat(btn.dataset.temp) === currentTemp);
+            });
+        }
+
+        function saveSettings() {
+            systemPrompt = document.getElementById('sys-prompt').value;
+            localStorage.setItem('sys_prompt', systemPrompt);
+            localStorage.setItem('chat_temp', currentTemp);
+            localStorage.setItem('font_size', currentFontSize);
+            toggleSettings();
+        }
+
+        function autoResize(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
+
+        // ==================== 聊天管理 ====================
+        function createNewChat() {
+            const id = Date.now().toString();
+            const newChat = { id, title: '新对话', messages: [], updatedAt: Date.now() };
+            chats.unshift(newChat);
+            localStorage.setItem('ai_chats', JSON.stringify(chats));
+            renderChatHistory();
+            switchChat(id);
+            syncData();
+            toggleSidebar(false);
+        }
+
+        function saveChats() {
+            localStorage.setItem('ai_chats', JSON.stringify(chats));
+            renderChatHistory();
+        }
+
+        function switchChat(id) {
+            activeChatId = id;
+            const chat = chats.find(c => c.id === id);
+            if (!chat) return;
+            document.getElementById('active-chat-title').innerText = chat.title;
+            renderMessages(chat.messages);
+            renderChatHistory(); 
+            document.getElementById('welcome-view').style.display = chat.messages.length ? 'none' : 'flex';
+        }
+
+        function renderMessages(messages) {
+            const wrapper = document.getElementById('messages-wrapper');
+            wrapper.innerHTML = '';
+            messages.forEach((msg, idx) => {
+                const isLast = idx === messages.length - 1;
+                appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant');
+            });
+            wrapper.scrollTop = wrapper.scrollHeight;
+        }
+
+        async function copyToClipboard(text, btnElement) {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                }
+                const originalContent = btnElement.innerHTML;
+                if (btnElement.classList.contains('action-btn')) {
+                    btnElement.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 已复制`;
+                    btnElement.style.color = "#10b981";
+                } else {
+                    btnElement.innerText = "✓ 已复制";
+                }
+                lucide.createIcons();
+                setTimeout(() => {
+                    btnElement.innerHTML = originalContent;
+                    btnElement.style.color = "";
+                    lucide.createIcons();
+                }, 2000);
+            } catch (err) {
+                console.error('复制失败', err);
+            }
+        }
+
+        function syncRetrySelect() {
+            const mainSelect = document.getElementById('model-select');
+            const retrySelect = document.getElementById('retry-model-select');
+            retrySelect.innerHTML = mainSelect.innerHTML;
+        }
+
+        function openRetryMenu(e) {
+            e.stopPropagation();
+            const popover = document.getElementById('retry-popover');
+            popover.style.left = `${e.clientX - 10}px`;
+            popover.style.top = `${e.clientY + 15}px`;
+            popover.classList.remove('hidden');
+        }
+
+        function closeRetryMenu(e) {
+            const popover = document.getElementById('retry-popover');
+            if (popover && !popover.contains(e.target)) {
+                popover.classList.add('hidden');
+            }
+        }
+
+        function confirmRetry() {
+            const selectedModel = document.getElementById('retry-model-select').value;
+            document.getElementById('retry-popover').classList.add('hidden');
+            
+            const chat = chats.find(c => c.id === activeChatId);
+            if (!chat || chat.messages.length === 0) return;
+            
+            if (chat.messages[chat.messages.length - 1].role === 'assistant') {
+                chat.messages.pop();
+            }
+            
+            const lastUserMsg = chat.messages[chat.messages.length - 1];
+            if (!lastUserMsg || lastUserMsg.role !== 'user') return;
+            
+            renderMessages(chat.messages);
+            requestAI(lastUserMsg.content, selectedModel, chat);
+        }
+
+        async function sendMessage() {
+            if (isGenerating) return; 
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if (!text) return;
+            const model = document.getElementById('model-select').value;
+            const chat = chats.find(c => c.id === activeChatId);
+            
+            if (chat.messages.length === 0) {
+                chat.title = text.slice(0, 20);
+                document.getElementById('active-chat-title').innerText = chat.title;
+            }
+            
+            chat.messages.push({ role: 'user', content: text });
+            chat.updatedAt = Date.now();
+            appendMessageToUI('user', text);
+            input.value = '';
+            autoResize(input);
+            
+            syncData(); 
+            await requestAI(text, model, chat);
+        }
+
+        async function requestAI(userText, model, chat) {
+            abortController = new AbortController();
+            isGenerating = true;
+
+            document.getElementById('send-btn').classList.add('hidden');
+            document.getElementById('stop-btn').classList.remove('hidden');
+            
+            const aiRow = appendMessageToUI('assistant', '', model, true);
+            const contentArea = aiRow.querySelector('.ai-content-area');
+            let fullContent = "";
+            let receivedAny = false;
+
+            try {
+                const response = await fetch(`${BASE_URL}/chat/completions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify({
+                        model: model,
+                        temperature: currentTemp,
+                        messages: [{ role: 'system', content: systemPrompt }, ...chat.messages],
+                        stream: true
+                    }),
+                    signal: abortController.signal
+                });
+
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                contentArea.innerHTML = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            try {
+                                const json = JSON.parse(data);
+                                const delta = json.choices[0].delta?.content || '';
+                                if (delta) receivedAny = true;
+                                fullContent += delta;
+                                contentArea.innerHTML = marked.parse(fullContent);
+                            } catch (e) { }
+                        }
+                    }
+                }
+
+                if (!receivedAny && !fullContent.trim()) {
+                    fullContent = '';
+                }
+                contentArea.querySelectorAll('pre code').forEach(el => {
+                    hljs.highlightElement(el);
+                    if (!el.parentElement.querySelector('.code-copy-btn')) {
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'code-copy-btn';
+                        copyBtn.innerText = '复制代码';
+                        copyBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            copyToClipboard(el.innerText, copyBtn);
+                        };
+                        el.parentElement.appendChild(copyBtn);
+                    }
+                });
+
+                chat.messages.push({ role: 'assistant', content: fullContent, model: model });
+                chat.updatedAt = Date.now();
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+                renderChatHistory();
+                
+                await syncData();
+
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    console.log('Generation stopped by user');
+                    if (!fullContent.trim() && !receivedAny) {
+                        fullContent = '';
+                    }
+                    if (contentArea) {
+                        contentArea.innerHTML = marked.parse(fullContent || '');
+                        contentArea.querySelectorAll('pre code').forEach(el => {
+                            hljs.highlightElement(el);
+                            if (!el.parentElement.querySelector('.code-copy-btn')) {
+                                const copyBtn = document.createElement('button');
+                                copyBtn.className = 'code-copy-btn';
+                                copyBtn.innerText = '复制代码';
+                                copyBtn.onclick = (e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(el.innerText, copyBtn);
+                                };
+                                el.parentElement.appendChild(copyBtn);
+                            }
+                        });
+                    }
+                    chat.messages.push({ role: 'assistant', content: fullContent, model: model });
+                    chat.updatedAt = Date.now();
+                    localStorage.setItem('ai_chats', JSON.stringify(chats));
+                    renderChatHistory();
+                    await syncData();
+                } else {
+                    contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`;
+                }
+            } finally {
+                abortController = null;
+                isGenerating = false;
+                document.getElementById('send-btn').classList.remove('hidden');
+                document.getElementById('stop-btn').classList.add('hidden');
+                
+                const pulseElements = aiRow.querySelectorAll('.animate-pulse');
+                pulseElements.forEach(el => el.classList.remove('animate-pulse'));
+                lucide.createIcons();
+                document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper').scrollHeight;
+            }
+        }
+
+        function appendMessageToUI(role, content, model, showActions = false) {
+            const wrapper = document.getElementById('messages-wrapper');
+            if (document.getElementById('welcome-view')) document.getElementById('welcome-view').style.display = 'none';
+            
+            const isAI = role === 'assistant';
+            const row = document.createElement('div');
+            row.className = `chat-row ${isAI ? 'ai-row' : 'user-row'}`;
+
+            const contentCol = document.createElement('div');
+            contentCol.className = `flex flex-col max-w-[85%] ${isAI ? '' : 'items-end'}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
+            
+            if (content) {
+                bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${marked.parse(content)}</div>`;
+                bubble.querySelectorAll('pre').forEach(pre => {
+                    const code = pre.querySelector('code');
+                    if (code && !pre.querySelector('.code-copy-btn')) {
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'code-copy-btn';
+                        copyBtn.innerText = '复制代码';
+                        copyBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            copyToClipboard(code.innerText, copyBtn);
+                        };
+                        pre.appendChild(copyBtn);
+                    }
+                });
+            } else {
+                bubble.innerHTML = `<div class="ai-content-area"><div class="animate-pulse text-gray-400 text-sm">AI 正在思考...</div></div>`;
+            }
+
+            contentCol.appendChild(bubble);
+
+            if (isAI) {
+                const footer = document.createElement('div');
+                footer.className = "flex items-center gap-2 mt-1.5 px-1 w-full flex-wrap";
+                
+                const modelSpan = document.createElement('span');
+                modelSpan.className = "text-[13px] text-gray-500 font-bold font-mono uppercase";
+                modelSpan.innerText = model || document.getElementById('model-select').value;
+
+                const btnGroup = document.createElement('div');
+                btnGroup.className = "flex items-center gap-1";
+
+                const copyMsgBtn = document.createElement('span');
+                copyMsgBtn.className = 'action-btn';
+                copyMsgBtn.setAttribute('data-copy', '');
+                copyMsgBtn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> 复制`;
+                copyMsgBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    copyToClipboard(content || '', copyMsgBtn);
+                };
+
+                const retryBtn = document.createElement('span');
+                retryBtn.className = 'action-btn';
+                retryBtn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重试`;
+                retryBtn.onclick = (e) => openRetryMenu(e);
+
+                btnGroup.appendChild(copyMsgBtn);
+                if (showActions) btnGroup.appendChild(retryBtn);
+
+                footer.appendChild(modelSpan);
+                footer.appendChild(btnGroup);
+                
+                contentCol.appendChild(footer);
+            }
+
+            const avatar = document.createElement('div');
+            avatar.className = `avatar ${isAI ? 'bg-emerald-600' : 'bg-blue-600'}`;
+            avatar.innerHTML = `<i data-lucide="${isAI ? 'bot' : 'user'}" class="w-5 h-5 text-white"></i>`;
+
+            if (isAI) {
+                row.appendChild(avatar);
+                row.appendChild(contentCol);
+            } else {
+                row.appendChild(contentCol);
+                row.appendChild(avatar);
+            }
+
+            if (content) {
+                bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+            }
+            
+            wrapper.appendChild(row);
+            lucide.createIcons();
+            wrapper.scrollTop = wrapper.scrollHeight;
+            return row;
+        }
+    </script>
+</body>
+</html>
