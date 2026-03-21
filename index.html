@@ -9,6 +9,9 @@
     <script src="lucide.js"></script>
     <!-- Marked.js -->
     <script src="marked.js"></script>
+    <!-- KaTeX for Math Expressions -->
+    <link rel="stylesheet" href="katex.min.css">
+    <script src="katex.min.js"></script>
     <!-- Highlight.js (深色代码块) -->
     <link rel="stylesheet" href="github-dark.min.css">
     <script src="highlight.js"></script>
@@ -60,7 +63,7 @@
             padding: 0.85rem 1.25rem;
         }
 
-        /* 用户气泡保留原样（只去掉头像） */
+        /* 用户气泡保留原样 */
         body.theme-light .msg-bubble.user-bubble {
             background: rgba(220, 230, 255, 0.7) !important;
             backdrop-filter: blur(8px);
@@ -71,10 +74,15 @@
 
         body.theme-light #model-select,
         body.theme-light #retry-model-select {
-            background: rgba(255, 255, 255, 0.7) !important;
+            background: rgba(240, 240, 245, 0.9) !important;
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.6) !important;
+            border: 1px solid rgba(100, 100, 100, 0.2) !important;
             color: #1f1f1f;
+        }
+
+        body.theme-light #model-select:focus,
+        body.theme-light #retry-model-select:focus {
+            border-color: #10b981 !important;
         }
 
         body.theme-light .sidebar button {
@@ -92,7 +100,7 @@
         body.theme-light .action-btn {
             color: #3a3a3a;
             background: rgba(255, 255, 255, 0.3);
-            border-radius: 6px;
+            border-radius: 0.75rem;
         }
 
         body.theme-light .action-btn:hover {
@@ -114,25 +122,33 @@
             color: #1f1f1f;
         }
 
-        body.theme-light #settings-modal>div {
-            background: rgba(255, 255, 255, 0.7) !important;
-            backdrop-filter: blur(40px);
-            border: 1px solid rgba(255, 255, 255, 0.6);
-        }
+        /* 已移至下方的亮模式专用样式 */
 
         body.theme-light #retry-popover {
-            background: rgba(255, 255, 255, 0.7) !important;
+            background: rgba(255, 255, 255, 0.95) !important;
             backdrop-filter: blur(24px);
-            border: 1px solid rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0, 0, 0, 0.15);
             color: #1f1f1f;
+        }
+
+        body.theme-light #retry-popover>span {
+            color: #4a4a4a !important;
         }
 
         body.theme-light .temp-btn,
         body.theme-light .font-btn,
         body.theme-light .theme-btn {
-            background: rgba(255, 255, 255, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            color: #1f1f1f;
+            background: rgba(200, 200, 200, 0.3);
+            border: 1px solid rgba(100, 100, 100, 0.3);
+            color: #2a2a2a;
+        }
+
+        body.theme-light #settings-modal .temp-btn,
+        body.theme-light #settings-modal .font-btn,
+        body.theme-light #settings-modal .theme-btn {
+            background: rgba(220, 220, 220, 0.5);
+            border: 1px solid rgba(100, 100, 100, 0.4);
+            color: #2a2a2a;
         }
 
         body.theme-light .temp-btn.active,
@@ -141,6 +157,87 @@
             background: #10b981;
             border-color: #10b981;
             color: white;
+        }
+
+        /* 记忆卡片样式 (浅色) */
+        /* 亮模式：MIT License盒子 */
+        body.theme-light .license-box {
+            background: rgba(235, 235, 240, 0.8) !important;
+            border-color: rgba(100, 100, 100, 0.2) !important;
+        }
+
+        body.theme-light .license-box p {
+            color: #3a3a3a !important;
+        }
+
+        body.theme-light .license-box .font-mono {
+            color: #4a4a4a !important;
+        }
+
+        /* 亮模式：版本号和开发者信息 */
+        body.theme-light #app-version,
+        body.theme-light #app-author {
+            color: #2a2a2a !important;
+        }
+
+        /* ========== KaTeX 数学公式样式 ========== */
+        .katex-display {
+            margin: 1rem 0 !important;
+            padding: 1rem 0 !important;
+        }
+
+        .katex {
+            font-size: 1em !important;
+        }
+
+        .ai-content-area .katex-display {
+            overflow-x: auto;
+        }
+
+        /* 亮模式和深色模式的KaTeX颜色 */
+        body.theme-light .katex {
+            color: #1f1f1f !important;
+        }
+
+        body.theme-dark .katex {
+            color: #f0f0f0 !important;
+        }
+
+        /* 亮模式：提示词输入框 */
+        body.theme-light #sys-prompt {
+            background: rgba(240, 240, 245, 0.9) !important;
+            border: 1px solid rgba(0, 0, 0, 0.2) !important;
+            color: #1f1f1f !important;
+        }
+
+        body.theme-light #sys-prompt:focus {
+            border-color: #10b981 !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+        }
+
+        /* 亮模式：记忆库容器 */
+        body.theme-light .memory-list {
+            background: rgba(240, 240, 245, 0.5);
+        }
+
+        /* 亮模式：设置弹窗文字更深 */
+        body.theme-light #settings-modal>div {
+            background: rgba(255, 255, 255, 0.95) !important;
+            color: #1f1f1f !important;
+        }
+
+        body.theme-light #settings-modal>div label {
+            color: #2a2a2a !important;
+        }
+
+        body.theme-light #settings-modal>div .text-gray-300,
+        body.theme-light #settings-modal>div strong {
+            color: #2a2a2a !important;
+        }
+
+        body.theme-light #settings-modal>div .text-gray-400,
+        body.theme-light #settings-modal>div .text-gray-500 {
+            color: #4a4a4a !important;
         }
 
         /* ----- 深色模式：更黑叠加层，降低图片亮度 ----- */
@@ -208,6 +305,7 @@
         body.theme-dark .action-btn {
             color: #aaa;
             background: rgba(255, 255, 255, 0.06);
+            border-radius: 0.75rem;
         }
 
         body.theme-dark .action-btn:hover {
@@ -232,6 +330,7 @@
             background: rgba(30, 30, 35, 0.8) !important;
             backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
         }
 
         body.theme-dark #retry-popover {
@@ -255,6 +354,12 @@
             background: #10b981;
             border-color: #10b981;
             color: white;
+        }
+
+        /* 记忆卡片深色 */
+        body.theme-dark .memory-card {
+            background: rgba(20, 20, 30, 0.7);
+            border-left: 3px solid #10b981;
         }
 
         /* ========== 全局悬停无放大 ========== */
@@ -308,7 +413,7 @@
             }
         }
 
-        /* 消息行 — 手机上去掉左右padding，实现全宽 */
+        /* 消息行 */
         .chat-row {
             display: flex;
             gap: 1rem;
@@ -316,7 +421,6 @@
             max-width: 1000px;
             margin: 0 auto;
             padding: 0 1rem;
-            /* 桌面呼吸间距 */
         }
 
         @media (max-width: 768px) {
@@ -326,7 +430,6 @@
             }
         }
 
-        /* 消息内容区 — 占用所有剩余宽度 */
         .ai-content-col {
             flex: 1 1 0;
             max-width: 100%;
@@ -335,7 +438,7 @@
 
         .msg-bubble {
             padding: 0.85rem 1.25rem;
-            border-radius: 1.25rem;
+            border-radius: 0.75rem;
             line-height: 1.6;
             max-width: 100%;
             word-wrap: break-word;
@@ -351,13 +454,13 @@
         }
 
         .input-area {
-            border-radius: 1.5rem;
+            border-radius: 0.75rem;
             border-top-left-radius: 0;
         }
 
         pre {
             padding: 1rem;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             margin: 1rem 0;
             overflow-x: auto;
             position: relative;
@@ -378,7 +481,7 @@
             gap: 4px;
             font-size: 0.75rem;
             padding: 4px 8px;
-            border-radius: 4px;
+            border-radius: 0.75rem;
             transition: all 0.2s;
         }
 
@@ -397,7 +500,7 @@
             top: 0.5rem;
             right: 0.5rem;
             padding: 0.25rem 0.5rem;
-            border-radius: 0.25rem;
+            border-radius: 0.75rem;
             font-size: 0.7rem;
             cursor: pointer;
             opacity: 0;
@@ -455,7 +558,7 @@
             padding: 0.5rem;
             text-align: center;
             font-size: 0.875rem;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             transition: all 0.2s;
             cursor: pointer;
         }
@@ -464,6 +567,18 @@
             background-color: rgba(0, 0, 0, 0.4);
             display: none;
             backdrop-filter: blur(8px);
+        }
+
+        body.theme-light #settings-modal {
+            background-color: rgba(0, 0, 0, 0.15) !important;
+        }
+
+        body.theme-light #settings-modal>div header {
+            border-bottom-color: rgba(0, 0, 0, 0.1) !important;
+        }
+
+        body.theme-light #settings-modal>div .border-t {
+            border-color: rgba(0, 0, 0, 0.1) !important;
         }
 
         #settings-modal.flex {
@@ -483,22 +598,10 @@
             font-size: 1.125rem;
         }
 
-        .font-size-small #user-input {
-            font-size: 0.875rem;
-        }
-
-        .font-size-medium #user-input {
-            font-size: 1rem;
-        }
-
-        .font-size-large #user-input {
-            font-size: 1.125rem;
-        }
-
         .search-box {
             background: rgba(255, 255, 255, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 0.85rem;
+            border-radius: 0.75rem;
             padding: 0.5rem 0.75rem;
             margin-bottom: 0.75rem;
             display: flex;
@@ -507,38 +610,31 @@
             backdrop-filter: blur(4px);
         }
 
-        .theme-dark .search-box {
-            background: rgba(0, 0, 0, 0.3);
-            border-color: rgba(255, 255, 255, 0.1);
+        .memory-list {
+            max-height: 180px;
+            overflow-y: auto;
+            border-radius: 0.75rem;
+            padding: 0.25rem;
         }
 
-        .search-box input {
-            background: transparent;
-            border: none;
-            outline: none;
-            width: 100%;
-            font-size: 0.9rem;
-        }
-
-        .theme-light .search-box input {
-            color: #1f1f1f;
-        }
-
-        .theme-dark .search-box input {
-            color: #f0f0f0;
+        .memory-card {
+            padding: 0.6rem 0.8rem;
+            border-radius: 0.75rem;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            backdrop-filter: blur(4px);
+            margin-bottom: 0.5rem;
         }
 
         .delete-chat-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 0.375rem;
+            border-radius: 0.75rem;
             padding: 0.25rem;
             cursor: pointer;
-            transition: all 0.15s;
         }
 
-        /* 移动端标题居中（原样保留） */
         @media (max-width: 768px) {
             header {
                 position: relative !important;
@@ -590,24 +686,39 @@
             color: #9ca3af;
         }
 
-        .theme-dark .thinking-text {
-            color: #9ca3af;
+        /* ========== Markdown 表格和分割线样式 ========== */
+        .ai-content-area table {
+            border-collapse: collapse;
+            width: 100%;
         }
 
-        .theme-light .thinking-text {
-            color: #4b5563;
+        .ai-content-area table th,
+        .ai-content-area table td {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem;
         }
 
-        /* 欢迎视图动画微调 */
+        body.theme-light .ai-content-area table th,
+        body.theme-light .ai-content-area table td {
+            border-color: rgba(0, 0, 0, 0.15);
+        }
+
+        .ai-content-area hr {
+            margin: 1.5rem 0;
+            border: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        body.theme-light .ai-content-area hr {
+            border-top-color: rgba(0, 0, 0, 0.15);
+        }
+
         .welcome-greeting {
             background: rgba(255, 255, 255, 0.05);
             backdrop-filter: blur(12px);
-            border-radius: 2rem;
+            border-radius: 0.75rem;
             padding: 1rem 2rem;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-        }
-        body.theme-light .welcome-greeting {
-            background: rgba(255, 255, 255, 0.4);
         }
     </style>
 </head>
@@ -621,10 +732,12 @@
             class="flex items-center gap-3 px-3 py-3 border border-gray-600 rounded-xl hover:bg-gray-800 transition-colors mb-4">
             <i data-lucide="plus" class="w-4 h-4"></i><span class="text-sm font-medium">开启新对话</span>
         </button>
+		<!--
         <div class="search-box">
             <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
             <input type="text" id="chat-search" placeholder="搜索对话..." oninput="filterChats()">
         </div>
+		-->
         <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
         <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
             <button onclick="syncData()"
@@ -649,9 +762,7 @@
             </div>
         </header>
 
-        <div id="messages-wrapper" class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar scroll-smooth">
-            <!-- 欢迎视图将完全由js动态渲染，避免残留 -->
-        </div>
+        <div id="messages-wrapper" class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar scroll-smooth"></div>
 
         <!-- 重试浮层 -->
         <div id="retry-popover" class="hidden" onclick="event.stopPropagation()">
@@ -671,8 +782,8 @@
             <div class="max-w-4xl mx-auto relative flex flex-col items-start">
                 <div class="model-selector-container">
                     <select id="model-select" onchange="syncRetrySelect()">
-                        <option value="deepseek-v3.2-thinking" selected>deepseek-v3.2-thinking</option>
-                        <option value="gpt-5.2-2025-12-11">gpt-5.2-2025-12-11</option>
+                        
+                        <option value="gpt-5.2-2025-12-11" selected>gpt-5.2-2025-12-11</option>
                         <option value="gpt-5.2">gpt-5.2</option>
                         <option value="gpt-5-all">gpt-5-all（不稳定）</option>
                         <option value="gpt-5.2-medium">gpt-5.2-medium</option>
@@ -692,6 +803,7 @@
                         <option value="deepseek-v3.2">deepseek-v3.2</option>
                         <option value="deepseek-r1-search">deepseek-r1-search</option>
                         <option value="deepseek-v3-search">deepseek-v3-search</option>
+						<option value="deepseek-v3.2-thinking">deepseek-v3.2-thinking</option>
                         <option value="gpt-5.3-codex">gpt-5.3-codex</option>
                     </select>
                 </div>
@@ -712,15 +824,14 @@
         </footer>
     </main>
 
-    <!-- 设置弹窗 -->
+    <!-- 设置弹窗 - 增加记忆列表区域 -->
     <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
         <div class="bg-[#2f2f2f] w-full max-w-md rounded-xl shadow-2xl overflow-hidden text-white">
             <div class="p-6 border-b border-gray-700 flex justify-between items-center">
                 <h2 class="text-xl font-semibold">偏好设置</h2>
-                <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i
-                        data-lucide="x"></i></button>
+                <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i data-lucide="x"></i></button>
             </div>
-            <div class="p-6 space-y-6">
+            <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
                 <div>
                     <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
                     <textarea id="sys-prompt"
@@ -750,6 +861,40 @@
                         <button class="theme-btn rounded-xl" data-theme="dark" onclick="setTheme('dark')">深色</button>
                     </div>
                 </div>
+                <!-- ========= 记忆库只读区域 ========= -->
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-300 flex items-center gap-2">
+                        <i data-lucide="brain" class="w-4 h-4"></i>长久记忆库
+                    </label>
+                    <div id="memory-list-container" class="memory-list space-y-2">
+                        <div class="text-gray-400 text-xs italic p-2">加载记忆中...</div>
+                    </div>
+                    <p class="text-[11px] text-gray-500 mt-2">记忆由开发者维护，每次对话AI都会参考以上信息。</p>
+                </div>
+                <!-- ========= 软件信息 ========= -->
+                <div class="border-t border-gray-700 pt-4">
+                    <label class="block text-sm font-medium mb-3 text-gray-300 flex items-center gap-2">
+                        <i data-lucide="info" class="w-4 h-4"></i>软件信息
+                    </label>
+                    <div class="text-xs text-gray-400 space-y-3">
+                        <p class="leading-relaxed">
+                            <strong class="text-gray-300">AI Chat UI Demo</strong><br>
+                            一个基于云端的智能对话应用，支持多个AI模型，本地保存聊天记录，并通过记忆机制增强AI对用户的理解与回应。
+                        </p>
+                        <p class="leading-relaxed">
+                            <strong class="text-gray-300">开发者</strong><br>
+                            <span id="app-author">JHCWColin/abpdf</span>
+                        </p>
+                        <p class="leading-relaxed">
+                            <strong class="text-gray-300">版本</strong><br>
+                            <span id="app-version">V1.1 (build202603212346)</span>
+                        </p>
+                        <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
+                            <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
+                            <p class="text-gray-500">本软件采用MIT开源协议发布，您可以自由使用、修改和分发。详见 <a href="#" class="text-emerald-400 hover:text-emerald-300">LICENSE</a> 文件。</p>
+                        </div>
+                    </div>
+                </div>
                 <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
                     <button onclick="toggleSettings()"
                         class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
@@ -762,12 +907,12 @@
 
     <script>
         // ==================== 配置 ====================
-        const API_KEY = 'sk-cNcGPKxI0qnAvbxh3e8bC70fC1F844Ac88826a483a1dF96c';
+        const API_KEY = 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
         const BASE_URL = 'https://api.vveai.com/v1';
         const LC_CONFIG = {
-            id: 'Q6hBoWqJFQnGWFVTOzi98uRr-gzGzoHsz',
-            key: 'W7eC0Hzydm9fmlQViArwDdIS',
-            masterKey: 'S6tAGShBIaWrTMY6sTLoR91F',
+            id: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+            key: 'xxxxxxxxxxxxxxxxxxxxxxxxxxx',
+            masterKey: '4xxxxxxxxxxxxxxxxxxxxxx',
             base: 'https://q6hbowqj.lc-cn-n1-shared.com/1.1/classes/AIChats'
         };
 
@@ -779,8 +924,10 @@
         let abortController = null;
         let isGenerating = false;
         let filteredChats = [];
+        // 记忆缓存 (每次请求会实时拉取, 但设置弹窗展示也用)
+        let cachedMemories = []; 
 
-        // 问候语库（按时间段）
+        // 问候语库
         function getGreetingByTime() {
             const hour = new Date().getHours();
             if (hour >= 23 || hour < 6) return "夜深了，注意休息。不开心嘛？<br>心里难受的话就找我聊聊。";
@@ -789,7 +936,111 @@
             return "傍晚好，忙碌一天辛苦了。<br>一起梳理思绪吧。";
         }
 
-        // ========== 渲染核心：动态欢迎视图 / 消息列表 ==========
+        // ========== KaTeX 数学公式处理 ==========
+        function renderMathFormulas(element) {
+            if (!window.katex) return;
+            
+            // 处理块级公式 $$ ... $$
+            const blockRegex = /\$\$([\s\S]*?)\$\$/g;
+            let blockHtml = element.innerHTML;
+            blockHtml = blockHtml.replace(blockRegex, (match, math) => {
+                try {
+                    const rendered = window.katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
+                    return `<div class="katex-display">${rendered}</div>`;
+                } catch (e) {
+                    return match;
+                }
+            });
+            
+            // 处理行内公式 $ ... $
+            const inlineRegex = /\$([^\$\n]+?)\$/g;
+            blockHtml = blockHtml.replace(inlineRegex, (match, math) => {
+                try {
+                    const rendered = window.katex.renderToString(math.trim(), { displayMode: false, throwOnError: false });
+                    return `<span class="katex-inline">${rendered}</span>`;
+                } catch (e) {
+                    return match;
+                }
+            });
+            
+            element.innerHTML = blockHtml;
+        }
+
+        // ========== 从LeanCloud Memory类读取所有记忆 ==========
+        async function fetchMemoriesFromCloud() {
+            try {
+                // 使用masterKey确保能读取所有记忆 (假设Memory类ACL可能限制)
+                const url = `${LC_CONFIG.base.replace('AIChats', 'Memory')}`;
+                const headers = {
+                    'X-LC-Id': LC_CONFIG.id,
+                    'X-LC-Key': `${LC_CONFIG.masterKey},master`,
+                    'Content-Type': 'application/json'
+                };
+                const res = await fetch(url, { method: 'GET', headers });
+                if (!res.ok) throw new Error(`记忆读取失败: ${res.status}`);
+                const data = await res.json();
+                const results = data.results || [];
+                // 提取 Memory 字段，过滤空值
+                const memories = results.map(item => item.Memory).filter(m => m && typeof m === 'string' && m.trim().length > 0);
+                cachedMemories = memories;
+                return memories;
+            } catch (err) {
+                console.warn("获取记忆异常:", err);
+                cachedMemories = [];
+                return [];
+            }
+        }
+
+        // 将记忆列表渲染到设置弹窗内
+        async function renderMemoriesToSettings() {
+            const container = document.getElementById('memory-list-container');
+            if (!container) return;
+            try {
+                const memories = await fetchMemoriesFromCloud();
+                if (!memories.length) {
+                    container.innerHTML = `<div class="text-gray-400 text-xs italic p-2"></div>`;
+                } else {
+                    container.innerHTML = memories.map((mem, idx) => `
+                        <div class="memory-card">
+                            <div class="flex gap-2 items-start">
+                                <span class="text-emerald-400 text-xs font-bold">#${idx+1}</span>
+                                <span class="text-sm leading-relaxed break-words">${escapeHtml(mem)}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+                lucide.createIcons();
+            } catch (err) {
+                container.innerHTML = `<div class="text-red-400 text-xs p-2">无法加载记忆: ${err.message}</div>`;
+            }
+        }
+
+        // 简单的防XSS
+        function escapeHtml(str) {
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+
+        // 构建带记忆的系统消息内容
+        async function buildSystemMessageWithMemories() {
+            let baseSys = systemPrompt || "";
+            try {
+                const memories = await fetchMemoriesFromCloud();
+                if (memories && memories.length > 0) {
+                    const memorySection = "\n\n#关于对话者的长久记忆\n" + memories.map((m, idx) => `${idx+1}. ${m}`).join("\n") + "\n\n请参考记忆信息，更贴合对话者的背景进行回复。";
+                    return baseSys + memorySection;
+                }
+            } catch (e) { console.warn("记忆合并失败", e); }
+            return baseSys;
+        }
+
+        // ========== 渲染聊天等原有函数 (保留核心逻辑, 修改requestAI) ==========
         function renderMessages(messages) {
             const wrapper = document.getElementById('messages-wrapper');
             wrapper.innerHTML = '';
@@ -797,9 +1048,7 @@
                 const greetingText = getGreetingByTime();
                 const welcomeDiv = document.createElement('div');
                 welcomeDiv.className = 'h-full flex flex-col items-center justify-center text-center opacity-90';
-                welcomeDiv.innerHTML = `
-                        <h1 class="text-xl md:text-2xl font-bold mb-3 bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent">${greetingText}</h1>
-                `;
+                welcomeDiv.innerHTML = `<h1 class="text-xl md:text-2xl font-bold mb-3 bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent">${greetingText}</h1>`;
                 wrapper.appendChild(welcomeDiv);
                 return;
             }
@@ -810,7 +1059,7 @@
             wrapper.scrollTop = wrapper.scrollHeight;
         }
 
-        function appendMessageToUI(role, content, model, showActions = false, reasoning = '') { /* 完全沿用原版逻辑，保证无头像 */
+        function appendMessageToUI(role, content, model, showActions = false, reasoning = '') {
             const wrapper = document.getElementById('messages-wrapper');
             const isAI = role === 'assistant';
             const row = document.createElement('div');
@@ -831,6 +1080,10 @@
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
             if (content) {
                 bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${marked.parse(content)}</div>`;
+                const contentArea = bubble.querySelector('.ai-content-area');
+                if (contentArea) {
+                    renderMathFormulas(contentArea);
+                }
                 bubble.querySelectorAll('pre').forEach(pre => {
                     const code = pre.querySelector('code');
                     if (code && !pre.querySelector('.code-copy-btn')) {
@@ -847,7 +1100,7 @@
             contentCol.appendChild(bubble);
             if (isAI) {
                 const footer = document.createElement('div');
-                footer.className = "flex items-center gap-2 mt-1.5 px-1 w-full flex-wrap";
+                footer.className = "flex items-center gap-2 mt-1.5 px-4 w-full flex-wrap";
                 const modelSpan = document.createElement('span');
                 modelSpan.className = "text-[13px] text-gray-500 font-bold font-mono uppercase";
                 modelSpan.innerText = model || document.getElementById('model-select').value;
@@ -875,24 +1128,25 @@
             return row;
         }
 
-        // === 保留所有原有函数 (copyToClipboard, syncData, lcFetch, pushToCloud, setSyncUI, 开关侧边栏, 设置等) ===
-        async function copyToClipboard(text, btnElement) { /* 完全保留 */
+        async function copyToClipboard(text, btnElement) { 
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
                 else { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
                 const original = btnElement.innerHTML;
-                if (btnElement.classList.contains('action-btn')) { btnElement.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 已复制`; btnElement.style.color = "#10b981"; }
-                else btnElement.innerText = "✓ 已复制";
+                btnElement.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 已复制`;
+                btnElement.style.color = "#10b981";
                 lucide.createIcons();
                 setTimeout(() => { btnElement.innerHTML = original; btnElement.style.color = ""; lucide.createIcons(); }, 2000);
             } catch (err) { console.error(err); }
         }
+
+        // lcFetch 保留用于同步聊天记录，不干扰Memory
         async function lcFetch(path = '', options = {}) { const url = path ? `${LC_CONFIG.base}/${path}` : LC_CONFIG.base; const headers = { 'X-LC-Id': LC_CONFIG.id, 'X-LC-Key': options.master ? `${LC_CONFIG.masterKey},master` : LC_CONFIG.key, 'Content-Type': 'application/json' }; return fetch(url, { ...options, headers: { ...headers, ...options.headers } }); }
         async function pushToCloud(chat, method) { const body = { chatId: chat.id, title: chat.title, messages: chat.messages, updatedAtMs: chat.updatedAt || Date.now() }; const path = method === 'PUT' ? chat.lcObjectId : ''; try { const res = await lcFetch(path, { method, body: JSON.stringify(body) }); const result = await res.json(); if (method === 'POST') chat.lcObjectId = result.objectId; localStorage.setItem('ai_chats', JSON.stringify(chats)); } catch (e) { console.error("推送失败", e); throw e; } }
         function setSyncUI(isSyncing) { document.getElementById('sync-status').classList.toggle('hidden', !isSyncing); }
         async function syncData() { setSyncUI(true); try { const res = await lcFetch(); if (!res.ok) throw new Error(`云端拉取失败: ${res.status}`); const data = await res.json(); const cloudChats = data.results || []; let localChats = JSON.parse(localStorage.getItem('ai_chats') || '[]'); let hasLocalChange = false; const cloudMap = new Map(cloudChats.map(c => [c.chatId, c])); const localMap = new Map(localChats.map(c => [c.id, c])); for (const c of cloudChats) { const l = localMap.get(c.chatId); if (!l || (c.updatedAtMs || 0) > (l.updatedAt || 0)) { const newLocal = { id: c.chatId, title: c.title, messages: c.messages, updatedAt: c.updatedAtMs || 0, lcObjectId: c.objectId }; if (!l) localChats.push(newLocal); else Object.assign(l, newLocal); hasLocalChange = true; } } const pushPromises = []; for (const l of localChats) { const c = cloudMap.get(l.id); if (!c) pushPromises.push(pushToCloud(l, 'POST')); else if ((l.updatedAt || 0) > (c.updatedAtMs || 0)) { l.lcObjectId = c.objectId; pushPromises.push(pushToCloud(l, 'PUT')); } } await Promise.all(pushPromises); if (hasLocalChange) { localChats.sort((a, b) => b.updatedAt - a.updatedAt); chats = localChats; localStorage.setItem('ai_chats', JSON.stringify(chats)); renderChatHistory(); if (activeChatId) { const currentChat = chats.find(c => c.id === activeChatId); if (currentChat) renderMessages(currentChat.messages); } } } catch (err) { console.error("同步异常:", err); } finally { setSyncUI(false); } }
         function toggleSidebar(show) { document.getElementById('sidebar').classList.toggle('active', show); document.getElementById('sidebar-overlay').classList.toggle('active', show); }
-        function toggleSettings() { const modal = document.getElementById('settings-modal'); modal.classList.toggle('flex'); modal.classList.toggle('hidden'); lucide.createIcons(); }
+        function toggleSettings() { const modal = document.getElementById('settings-modal'); modal.classList.toggle('flex'); modal.classList.toggle('hidden'); if (modal.classList.contains('flex')) renderMemoriesToSettings(); lucide.createIcons(); }
         function setTemp(val, btn) { currentTemp = val; document.querySelectorAll('.temp-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
         function setFontSize(size, btn) { currentFontSize = size; document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large'); document.body.classList.add(`font-size-${size}`); document.querySelectorAll('.font-btn').forEach(b => b.classList.toggle('active', b.dataset.size === size)); }
         function setTheme(theme, save = true) { document.body.classList.remove('theme-light', 'theme-dark'); document.body.classList.add(`theme-${theme}`); if (save) localStorage.setItem('theme', theme); lucide.createIcons(); }
@@ -905,14 +1159,71 @@
         function stopGeneration() { if (abortController) { abortController.abort(); abortController = null; isGenerating = false; document.getElementById('send-btn').classList.remove('hidden'); document.getElementById('stop-btn').classList.add('hidden'); } }
         function renderChatHistory() { filteredChats = chats; renderFilteredHistory(); }
         function filterChats() { const searchTerm = document.getElementById('chat-search').value.toLowerCase().trim(); filteredChats = searchTerm ? chats.filter(chat => chat.title.toLowerCase().includes(searchTerm)) : chats; renderFilteredHistory(); }
-        function renderFilteredHistory() { const container = document.getElementById('chat-history'); container.innerHTML = ''; (filteredChats.length ? filteredChats : chats).forEach(chat => { const btn = document.createElement('button'); btn.className = `w-full flex items-center gap-3 px-3 py-3 rounded-md transition-colors text-sm ${activeChatId === chat.id ? 'active-chat' : ''}`; btn.innerHTML = `<i data-lucide="message-square" class="w-4 h-4 text-gray-400 flex-shrink-0"></i><span class="truncate text-left flex-grow">${chat.title}</span><span class="delete-chat-btn p-1" data-chat-id="${chat.id}" onclick="event.stopPropagation(); deleteChat('${chat.id}')"><i data-lucide="trash-2" class="w-4 h-4 text-gray-400"></i></span>`; btn.onclick = () => switchChat(chat.id); container.appendChild(btn); }); lucide.createIcons(); }
+        function renderFilteredHistory() { const container = document.getElementById('chat-history'); container.innerHTML = ''; (filteredChats.length ? filteredChats : chats).forEach(chat => { const btn = document.createElement('button'); btn.className = `w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-sm ${activeChatId === chat.id ? 'active-chat' : ''}`; btn.innerHTML = `<i data-lucide="message-square" class="w-4 h-4 text-gray-400 flex-shrink-0"></i><span class="truncate text-left flex-grow">${chat.title}</span><span class="delete-chat-btn p-1" data-chat-id="${chat.id}" onclick="event.stopPropagation(); deleteChat('${chat.id}')"><i data-lucide="trash-2" class="w-4 h-4 text-gray-400"></i></span>`; btn.onclick = () => switchChat(chat.id); container.appendChild(btn); }); lucide.createIcons(); }
         async function deleteChat(chatId) { if (!confirm('确定删除此对话吗？')) return; const chat = chats.find(c => c.id === chatId); if (!chat) return; if (chat.lcObjectId) { try { const deleteUrl = `${LC_CONFIG.base}/${chat.lcObjectId}`; await fetch(deleteUrl, { method: 'DELETE', headers: { 'X-LC-Id': LC_CONFIG.id, 'X-LC-Key': `${LC_CONFIG.masterKey},master`, 'Content-Type': 'application/json' } }); } catch (e) { alert('云端删除失败，请稍后重试。'); return; } } const index = chats.findIndex(c => c.id === chatId); if (index !== -1) chats.splice(index, 1); localStorage.setItem('ai_chats', JSON.stringify(chats)); if (activeChatId === chatId) { if (chats.length > 0) switchChat(chats[0].id); else createNewChat(); } filterChats(); }
         function createNewChat() { const id = Date.now().toString(); const newChat = { id, title: '新对话', messages: [], updatedAt: Date.now() }; chats.unshift(newChat); localStorage.setItem('ai_chats', JSON.stringify(chats)); renderChatHistory(); switchChat(id); syncData(); toggleSidebar(false); }
         function switchChat(id) { activeChatId = id; const chat = chats.find(c => c.id === id); if (!chat) return; document.getElementById('active-chat-title').innerText = chat.title; renderMessages(chat.messages); renderChatHistory(); }
         async function sendMessage() { if (isGenerating) return; const input = document.getElementById('user-input'); const text = input.value.trim(); if (!text) return; const model = document.getElementById('model-select').value; const chat = chats.find(c => c.id === activeChatId); if (chat.messages.length === 0) { chat.title = text.slice(0, 20); document.getElementById('active-chat-title').innerText = chat.title; } chat.messages.push({ role: 'user', content: text }); chat.updatedAt = Date.now(); appendMessageToUI('user', text); input.value = ''; autoResize(input); syncData(); await requestAI(text, model, chat); }
-        async function requestAI(userText, model, chat) { abortController = new AbortController(); isGenerating = true; document.getElementById('send-btn').classList.add('hidden'); document.getElementById('stop-btn').classList.remove('hidden'); const aiRow = appendMessageToUI('assistant', '', model, true); const thinkingDiv = aiRow.querySelector('.thinking-text'); const contentArea = aiRow.querySelector('.ai-content-area'); let fullContent = "", thinkingContent = ""; let receivedAny = false; try { const response = await fetch(`${BASE_URL}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` }, body: JSON.stringify({ model, temperature: currentTemp, messages: [{ role: 'system', content: systemPrompt }, ...chat.messages], stream: true }), signal: abortController.signal }); if (!response.ok) throw new Error(`API error: ${response.status}`); const reader = response.body.getReader(); const decoder = new TextDecoder(); while (true) { const { done, value } = await reader.read(); if (done) break; const chunk = decoder.decode(value); const lines = chunk.split('\n'); for (const line of lines) { if (line.startsWith('data: ')) { const data = line.slice(6); if (data === '[DONE]') continue; try { const json = JSON.parse(data); const delta = json.choices[0].delta || {}; if (delta.reasoning_content) { thinkingContent += delta.reasoning_content; if (thinkingDiv) { thinkingDiv.style.display = 'block'; thinkingDiv.innerText = thinkingContent; } } if (delta.content) { receivedAny = true; fullContent += delta.content; contentArea.innerHTML = marked.parse(fullContent); } } catch (e) { } } } } if (!receivedAny && !fullContent.trim()) fullContent = ''; contentArea.querySelectorAll('pre code').forEach(el => { hljs.highlightElement(el); if (!el.parentElement.querySelector('.code-copy-btn')) { const copyBtn = document.createElement('button'); copyBtn.className = 'code-copy-btn'; copyBtn.innerText = '复制代码'; copyBtn.onclick = (e) => { e.stopPropagation(); copyToClipboard(el.innerText, copyBtn); }; el.parentElement.appendChild(copyBtn); } }); chat.messages.push({ role: 'assistant', content: fullContent, model, reasoning: thinkingContent }); chat.updatedAt = Date.now(); localStorage.setItem('ai_chats', JSON.stringify(chats)); renderChatHistory(); await syncData(); } catch (err) { if (err.name !== 'AbortError') { contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`; } else { if (!fullContent.trim() && !receivedAny) fullContent = ''; contentArea.innerHTML = marked.parse(fullContent || ''); chat.messages.push({ role: 'assistant', content: fullContent, model, reasoning: thinkingContent }); chat.updatedAt = Date.now(); localStorage.setItem('ai_chats', JSON.stringify(chats)); renderChatHistory(); await syncData(); } } finally { abortController = null; isGenerating = false; document.getElementById('send-btn').classList.remove('hidden'); document.getElementById('stop-btn').classList.add('hidden'); lucide.createIcons(); document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper').scrollHeight; } }
+        async function requestAI(userText, model, chat) { 
+            abortController = new AbortController(); 
+            isGenerating = true; 
+            document.getElementById('send-btn').classList.add('hidden'); 
+            document.getElementById('stop-btn').classList.remove('hidden'); 
+            const aiRow = appendMessageToUI('assistant', '', model, true); 
+            const thinkingDiv = aiRow.querySelector('.thinking-text'); 
+            const contentArea = aiRow.querySelector('.ai-content-area'); 
+            let fullContent = "", thinkingContent = ""; 
+            let receivedAny = false;
+            // 🔥 关键: 构建带有记忆的系统消息
+            const systemWithMem = await buildSystemMessageWithMemories();
+            try { 
+                const response = await fetch(`${BASE_URL}/chat/completions`, { 
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` }, 
+                    body: JSON.stringify({ model, temperature: currentTemp, messages: [{ role: 'system', content: systemWithMem }, ...chat.messages], stream: true }), 
+                    signal: abortController.signal 
+                }); 
+                if (!response.ok) throw new Error(`API error: ${response.status}`); 
+                const reader = response.body.getReader(); 
+                const decoder = new TextDecoder(); 
+                while (true) { 
+                    const { done, value } = await reader.read(); 
+                    if (done) break; 
+                    const chunk = decoder.decode(value); 
+                    const lines = chunk.split('\n'); 
+                    for (const line of lines) { 
+                        if (line.startsWith('data: ')) { 
+                            const data = line.slice(6); 
+                            if (data === '[DONE]') continue; 
+                            try { 
+                                const json = JSON.parse(data); 
+                                const delta = json.choices[0].delta || {}; 
+                                if (delta.reasoning_content) { 
+                                    thinkingContent += delta.reasoning_content; 
+                                    if (thinkingDiv) { thinkingDiv.style.display = 'block'; thinkingDiv.innerText = thinkingContent; } 
+                                } 
+                                if (delta.content) { 
+                                    receivedAny = true; 
+                                    fullContent += delta.content; 
+                                    contentArea.innerHTML = marked.parse(fullContent);
+                                    renderMathFormulas(contentArea);
+                                } 
+                            } catch (e) { } 
+                        } 
+                    } 
+                } 
+                if (!receivedAny && !fullContent.trim()) fullContent = ''; 
+                contentArea.querySelectorAll('pre code').forEach(el => { hljs.highlightElement(el); if (!el.parentElement.querySelector('.code-copy-btn')) { const copyBtn = document.createElement('button'); copyBtn.className = 'code-copy-btn'; copyBtn.innerText = '复制代码'; copyBtn.onclick = (e) => { e.stopPropagation(); copyToClipboard(el.innerText, copyBtn); }; el.parentElement.appendChild(copyBtn); } }); 
+                chat.messages.push({ role: 'assistant', content: fullContent, model, reasoning: thinkingContent }); 
+                chat.updatedAt = Date.now(); 
+                localStorage.setItem('ai_chats', JSON.stringify(chats)); 
+                renderChatHistory(); 
+                await syncData(); 
+            } catch (err) { 
+                if (err.name !== 'AbortError') { contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`; } 
+                else { if (!fullContent.trim() && !receivedAny) fullContent = ''; contentArea.innerHTML = marked.parse(fullContent || ''); renderMathFormulas(contentArea); chat.messages.push({ role: 'assistant', content: fullContent, model, reasoning: thinkingContent }); chat.updatedAt = Date.now(); localStorage.setItem('ai_chats', JSON.stringify(chats)); renderChatHistory(); await syncData(); } 
+            } finally { abortController = null; isGenerating = false; document.getElementById('send-btn').classList.remove('hidden'); document.getElementById('stop-btn').classList.add('hidden'); lucide.createIcons(); document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper').scrollHeight; } 
+        }
 
-        // ========== 启动逻辑：最新聊天若非新对话则新建 ==========
         window.onload = async () => {
             const savedTheme = localStorage.getItem('theme') || 'light';
             setTheme(savedTheme, false);
@@ -923,17 +1234,15 @@
             syncRetrySelect();
             renderChatHistory();
             await syncData();
-            // 整理排序：按更新时间取最新聊天
             chats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             const latestChat = chats.length ? chats[0] : null;
-            if (!latestChat || (latestChat.messages && latestChat.messages.length > 0)) {
-                createNewChat();   // 无对话或最新对话非空 -> 新建干净对话
-            } else {
-                switchChat(latestChat.id); // 最新对话为空，直接进入显示问候语
-            }
+            if (!latestChat || (latestChat.messages && latestChat.messages.length > 0)) createNewChat();
+            else switchChat(latestChat.id);
             const input = document.getElementById('user-input');
             input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(); } });
             highlightFontBtn(currentFontSize);
+            // 预拉一次记忆，但不影响后续使用
+            await fetchMemoriesFromCloud();
         };
         function updateTempUI() { document.querySelectorAll('.temp-btn').forEach(btn => { btn.classList.toggle('active', parseFloat(btn.dataset.temp) === currentTemp); }); }
         function highlightFontBtn(size) { document.querySelectorAll('.font-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.size === size); }); }
