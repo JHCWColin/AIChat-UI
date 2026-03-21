@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>AI Chat</title>
+    <title>AI Chat · 无头像宽屏版</title>
     <script src="tailwindcss.js"></script>
     <script src="lucide.js"></script>
     <!-- Marked.js -->
@@ -414,6 +415,7 @@
                 transform: scale(0.33);
                 opacity: 1;
             }
+
             80%,
             100% {
                 opacity: 0;
@@ -579,143 +581,177 @@
                 z-index: 5;
             }
         }
+
+        .thinking-text {
+            font-style: italic;
+            white-space: pre-wrap;
+            opacity: 0.8;
+            padding-left: 1.25rem;
+            margin-bottom: 0.25rem;
+            font-size: 0.85rem;
+            color: #9ca3af;
+            /* 灰色 */
+        }
+
+        .theme-dark .thinking-text {
+            color: #9ca3af;
+        }
+
+        .theme-light .thinking-text {
+            color: #4b5563;
+        }
     </style>
 </head>
 
 <body class="h-screen flex overflow-hidden theme-light font-size-medium" onclick="closeRetryMenu(event)">
 
-  <!-- 遮罩 & 侧边栏 (完全原样) -->
-  <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
-  <aside id="sidebar" class="sidebar h-full flex flex-col p-3 flex-shrink-0">
-    <button onclick="createNewChat()" class="flex items-center gap-3 px-3 py-3 border border-gray-600 rounded-md hover:bg-gray-800 transition-colors mb-4">
-      <i data-lucide="plus" class="w-4 h-4"></i><span class="text-sm font-medium">开启新对话</span>
-    </button>
-    <div class="search-box">
-      <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
-      <input type="text" id="chat-search" placeholder="搜索对话..." oninput="filterChats()">
-    </div>
-    <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
-    <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
-      <button onclick="syncData()" class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-md transition-colors text-emerald-400">
-        <i data-lucide="cloud-download" class="w-5 h-5"></i><span class="text-sm font-medium">立即同步云端</span>
-      </button>
-      <button onclick="toggleSettings()" class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-md transition-colors">
-        <i data-lucide="settings" class="w-5 h-5"></i><span class="text-sm">设置</span>
-      </button>
-    </div>
-  </aside>
-
-  <!-- 主聊天区 -->
-  <main class="flex-grow flex flex-col relative chat-container w-full min-w-0">
-    <header class="p-3 flex items-center border-b border-gray-800 bg-[#212121] z-10">
-      <button onclick="toggleSidebar(true)" class="md:hidden p-2 hover:bg-gray-800 rounded-md mr-2"><i data-lucide="menu"></i></button>
-      <div id="active-chat-title" class="flex-grow text-center font-medium text-gray-200 truncate px-4">新对话</div>
-      <div id="sync-status" class="hidden flex items-center gap-2 pr-2">
-        <span class="sync-dot"></span><span class="text-[10px] text-emerald-400 font-bold uppercase">同步中</span>
-      </div>
-    </header>
-
-    <div id="messages-wrapper" class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar scroll-smooth">
-      <div id="welcome-view" class="h-full flex flex-col items-center justify-center text-center opacity-50">
-        <h1 class="text-2xl font-bold mb-2">有什么可以帮你的？</h1>
-      </div>
-    </div>
-
-    <!-- 重试浮层 -->
-    <div id="retry-popover" class="hidden" onclick="event.stopPropagation()">
-      <span class="text-[10px] text-gray-400 px-2 pt-1 font-bold uppercase tracking-wider">选择模型并重试</span>
-      <div class="flex gap-1 mt-1">
-        <select id="retry-model-select" class="bg-[#171717] border border-gray-700 rounded-lg p-1.5 text-xs flex-grow outline-none text-white"></select>
-        <button onclick="confirmRetry()" class="bg-white text-black px-2 rounded-lg hover:bg-gray-200 transition-colors">
-          <i data-lucide="check" class="w-4 h-4"></i>
+    <!-- 遮罩 & 侧边栏 (完全原样) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
+    <aside id="sidebar" class="sidebar h-full flex flex-col p-3 flex-shrink-0">
+        <button onclick="createNewChat()"
+            class="flex items-center gap-3 px-3 py-3 border border-gray-600 rounded-md hover:bg-gray-800 transition-colors mb-4">
+            <i data-lucide="plus" class="w-4 h-4"></i><span class="text-sm font-medium">开启新对话</span>
         </button>
-      </div>
-    </div>
+        <div class="search-box">
+            <i data-lucide="search" class="w-4 h-4 text-gray-400"></i>
+            <input type="text" id="chat-search" placeholder="搜索对话..." oninput="filterChats()">
+        </div>
+        <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
+        <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
+            <button onclick="syncData()"
+                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-md transition-colors text-emerald-400">
+                <i data-lucide="cloud-download" class="w-5 h-5"></i><span class="text-sm font-medium">立即同步云端</span>
+            </button>
+            <button onclick="toggleSettings()"
+                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-md transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i><span class="text-sm">设置</span>
+            </button>
+        </div>
+    </aside>
 
-    <!-- 底部输入区 -->
-    <footer class="p-4 md:pb-8 w-full">
-      <div class="max-w-4xl mx-auto relative flex flex-col items-start">
-        <div class="model-selector-container">
-          <select id="model-select" onchange="syncRetrySelect()">
-            <option value="deepseek-v3.2-thinking" selected>deepseek-v3.2-thinking</option>
-            <option value="gpt-5.2-2025-12-11">gpt-5.2-2025-12-11（不稳定）</option>
-            <option value="gpt-5.2">gpt-5.2（不稳定）</option>
-            <option value="gpt-5-all">gpt-5-all（不稳定）</option>
-            <option value="gpt-5.2-medium">gpt-5.2-medium（不稳定）</option>
-            <option value="gpt-5.2-high">gpt-5.2-high（不稳定）</option>
-            <option value="gpt-5-nano">gpt-5-nano（不稳定）</option>
-            <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-            <option value="gemini-3-flash-preview-thinking">gemini-3-flash-preview-thinking</option>
-            <option value="gemini-3.1-pro-preview-search">gemini-3.1-pro-preview-search</option>
-            <option value="gemini-3.1-pro-preview-high">gemini-3.1-pro-preview-high</option>
-            <option value="gemini-3.1-pro-preview-thinking">gemini-3.1-pro-preview-thinking</option>
-            <option value="grok-4.1">grok-4.1</option>
-            <option value="grok-4">grok-4</option>
-            <option value="grok-3">grok-3</option>
-            <option value="grok-3-deepersearch">grok-3-deepersearch</option>
-            <option value="grok-3-deepsearch">grok-3-deepsearch</option>
-            <option value="grok-3-reasoner">grok-3-reasoner</option>
-            <option value="deepseek-v3.2">deepseek-v3.2</option>
-            <option value="deepseek-r1-search">deepseek-r1-search</option>
-            <option value="deepseek-v3-search">deepseek-v3-search</option>
-            <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-          </select>
-        </div>
-        <div class="input-area p-3 flex items-end gap-2 w-full shadow-lg">
-          <textarea id="user-input" rows="1" placeholder="给 AI 发送消息..." class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none py-1 px-2 text-sm md:text-base" oninput="autoResize(this)"></textarea>
-          <button id="send-btn" onclick="sendMessage()" class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">
-            <i data-lucide="arrow-up" class="w-5 h-5"></i>
-          </button>
-          <button id="stop-btn" onclick="stopGeneration()" class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 hidden">
-            <i data-lucide="square" class="w-5 h-5"></i>
-          </button>
-        </div>
-      </div>
-    </footer>
-  </main>
+    <!-- 主聊天区 -->
+    <main class="flex-grow flex flex-col relative chat-container w-full min-w-0">
+        <header class="p-3 flex items-center border-b border-gray-800 bg-[#212121] z-10">
+            <button onclick="toggleSidebar(true)" class="md:hidden p-2 hover:bg-gray-800 rounded-md mr-2"><i
+                    data-lucide="menu"></i></button>
+            <div id="active-chat-title" class="flex-grow text-center font-medium text-gray-200 truncate px-4">新对话</div>
+            <div id="sync-status" class="hidden flex items-center gap-2 pr-2">
+                <span class="sync-dot"></span><span class="text-[10px] text-emerald-400 font-bold uppercase">同步中</span>
+            </div>
+        </header>
 
-  <!-- 设置弹窗 -->
-  <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
-    <div class="bg-[#2f2f2f] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-white">
-      <div class="p-6 border-b border-gray-700 flex justify-between items-center">
-        <h2 class="text-xl font-semibold">偏好设置</h2>
-        <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i data-lucide="x"></i></button>
-      </div>
-      <div class="p-6 space-y-6">
-        <div>
-          <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
-          <textarea id="sys-prompt" class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors" rows="4"></textarea>
+        <div id="messages-wrapper" class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar scroll-smooth">
+            <div id="welcome-view" class="h-full flex flex-col items-center justify-center text-center opacity-50">
+                <h1 class="text-2xl font-bold mb-2">有什么可以帮你的？</h1>
+            </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-3 text-gray-300">回复倾向 (Temperature)</label>
-          <div class="flex gap-2">
-            <button class="temp-btn" data-temp="0.2" onclick="setTemp(0.2, this)">更严谨</button>
-            <button class="temp-btn" data-temp="0.7" onclick="setTemp(0.7, this)">适中</button>
-            <button class="temp-btn" data-temp="1.2" onclick="setTemp(1.2, this)">创造力</button>
-          </div>
+
+        <!-- 重试浮层 -->
+        <div id="retry-popover" class="hidden" onclick="event.stopPropagation()">
+            <span class="text-[10px] text-gray-400 px-2 pt-1 font-bold uppercase tracking-wider">选择模型并重试</span>
+            <div class="flex gap-1 mt-1">
+                <select id="retry-model-select"
+                    class="bg-[#171717] border border-gray-700 rounded-lg p-1.5 text-xs flex-grow outline-none text-white"></select>
+                <button onclick="confirmRetry()"
+                    class="bg-white text-black px-2 rounded-lg hover:bg-gray-200 transition-colors">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                </button>
+            </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-3 text-gray-300">字体大小</label>
-          <div class="flex gap-2">
-            <button class="font-btn" data-size="small" onclick="setFontSize('small', this)">小</button>
-            <button class="font-btn" data-size="medium" onclick="setFontSize('medium', this)">中</button>
-            <button class="font-btn" data-size="large" onclick="setFontSize('large', this)">大</button>
-          </div>
+
+        <!-- 底部输入区 -->
+        <footer class="p-4 md:pb-8 w-full">
+            <div class="max-w-4xl mx-auto relative flex flex-col items-start">
+                <div class="model-selector-container">
+                    <select id="model-select" onchange="syncRetrySelect()">
+                        <option value="deepseek-v3.2-thinking" selected>deepseek-v3.2-thinking</option>
+                        <option value="gpt-5.2-2025-12-11">gpt-5.2-2025-12-11（不稳定）</option>
+                        <option value="gpt-5.2">gpt-5.2（不稳定）</option>
+                        <option value="gpt-5-all">gpt-5-all（不稳定）</option>
+                        <option value="gpt-5.2-medium">gpt-5.2-medium（不稳定）</option>
+                        <option value="gpt-5.2-high">gpt-5.2-high（不稳定）</option>
+                        <option value="gpt-5-nano">gpt-5-nano（不稳定）</option>
+                        <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                        <option value="gemini-3-flash-preview-thinking">gemini-3-flash-preview-thinking</option>
+                        <option value="gemini-3.1-pro-preview-search">gemini-3.1-pro-preview-search</option>
+                        <option value="gemini-3.1-pro-preview-high">gemini-3.1-pro-preview-high</option>
+                        <option value="gemini-3.1-pro-preview-thinking">gemini-3.1-pro-preview-thinking</option>
+                        <option value="grok-4.1">grok-4.1</option>
+                        <option value="grok-4">grok-4</option>
+                        <option value="grok-3">grok-3</option>
+                        <option value="grok-3-deepersearch">grok-3-deepersearch</option>
+                        <option value="grok-3-deepsearch">grok-3-deepsearch</option>
+                        <option value="grok-3-reasoner">grok-3-reasoner</option>
+                        <option value="deepseek-v3.2">deepseek-v3.2</option>
+                        <option value="deepseek-r1-search">deepseek-r1-search</option>
+                        <option value="deepseek-v3-search">deepseek-v3-search</option>
+                        <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+                    </select>
+                </div>
+                <div class="input-area p-3 flex items-end gap-2 w-full shadow-lg">
+                    <textarea id="user-input" rows="1" placeholder="给 AI 发送消息..."
+                        class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none py-1 px-2 text-sm md:text-base"
+                        oninput="autoResize(this)"></textarea>
+                    <button id="send-btn" onclick="sendMessage()"
+                        class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50">
+                        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                    </button>
+                    <button id="stop-btn" onclick="stopGeneration()"
+                        class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 hidden">
+                        <i data-lucide="square" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </main>
+
+    <!-- 设置弹窗 -->
+    <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
+        <div class="bg-[#2f2f2f] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden text-white">
+            <div class="p-6 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-xl font-semibold">偏好设置</h2>
+                <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i
+                        data-lucide="x"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
+                    <textarea id="sys-prompt"
+                        class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
+                        rows="4"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">回复倾向 (Temperature)</label>
+                    <div class="flex gap-2">
+                        <button class="temp-btn" data-temp="0.2" onclick="setTemp(0.2, this)">更严谨</button>
+                        <button class="temp-btn" data-temp="0.7" onclick="setTemp(0.7, this)">适中</button>
+                        <button class="temp-btn" data-temp="1.2" onclick="setTemp(1.2, this)">创造力</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">字体大小</label>
+                    <div class="flex gap-2">
+                        <button class="font-btn" data-size="small" onclick="setFontSize('small', this)">小</button>
+                        <button class="font-btn" data-size="medium" onclick="setFontSize('medium', this)">中</button>
+                        <button class="font-btn" data-size="large" onclick="setFontSize('large', this)">大</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">外观主题</label>
+                    <div class="flex gap-2">
+                        <button class="theme-btn" data-theme="light" onclick="setTheme('light')">浅色</button>
+                        <button class="theme-btn" data-theme="dark" onclick="setTheme('dark')">深色</button>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
+                    <button onclick="toggleSettings()"
+                        class="px-4 py-2 hover:bg-gray-800 rounded-md text-sm">取消</button>
+                    <button onclick="saveSettings()"
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors text-sm font-medium">保存设置</button>
+                </div>
+            </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-3 text-gray-300">外观主题</label>
-          <div class="flex gap-2">
-            <button class="theme-btn" data-theme="light" onclick="setTheme('light')">浅色</button>
-            <button class="theme-btn" data-theme="dark" onclick="setTheme('dark')">深色</button>
-          </div>
-        </div>
-        <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
-          <button onclick="toggleSettings()" class="px-4 py-2 hover:bg-gray-800 rounded-md text-sm">取消</button>
-          <button onclick="saveSettings()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors text-sm font-medium">保存设置</button>
-        </div>
-      </div>
     </div>
-  </div>
     <script>
         // ==================== 配置 ====================
         const API_KEY = 'sk-cNcGPKxI0qnAvbxh3e8bC70fC1F844Ac88826a483a1dF96c';
@@ -1067,7 +1103,8 @@
             wrapper.innerHTML = '';
             messages.forEach((msg, idx) => {
                 const isLast = idx === messages.length - 1;
-                appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant');
+                // 传递 msg.reasoning（如果存在）
+                appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg.reasoning || '');
             });
             wrapper.scrollTop = wrapper.scrollHeight;
         }
@@ -1164,8 +1201,8 @@
             await requestAI(text, model, chat);
         }
 
-        // ========== 修改后的 appendMessageToUI：无头像，手机全宽 ==========
-        function appendMessageToUI(role, content, model, showActions = false) {
+        // ========== 修改后的 appendMessageToUI：无头像，手机全宽，支持思考内容 ==========
+        function appendMessageToUI(role, content, model, showActions = false, reasoning = '') {
             const wrapper = document.getElementById('messages-wrapper');
             if (document.getElementById('welcome-view')) document.getElementById('welcome-view').style.display = 'none';
 
@@ -1175,6 +1212,18 @@
 
             const contentCol = document.createElement('div');
             contentCol.className = `flex flex-col w-full`; // 完全占满父容器
+
+            // 如果是AI并且有思考内容，添加一个灰色思考区域
+            if (isAI) {
+                const thinkingDiv = document.createElement('div');
+                thinkingDiv.className = 'thinking-text text-gray-400 text-xs mb-1';
+                if (reasoning) {
+                    thinkingDiv.innerText = reasoning;
+                } else {
+                    thinkingDiv.style.display = 'none';
+                }
+                contentCol.appendChild(thinkingDiv);
+            }
 
             const bubble = document.createElement('div');
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
@@ -1246,7 +1295,7 @@
             return row;
         }
 
-        // ========== requestAI 函数保持不变（只依赖 appendMessageToUI 返回的结构） ==========
+        // ========== requestAI 函数（修复重复变量，支持思考内容保存） ==========
         async function requestAI(userText, model, chat) {
             abortController = new AbortController();
             isGenerating = true;
@@ -1255,8 +1304,10 @@
             document.getElementById('stop-btn').classList.remove('hidden');
 
             const aiRow = appendMessageToUI('assistant', '', model, true);
+            const thinkingDiv = aiRow.querySelector('.thinking-text');
             const contentArea = aiRow.querySelector('.ai-content-area');
             let fullContent = "";
+            let thinkingContent = "";    // 累积思考内容
             let receivedAny = false;
 
             try {
@@ -1288,10 +1339,22 @@
                             if (data === '[DONE]') continue;
                             try {
                                 const json = JSON.parse(data);
-                                const delta = json.choices[0].delta?.content || '';
-                                if (delta) receivedAny = true;
-                                fullContent += delta;
-                                contentArea.innerHTML = marked.parse(fullContent);
+                                const delta = json.choices[0].delta || {};
+
+                                // 处理思考内容
+                                if (delta.reasoning_content) {
+                                    thinkingContent += delta.reasoning_content;
+                                    if (thinkingDiv) {
+                                        thinkingDiv.style.display = 'block';
+                                        thinkingDiv.innerText = thinkingContent;
+                                    }
+                                }
+                                // 处理正式回复
+                                if (delta.content) {
+                                    receivedAny = true;
+                                    fullContent += delta.content;
+                                    contentArea.innerHTML = marked.parse(fullContent);
+                                }
                             } catch (e) { }
                         }
                     }
@@ -1314,7 +1377,12 @@
                     }
                 });
 
-                chat.messages.push({ role: 'assistant', content: fullContent, model: model });
+                chat.messages.push({
+                    role: 'assistant',
+                    content: fullContent,
+                    model: model,
+                    reasoning: thinkingContent   // 保存思考内容
+                });
                 chat.updatedAt = Date.now();
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
                 renderChatHistory();
@@ -1343,7 +1411,13 @@
                             }
                         });
                     }
-                    chat.messages.push({ role: 'assistant', content: fullContent, model: model });
+                    // 用户中止时也保存已收到的思考内容和回复
+                    chat.messages.push({ 
+                        role: 'assistant', 
+                        content: fullContent, 
+                        model: model,
+                        reasoning: thinkingContent   // 保存思考内容
+                    });
                     chat.updatedAt = Date.now();
                     localStorage.setItem('ai_chats', JSON.stringify(chats));
                     renderChatHistory();
@@ -1365,4 +1439,5 @@
         }
     </script>
 </body>
+
 </html>
