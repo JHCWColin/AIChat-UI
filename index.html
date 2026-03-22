@@ -832,11 +832,10 @@
                 <button onclick="toggleSettings()" class="text-gray-400 hover:text-white"><i data-lucide="x"></i></button>
             </div>
             <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                <h2 class="text-lg font-semibold text-gray-200">AI个性化</h2>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
-                    <textarea id="sys-prompt"
-                        class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                        rows="4"></textarea>
+                    <textarea id="sys-prompt" class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors" rows="4"></textarea>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-3 text-gray-300">回复倾向 (Temperature)</label>
@@ -844,6 +843,14 @@
                         <button class="temp-btn rounded-xl" data-temp="0.2" onclick="setTemp(0.2, this)">更严谨</button>
                         <button class="temp-btn rounded-xl" data-temp="0.7" onclick="setTemp(0.7, this)">适中</button>
                         <button class="temp-btn rounded-xl" data-temp="1.2" onclick="setTemp(1.2, this)">创造力</button>
+                    </div>
+                </div>
+                <h2 class="text-lg font-semibold text-gray-200">UI自定义</h2>
+                <div>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">外观主题</label>
+                    <div class="flex gap-2">
+                        <button class="theme-btn rounded-xl" data-theme="light" onclick="setTheme('light')">浅色</button>
+                        <button class="theme-btn rounded-xl" data-theme="dark" onclick="setTheme('dark')">深色</button>
                     </div>
                 </div>
                 <div>
@@ -855,11 +862,37 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-3 text-gray-300">外观主题</label>
-                    <div class="flex gap-2">
-                        <button class="theme-btn rounded-xl" data-theme="light" onclick="setTheme('light')">浅色</button>
-                        <button class="theme-btn rounded-xl" data-theme="dark" onclick="setTheme('dark')">深色</button>
+                    <label class="block text-sm font-medium mb-3 text-gray-300">背景图片</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="flex flex-col items-center gap-2">
+                            <img id="bg-thumb-1" src="1.JPG" alt="光遇同心节" class="w-20 h-20 object-cover object-center rounded-lg cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors" onclick="setBackgroundImage(1, this)">
+                            <span class="text-xs text-gray-400 text-center">光遇同心节</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <img id="bg-thumb-2" src="2.JPG" alt="光遇秋宵节" class="w-20 h-20 object-cover object-center rounded-lg cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors" onclick="setBackgroundImage(2, this)">
+                            <span class="text-xs text-gray-400 text-center">光遇秋宵节</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <img id="bg-thumb-3" src="3.JPG" alt="光遇圣诞节" class="w-20 h-20 object-cover object-center rounded-lg cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors" onclick="setBackgroundImage(3, this)">
+                            <span class="text-xs text-gray-400 text-center">光遇圣诞节</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <img id="bg-thumb-4" src="4.JPG" alt="光遇新年" class="w-20 h-20 object-cover object-center rounded-lg cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors" onclick="setBackgroundImage(4, this)">
+                            <span class="text-xs text-gray-400 text-center">光遇新年</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <img id="bg-thumb-5" src="5.JPG" alt="光遇星空（暗）" class="w-20 h-20 object-cover object-center rounded-lg cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors" onclick="setBackgroundImage(5, this)">
+                            <span class="text-xs text-gray-400 text-center">光遇星空（暗）</span>
+                        </div>
+                        <div class="flex flex-col items-center gap-2">
+                            <img id="bg-thumb-6" src="6.JPG" alt="MacOS" class="w-20 h-20 object-cover object-center rounded-lg cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors" onclick="setBackgroundImage(6, this)">
+                            <span class="text-xs text-gray-400 text-center">MacOS</span>
+                        </div>
                     </div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
+                    <button onclick="toggleSettings()" class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存设置</button>
                 </div>
                 <!-- ========= 记忆库只读区域 ========= -->
                 <div>
@@ -887,7 +920,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V1.1 (build202603212346)</span>
+                            <span id="app-version">V1.11 (build202603220937)</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -895,25 +928,19 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-700">
-                    <button onclick="toggleSettings()"
-                        class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
-                    <button onclick="saveSettings()"
-                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存设置</button>
-                </div>
             </div>
         </div>
     </div>
 
     <script>
         // ==================== 配置 ====================
-        const API_KEY = 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+        const API_KEY = 'sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
         const BASE_URL = 'https://api.vveai.com/v1';
         const LC_CONFIG = {
-            id: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-            key: 'xxxxxxxxxxxxxxxxxxxxxxxxxxx',
-            masterKey: '4xxxxxxxxxxxxxxxxxxxxxx',
-            base: 'https://q6hbowqj.lc-cn-n1-shared.com/1.1/classes/AIChats'
+            id: 'XXXXXXXXXXXXXXXXXXXxz',
+            key: 'W7eC0HzxxxxxxxxxxxxxxxDdIS',
+            masterKey: '4xTXG0XxxxxxxxxxxxQn2Yqa0l',
+            base: 'https://q6xxxxxxxxqj.lc-cn-n1-shared.com/1.1/classes/AIChats'
         };
 
         let chats = JSON.parse(localStorage.getItem('ai_chats') || '[]');
@@ -921,6 +948,7 @@
         let systemPrompt = localStorage.getItem('sys_prompt') || "";
         let currentTemp = parseFloat(localStorage.getItem('chat_temp')) || 0.7;
         let currentFontSize = localStorage.getItem('font_size') || 'medium';
+        let selectedBackgroundImage = parseInt(localStorage.getItem('bg_image')) || 1;
         let abortController = null;
         let isGenerating = false;
         let filteredChats = [];
@@ -1149,8 +1177,10 @@
         function toggleSettings() { const modal = document.getElementById('settings-modal'); modal.classList.toggle('flex'); modal.classList.toggle('hidden'); if (modal.classList.contains('flex')) renderMemoriesToSettings(); lucide.createIcons(); }
         function setTemp(val, btn) { currentTemp = val; document.querySelectorAll('.temp-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
         function setFontSize(size, btn) { currentFontSize = size; document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large'); document.body.classList.add(`font-size-${size}`); document.querySelectorAll('.font-btn').forEach(b => b.classList.toggle('active', b.dataset.size === size)); }
-        function setTheme(theme, save = true) { document.body.classList.remove('theme-light', 'theme-dark'); document.body.classList.add(`theme-${theme}`); if (save) localStorage.setItem('theme', theme); lucide.createIcons(); }
-        function saveSettings() { systemPrompt = document.getElementById('sys-prompt').value; localStorage.setItem('sys_prompt', systemPrompt); localStorage.setItem('chat_temp', currentTemp); localStorage.setItem('font_size', currentFontSize); toggleSettings(); }
+        function setTheme(theme, save = true) { document.body.classList.remove('theme-light', 'theme-dark'); document.body.classList.add(`theme-${theme}`); if (save) localStorage.setItem('theme', theme); updateBackgroundImage(); lucide.createIcons(); }
+        function setBackgroundImage(num, btn) { selectedBackgroundImage = num; document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => { img.style.borderColor = '#4b5563'; }); btn.style.borderColor = '#10b981'; updateBackgroundImage(); }
+        function saveSettings() { systemPrompt = document.getElementById('sys-prompt').value; localStorage.setItem('sys_prompt', systemPrompt); localStorage.setItem('chat_temp', currentTemp); localStorage.setItem('font_size', currentFontSize); localStorage.setItem('bg_image', selectedBackgroundImage); toggleSettings(); }
+        function updateBackgroundImage() { const bgNum = selectedBackgroundImage; const newUrl = `${bgNum}.JPG`; if (document.body.classList.contains('theme-light')) { document.body.style.background = `linear-gradient(145deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.6)), url('${newUrl}') center/cover fixed`; } else { document.body.style.background = `linear-gradient(145deg, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0.6)), url('${newUrl}') center/cover fixed`; } }
         function autoResize(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }
         function syncRetrySelect() { const mainSelect = document.getElementById('model-select'); const retrySelect = document.getElementById('retry-model-select'); retrySelect.innerHTML = mainSelect.innerHTML; }
         function openRetryMenu(e) { e.stopPropagation(); const popover = document.getElementById('retry-popover'); popover.style.left = `${e.clientX - 10}px`; popover.style.top = `${e.clientY + 15}px`; popover.classList.remove('hidden'); }
@@ -1231,6 +1261,8 @@
             lucide.createIcons();
             document.getElementById('sys-prompt').value = systemPrompt;
             updateTempUI();
+            updateBackgroundImage();
+            highlightBackgroundThumb();
             syncRetrySelect();
             renderChatHistory();
             await syncData();
@@ -1246,6 +1278,7 @@
         };
         function updateTempUI() { document.querySelectorAll('.temp-btn').forEach(btn => { btn.classList.toggle('active', parseFloat(btn.dataset.temp) === currentTemp); }); }
         function highlightFontBtn(size) { document.querySelectorAll('.font-btn').forEach(btn => { btn.classList.toggle('active', btn.dataset.size === size); }); }
+        function highlightBackgroundThumb() { const selectedThumb = document.getElementById(`bg-thumb-${selectedBackgroundImage}`); if (selectedThumb) { document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => { img.style.borderColor = '#3d3d3d'; }); selectedThumb.style.borderColor = '#10b981'; } }
     </script>
 </body>
 
