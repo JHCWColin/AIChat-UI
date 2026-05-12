@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>科技感引导页 | 轻触未来</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* 避免拖动时选中文字 */
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Poppins', sans-serif;
+            background: #f0f4fa;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 主容器：全屏滑动区 */
+        .slider-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.02);
+        }
+
+        .slider-wrapper {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            will-change: transform;
+        }
+
+        /* 每一页全屏卡片，浅色科技感背景 */
+        .slide {
+            flex: 0 0 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            backdrop-filter: blur(0px);
+            background: radial-gradient(ellipse at 20% 40%, rgba(255,255,245,0.9), rgba(248,250,255,1));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 20px rgba(0,0,0,0.02);
+        }
+
+        /* 科技感装饰网格线 (浅色) */
+        .slide::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(#e2e8f0 1px, transparent 1px),
+                linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.25;
+            pointer-events: none;
+        }
+
+        /* 内容卡片区 */
+        .content-card {
+            text-align: center;
+            max-width: 580px;
+            width: 86%;
+            padding: 2.2rem 2rem;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            border-radius: 48px;
+            box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0,0,0,0.02);
+            border: 1px solid rgba(255,255,255,0.8);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            z-index: 2;
+        }
+
+        .slide:hover .content-card {
+            transform: translateY(-5px);
+            box-shadow: 0 28px 40px -16px rgba(0, 0, 0, 0.12);
+        }
+
+        /* 占位图形 / 科技感抽象装饰 */
+        .tech-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            display: inline-block;
+            background: linear-gradient(135deg, #2c3e66, #4f7aa6);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: 4px;
+        }
+
+        /* 文案占位区域 */
+        .title-placeholder {
+            font-size: 2.2rem;
+            font-weight: 650;
+            letter-spacing: -0.01em;
+            margin-bottom: 1rem;
+            background: linear-gradient(120deg, #1e2a3e, #2c3e50);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .desc-placeholder {
+            font-size: 1.1rem;
+            line-height: 1.5;
+            color: #3b4b62;
+            font-weight: 450;
+            margin-top: 0.8rem;
+            border-top: 1px solid rgba(100, 116, 139, 0.2);
+            padding-top: 1.2rem;
+            display: inline-block;
+        }
+
+        /* 最后一页按钮 (关闭标签页样式，继承原有科技感) */
+        .start-link {
+            display: inline-block;
+            margin-top: 2rem;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            background: #1f2f47;
+            color: white;
+            border-radius: 60px;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 20px rgba(0, 20, 40, 0.12);
+            border: 1px solid rgba(255,255,255,0.3);
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            font-family: inherit;
+            line-height: normal;
+        }
+
+        .start-link:hover {
+            background: #0f1e2f;
+            transform: scale(1.02);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+            color: #f0f9ff;
+        }
+
+        /* 控制按钮通用样式：左右箭头 + 跳过按钮 */
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            background: rgba(255,255,255,0.7);
+            backdrop-filter: blur(20px);
+            border-radius: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 26px;
+            font-weight: 300;
+            color: #1f2f47;
+            transition: all 0.2s;
+            z-index: 20;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(255,255,255,0.6);
+            user-select: none;
+        }
+
+        .nav-btn:hover {
+            background: white;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+            color: #0077be;
+            transform: translateY(-50%) scale(1.02);
+        }
+
+        .btn-left {
+            left: 24px;
+        }
+
+        .btn-right {
+            right: 24px;
+        }
+
+        /* 跳过按钮 (右上角) */
+        .skip-btn {
+            position: absolute;
+            top: 28px;
+            right: 28px;
+            padding: 8px 20px;
+            background: rgba(255,255,245,0.8);
+            backdrop-filter: blur(12px);
+            border-radius: 100px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #2c3e66;
+            cursor: pointer;
+            z-index: 25;
+            transition: all 0.2s;
+            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            letter-spacing: 0.3px;
+        }
+
+        .skip-btn:hover {
+            background: white;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+            color: #0f2c44;
+        }
+
+        /* 页面指示圆点区域 */
+        .dots {
+            position: absolute;
+            bottom: 32px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            z-index: 20;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #b9c4d8;
+            border-radius: 10px;
+            transition: all 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+            cursor: pointer;
+        }
+
+        .dot.active {
+            width: 28px;
+            background: #2c3e66;
+            box-shadow: 0 0 6px rgba(44,62,102,0.4);
+        }
+
+        /* 隐藏元素 */
+        .hidden {
+            display: none;
+        }
+
+        /* 响应式调整，手机适应 */
+        @media (max-width: 680px) {
+            .content-card {
+                padding: 1.5rem 1.2rem;
+                width: 88%;
+            }
+            .title-placeholder {
+                font-size: 1.8rem;
+            }
+            .desc-placeholder {
+                font-size: 0.95rem;
+            }
+            .nav-btn {
+                width: 38px;
+                height: 38px;
+                font-size: 22px;
+            }
+            .skip-btn {
+                top: 18px;
+                right: 18px;
+                padding: 6px 16px;
+                font-size: 0.8rem;
+            }
+            .tech-icon {
+                font-size: 3rem;
+            }
+        }
+
+        /* 优雅滚动禁用，避免页面滚动 */
+        body, html {
+            overscroll-behavior: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="slider-container">
+    <!-- 跳过按钮 (略过全部引导，直接最后一页) -->
+    <div class="skip-btn" id="skipBtn">略过 →</div>
+
+    <!-- 左右箭头导航 -->
+    <div class="nav-btn btn-left" id="prevBtn">‹</div>
+    <div class="nav-btn btn-right" id="nextBtn">›</div>
+
+    <!-- 滑动主体 -->
+    <div class="slider-wrapper" id="sliderWrapper">
+        <!-- 第1页 文案占位区 -->
+        <div class="slide" data-index="0">
+            <div class="content-card">
+                <div class="tech-icon">◈ 01 ◈</div>
+                <div class="title-placeholder">全新设计理念</div>
+                <div class="desc-placeholder">
+                    </div>
+            </div>
+        </div>
+
+        <!-- 第2页 文案占位区 -->
+        <div class="slide" data-index="1">
+            <div class="content-card">
+                <div class="tech-icon">⚡ 02 ⚡</div>
+                <div class="title-placeholder">跟好最强模型步伐</div>
+                <div class="desc-placeholder">
+                </div>
+            </div>
+        </div>
+
+        <!-- 第3页 文案占位区 -->
+        <div class="slide" data-index="2">
+            <div class="content-card">
+                <div class="tech-icon">🌀 03 🌀</div>
+                <div class="title-placeholder">新的云端 多设备保持最新</div>
+                <div class="desc-placeholder">
+                    </div>
+            </div>
+        </div>
+
+        <!-- 第4页 包含「开始使用」按钮，点击关闭当前标签页 -->
+        <div class="slide" data-index="3">
+            <div class="content-card">
+                <div class="tech-icon">✨ 04 ✨</div>
+                <div class="title-placeholder">探索无限 · 即刻启程</div>
+                <div class="desc-placeholder">
+                    点击下方按钮关闭引导页。
+                </div>
+                <!-- 关闭当前标签页按钮，替代原有超链接 -->
+                <button class="start-link" id="closeTabBtn">开始使用 →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 圆点指示器 -->
+    <div class="dots" id="dotsContainer"></div>
+</div>
+
+<script>
+    (function() {
+        // ---------- 配置 ----------
+        const totalSlides = 4;
+        let currentIdx = 0;
+        let autoTimer = null;
+        let isAnimating = false;   // 防止动画期间过多切换
+        const autoInterval = 5000; // 5秒自动下一页
+        
+        // DOM 元素
+        const wrapper = document.getElementById('sliderWrapper');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const skipBtn = document.getElementById('skipBtn');
+        const dotsContainer = document.getElementById('dotsContainer');
+        const closeTabBtn = document.getElementById('closeTabBtn'); // 关闭页面按钮
+        
+        // slides 数组
+        const slides = document.querySelectorAll('.slide');
+        
+        // ---------- 关闭当前标签页功能 ----------
+        function handleCloseTab() {
+            // 清除自动轮播计时器，避免后台操作
+            clearAutoTimer();
+            // 尝试关闭当前标签页 / 窗口
+            // 现代浏览器通常允许在用户手势下关闭由脚本打开的标签页，但直接关闭有时受限。
+            // 为了最大程度实现关闭效果，调用 window.close()
+            window.close();
+            
+            // 由于某些浏览器可能禁止关闭非脚本打开的窗口，添加备用提示 (不破坏体验，静默)
+            // 但不影响主需求，设计上用户点击后期望关闭页面。
+            // 可选: 一小段时间后如果窗口未关闭，可以显示友好提示，但不干扰核心交互。
+            setTimeout(() => {
+                // 仅当窗口仍然存在且未关闭时，在控制台输出信息（不干扰界面）
+                if (!window.closed) {
+                    console.warn("浏览器安全策略限制了自动关闭，请手动关闭标签页。");
+                }
+            }, 200);
+        }
+        
+        // ---------- 辅助函数 ----------
+        function clearAutoTimer() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+        }
+        
+        // 启动自动轮播 (仅当不在最后一页时生效，且自动轮播开启)
+        function startAutoSlide() {
+            // 如果当前在最后一页，永不自动滚动
+            if (currentIdx === totalSlides - 1) {
+                clearAutoTimer();
+                return;
+            }
+            // 已经存在计时器则不重复
+            if (autoTimer) return;
+            autoTimer = setInterval(() => {
+                // 若正在动画 或者 当前已经是最后一页，不执行自动跳转
+                if (isAnimating) return;
+                if (currentIdx < totalSlides - 1) {
+                    goToSlide(currentIdx + 1);
+                } else {
+                    // 到达最后一页时清除计时器
+                    if (currentIdx === totalSlides - 1) {
+                        clearAutoTimer();
+                    }
+                }
+            }, autoInterval);
+        }
+        
+        // 重置自动轮播 (用户交互后重新计时)
+        function resetAutoTimer() {
+            if (currentIdx === totalSlides - 1) {
+                // 最后一页绝对不启动自动
+                clearAutoTimer();
+                return;
+            }
+            clearAutoTimer();
+            startAutoSlide();
+        }
+        
+        // 更新 UI：圆点活动状态 + 跳过按钮显隐 (最后一页隐藏跳过)
+        function updateUI() {
+            // 更新圆点激活样式
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach((dot, idx) => {
+                if (idx === currentIdx) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+            
+            // 最后一页时隐藏跳过按钮，否则显示
+            if (currentIdx === totalSlides - 1) {
+                skipBtn.classList.add('hidden');
+            } else {
+                skipBtn.classList.remove('hidden');
+            }
+        }
+        
+        // 核心切换方法
+        function goToSlide(index, fromAuto = false) {
+            if (isAnimating) return;
+            if (index === currentIdx) return;
+            if (index < 0) index = 0;
+            if (index >= totalSlides) index = totalSlides - 1;
+            if (index === currentIdx) return;
+            
+            const targetIndex = index;
+            isAnimating = true;
+            
+            // 更新 transform
+            const offsetPercent = targetIndex * 100;
+            wrapper.style.transition = "transform 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+            wrapper.style.transform = `translateX(-${offsetPercent}%)`;
+            
+            // 等待过渡完成
+            const onTransitionEnd = () => {
+                wrapper.removeEventListener('transitionend', onTransitionEnd);
+                currentIdx = targetIndex;
+                isAnimating = false;
+                updateUI();
+                
+                // 切换完成后管理自动轮播
+                if (currentIdx === totalSlides - 1) {
+                    // 最后一页: 停止所有自动切换
+                    clearAutoTimer();
+                } else {
+                    // 非最后一页: 如果是从自动轮播触发，维持现有计时器；手动重置计时器确保连贯
+                    if (!fromAuto) {
+                        resetAutoTimer();
+                    } else {
+                        if (!autoTimer) {
+                            startAutoSlide();
+                        }
+                    }
+                }
+            };
+            
+            wrapper.addEventListener('transitionend', onTransitionEnd, { once: true });
+            // 保险: 如果transition没触发(如样式问题) , 300ms后备
+            setTimeout(() => {
+                if (isAnimating) {
+                    wrapper.removeEventListener('transitionend', onTransitionEnd);
+                    currentIdx = targetIndex;
+                    isAnimating = false;
+                    updateUI();
+                    if (currentIdx === totalSlides - 1) clearAutoTimer();
+                    else if (!autoTimer && currentIdx !== totalSlides - 1) startAutoSlide();
+                }
+            }, 700);
+        }
+        
+        // 下一页
+        function nextSlide() {
+            if (isAnimating) return;
+            if (currentIdx < totalSlides - 1) {
+                goToSlide(currentIdx + 1);
+            } else {
+                // 已经是最后一页，无动作
+            }
+        }
+        
+        // 上一页
+        function prevSlide() {
+            if (isAnimating) return;
+            if (currentIdx > 0) {
+                goToSlide(currentIdx - 1);
+            }
+        }
+        
+        // 略过功能: 直接跳至最后一页（索引3），停止自动轮播
+        function skipToLast() {
+            if (isAnimating) return;
+            if (currentIdx === totalSlides - 1) return;
+            clearAutoTimer();   // 停止所有自动
+            goToSlide(totalSlides - 1);
+        }
+        
+        // 生成圆点并绑定事件
+        function initDots() {
+            dotsContainer.innerHTML = '';
+            for (let i = 0; i < totalSlides; i++) {
+                const dot = document.createElement('div');
+                dot.classList.add('dot');
+                if (i === currentIdx) dot.classList.add('active');
+                dot.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (isAnimating) return;
+                    if (i === currentIdx) return;
+                    clearAutoTimer();
+                    goToSlide(i);
+                });
+                dotsContainer.appendChild(dot);
+            }
+        }
+        
+        // 触摸滑动支持 (科技感流畅手势)
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let isSwiping = false;
+        
+        function handleTouchStart(e) {
+            if (isAnimating) return;
+            touchStartX = e.changedTouches[0].screenX;
+            isSwiping = true;
+        }
+        
+        function handleTouchEnd(e) {
+            if (!isSwiping || isAnimating) {
+                isSwiping = false;
+                return;
+            }
+            touchEndX = e.changedTouches[0].screenX;
+            const deltaX = touchEndX - touchStartX;
+            if (Math.abs(deltaX) > 50) {
+                if (deltaX > 0) {
+                    prevSlide();
+                } else {
+                    nextSlide();
+                }
+                if (currentIdx !== totalSlides - 1) {
+                    resetAutoTimer();
+                } else {
+                    clearAutoTimer();
+                }
+            }
+            isSwiping = false;
+            touchStartX = 0;
+            touchEndX = 0;
+        }
+        
+        // 绑定触摸事件
+        function bindTouchEvents() {
+            const container = document.querySelector('.slider-container');
+            container.addEventListener('touchstart', handleTouchStart, { passive: true });
+            container.addEventListener('touchend', handleTouchEnd);
+            // 阻止轻微滑动导致页面滚动
+            container.addEventListener('touchmove', (e) => {
+                if (isSwiping) {
+                    // 不阻止默认可以让体验更原生，但一般无影响
+                }
+            }, { passive: false });
+        }
+        
+        // 键盘左右方向键支持
+        function handleKeydown(e) {
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                prevSlide();
+                if (currentIdx !== totalSlides - 1) resetAutoTimer();
+                else clearAutoTimer();
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                nextSlide();
+                if (currentIdx !== totalSlides - 1) resetAutoTimer();
+                else clearAutoTimer();
+            }
+        }
+        
+        // 鼠标悬停时暂停自动轮播 (提升用户体验)
+        let hoverPaused = false;
+        function pauseAutoOnHover() {
+            if (autoTimer && currentIdx !== totalSlides - 1) {
+                clearAutoTimer();
+                hoverPaused = true;
+            }
+        }
+        function resumeAutoOnLeave() {
+            if (hoverPaused && currentIdx !== totalSlides - 1) {
+                clearAutoTimer();
+                startAutoSlide();
+                hoverPaused = false;
+            }
+        }
+        
+        // 绑定鼠标进出容器
+        function bindHoverPause() {
+            const container = document.querySelector('.slider-container');
+            container.addEventListener('mouseenter', pauseAutoOnHover);
+            container.addEventListener('mouseleave', resumeAutoOnLeave);
+        }
+        
+        // 按钮监听
+        function bindButtons() {
+            prevBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                prevSlide();
+                if (currentIdx !== totalSlides - 1) resetAutoTimer();
+                else clearAutoTimer();
+            });
+            nextBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                nextSlide();
+                if (currentIdx !== totalSlides - 1) resetAutoTimer();
+                else clearAutoTimer();
+            });
+            skipBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                skipToLast();
+            });
+        }
+        
+        // 阻止拖动选中等 使UI干净
+        function preventDrag() {
+            window.addEventListener('dragstart', (e) => e.preventDefault());
+        }
+        
+        // 边缘修正：resize后确保transform偏移量正确
+        function fixTransformOnResize() {
+            window.addEventListener('resize', () => {
+                if (isAnimating) return;
+                const correctOffset = currentIdx * 100;
+                wrapper.style.transition = 'none';
+                wrapper.style.transform = `translateX(-${correctOffset}%)`;
+                setTimeout(() => {
+                    wrapper.style.transition = "transform 0.65s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+                }, 20);
+            });
+        }
+        
+        // 为关闭按钮绑定事件 (点击关闭当前标签页)
+        function bindCloseButton() {
+            if (closeTabBtn) {
+                closeTabBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // 停止任何自动轮播
+                    clearAutoTimer();
+                    // 调用关闭页面方法
+                    handleCloseTab();
+                });
+            }
+        }
+        
+        // 初始化
+        function init() {
+            initDots();
+            bindButtons();
+            bindCloseButton();      // 绑定关闭页面逻辑
+            bindTouchEvents();
+            window.addEventListener('keydown', handleKeydown);
+            preventDrag();
+            bindHoverPause();
+            fixTransformOnResize();
+            // 起始偏移
+            wrapper.style.transform = 'translateX(0%)';
+            currentIdx = 0;
+            updateUI();
+            // 开始自动轮播（当前不在最后一页）
+            startAutoSlide();
+        }
+        
+        // 启动所有
+        init();
+    })();
+</script>
+</body>
+</html>
