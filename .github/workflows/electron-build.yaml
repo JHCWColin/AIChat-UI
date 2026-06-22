@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'V*'          # 仅当推送 v 开头的标签时触发
+      - 'v*'          # 仅当推送 v 开头的标签时触发
 
 jobs:
   build:
@@ -22,11 +22,11 @@ jobs:
         with:
           node-version: 20    # 可根据需要调整
 
-      - name: Sync version with tag (remove 'V' prefix)
+      - name: Sync version with tag (remove 'v' prefix)
         shell: bash
         run: |
           # 从标签名提取纯版本号（去掉 v），更新 package.json
-          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
+          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           npm version --no-git-tag-version "$TAG_VERSION"
 
       - name: Install dependencies
@@ -41,6 +41,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/**
+            release/*.exe
+            release/*.msi
+            release/*.zip
+            release/*.dmg
+            release/*.deb
+            release/*.AppImage
+            release/*.blockmap
+            release/latest*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
