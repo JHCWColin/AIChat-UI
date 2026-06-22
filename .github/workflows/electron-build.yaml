@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'          # 仅当推送 v 开头的标签时触发
+      - 'V*'          # 仅当推送 v 开头的标签时触发
 
 jobs:
   build:
@@ -22,11 +22,11 @@ jobs:
         with:
           node-version: 20    # 可根据需要调整
 
-      - name: Sync version with tag (remove 'v' prefix)
+      - name: Sync version with tag (remove 'V' prefix)
         shell: bash
         run: |
           # 从标签名提取纯版本号（去掉 v），更新 package.json
-          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
           npm version --no-git-tag-version "$TAG_VERSION"
 
       - name: Install dependencies
