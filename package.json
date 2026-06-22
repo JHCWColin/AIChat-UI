@@ -25,60 +25,49 @@
       "!release/**"
     ],
     "icon": "icon.png",
+
     "win": {
       "target": [
-        {
-          "target": "portable",
-          "arch": ["x64", "arm64"],
-          "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
-        },
-        {
-          "target": "nsis",
-          "arch": ["x64", "arm64"]
-        },
-        {
-          "target": "msi",
-          "arch": ["x64", "arm64"]
-        }
-      ]
+        { "target": "portable", "arch": ["x64", "arm64"] },
+        { "target": "nsis", "arch": ["x64", "arm64"] },
+        { "target": "msi", "arch": ["x64", "arm64"] }
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
     },
+
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
     },
+
     "msi": {
       "artifactName": "${productName}-${version}-win-${arch}-installer.${ext}"
     },
+
     "linux": {
       "target": [
-        {
-          "target": "deb",
-          "arch": ["x64"],
-          "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
-        },
-        {
-          "target": "AppImage",
-          "arch": ["x64"],
-          "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
-        }
+        { "target": "deb", "arch": ["x64"] },
+        { "target": "AppImage", "arch": ["x64"] }
       ],
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "category": "Utility"
     },
+
     "mac": {
       "target": [
-        {
-          "target": "dmg",
-          "arch": ["x64", "arm64"],
-          "artifactName": "${productName}-${version}-mac-${arch}-installer.${ext}"
-        },
-        {
-          "target": "zip",
-          "arch": ["x64", "arm64"],
-          "artifactName": "${productName}-${version}-mac-${arch}-portable.${ext}"
-        }
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
       ],
       "category": "public.app-category.utilities"
+    },
+
+    "dmg": {
+      "artifactName": "${productName}-${version}-mac-${arch}-installer.${ext}"
+    },
+
+    "zip": {
+      "artifactName": "${productName}-${version}-mac-${arch}-portable.${ext}"
     }
   }
 }
