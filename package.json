@@ -1,0 +1,84 @@
+{
+  "name": "AIChatUI",
+  "version": "4.0.5",
+  "description": "AI Chat UI powered by Electron",
+  "main": "main.js",
+  "author": "JHCWColin <jhcwcolin@gmail.com>",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.jhcwcolin.aiui",
+    "productName": "AIChatUI",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/**/*",
+      "!release/**"
+    ],
+    "icon": "icon.png",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64", "arm64"],
+          "artifactName": "${productName}-${version}-win-${arch}-portable.${ext}"
+        },
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "msi",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-${version}-win-${arch}-setup.${ext}"
+    },
+    "msi": {
+      "artifactName": "${productName}-${version}-win-${arch}-installer.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": ["x64"],
+          "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+        },
+        {
+          "target": "AppImage",
+          "arch": ["x64"],
+          "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
+        }
+      ],
+      "category": "Utility"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"],
+          "artifactName": "${productName}-${version}-mac-${arch}-installer.${ext}"
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"],
+          "artifactName": "${productName}-${version}-mac-${arch}-portable.${ext}"
+        }
+      ],
+      "category": "public.app-category.utilities"
+    }
+  }
+}
