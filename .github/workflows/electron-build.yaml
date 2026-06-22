@@ -41,13 +41,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/*.exe
-            release/*.msi
-            release/*.zip
-            release/*.dmg
-            release/*.deb
-            release/*.AppImage
-            release/*.blockmap
-            release/latest*.yml
+            release/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
