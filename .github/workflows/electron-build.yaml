@@ -104,18 +104,26 @@ jobs:
           fi
           npx cap sync android
 
-      - name: Replace app icon (remove adaptive icons completely)
+      - name: Replace app icon (generate multi-density icons)
         run: |
-          # 彻底删除自适应图标目录，避免资源找不到
+          sudo apt-get update -y && sudo apt-get install -y imagemagick
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
-          rm -rf android/app/src/main/res/mipmap-anydpi-v26  # 重复确保删除
-          # 删除可能残留的单个文件
           find android/app/src/main/res -name "ic_launcher.xml" -delete
           find android/app/src/main/res -name "ic_launcher_foreground.png" -delete
           find android/app/src/main/res -name "ic_launcher_background.xml" -delete
-          # 复制你的图标到所有密度
-          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp icon.png android/app/src/main/res/mipmap-${density}/ic_launcher.png
+
+          declare -A sizes=(
+            ["mdpi"]="48x48"
+            ["hdpi"]="72x72"
+            ["xhdpi"]="96x96"
+            ["xxhdpi"]="144x144"
+            ["xxxhdpi"]="192x192"
+          )
+
+          for density in "${!sizes[@]}"; do
+            size="${sizes[$density]}"
+            convert icon.png -resize "$size" android/app/src/main/res/mipmap-${density}/ic_launcher.png
+            echo "Generated ${density} icon (${size})"
           done
 
       - name: Set APK version
