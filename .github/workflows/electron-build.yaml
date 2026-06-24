@@ -3,11 +3,12 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'V*'          # 仅当推送 v 开头的标签时触发
+      - 'V*'
 
 jobs:
+  # ==================== Electron 桌面端构建 ====================
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build Electron on ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -20,22 +21,28 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20    # 可根据需要调整
+          node-version: 20
 
       - name: Sync version with tag (remove 'V' prefix)
         shell: bash
         run: |
-          # 从标签名提取纯版本号（去掉 v），更新 package.json
           TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
           npm version --no-git-tag-version "$TAG_VERSION"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build Electron app
+      - name: Build Electron app (skip MSI on Windows to avoid WiX error)
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --publish never
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            # 只构建 portable 和 nsis，跳过 msi 避免 light.exe 冲突
+            npx electron-builder --win portable nsis --publish never
+          else
+            npx electron-builder --publish never
+          fi
 
       - name: Upload artifacts to Release
         uses: softprops/action-gh-release@v2
@@ -49,5 +56,146 @@ jobs:
             release/*.AppImage
             release/*.blockmap
             release/latest*.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==================== Android APK 构建 ====================
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set version from tag
+        shell: bash
+        run: |
+          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
+          echo "APP_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+          echo "Version set to $TAG_VERSION"
+
+      - name: Setup Capacitor (web-to-mobile)
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+
+      - name: Prepare web assets for mobile
+        run: |
+          mkdir -p www
+          rsync -av \
+            --exclude='www' \
+            --exclude='android' \
+            --exclude='ios' \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='release' \
+            ./ www/
+
+      - name: Initialize Capacitor project
+        run: |
+          if [ ! -f capacitor.config.ts ] && [ ! -f capacitor.config.json ]; then
+            npx cap init "AIChatUI" "com.jhcwcolin.aiui" --web-dir=www
+          fi
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Replace app icon (remove adaptive icons completely)
+        run: |
+          # 彻底删除自适应图标目录，避免资源找不到
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26  # 重复确保删除
+          # 删除可能残留的单个文件
+          find android/app/src/main/res -name "ic_launcher.xml" -delete
+          find android/app/src/main/res -name "ic_launcher_foreground.png" -delete
+          find android/app/src/main/res -name "ic_launcher_background.xml" -delete
+          # 复制你的图标到所有密度
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            cp icon.png android/app/src/main/res/mipmap-${density}/ic_launcher.png
+          done
+
+      - name: Set APK version
+        run: |
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$APP_VERSION\"/" android/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode $(date +%s)/" android/app/build.gradle
+
+      - name: Fix Kotlin dependency conflict
+        run: |
+          sed -i '/^allprojects {/,/^}/{
+            /^}/i\
+            \    configurations.all {\
+            \        resolutionStrategy {\
+            \            force '\''org.jetbrains.kotlin:kotlin-stdlib:1.8.22'\''\
+            \            force '\''org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'\''\
+            \            force '\''org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'\''\
+            \        }\
+            \    }
+          }' android/build.gradle
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Locate keystore file
+        id: keystore
+        run: |
+          KEYSTORE=$(find . -maxdepth 1 -type f -name '1*' | head -n 1)
+          if [ -z "$KEYSTORE" ]; then
+            echo "Error: keystore file not found"
+            exit 1
+          fi
+          echo "keystore-file=$KEYSTORE" >> $GITHUB_OUTPUT
+
+      - name: Extract key alias
+        id: alias
+        run: |
+          ALIAS=$(keytool -list -keystore ./1.keystore \
+                  -storepass 20090807 2>/dev/null | \
+                  grep -E 'PrivateKeyEntry|keyEntry' | head -n 1 | awk -F, '{print $1}')
+          if [ -z "$ALIAS" ]; then
+            ALIAS=$(keytool -list -v -keystore ./1.keystore \
+                    -storepass 20090807 2>/dev/null | \
+                    grep "Alias name:" | head -n 1 | sed 's/Alias name: //')
+          fi
+          if [ -z "$ALIAS" ]; then
+            echo "Error: Could not determine key alias"
+            exit 1
+          fi
+          echo "alias=$ALIAS" >> $GITHUB_OUTPUT
+
+      - name: Copy keystore
+        run: cp ./1.keystore android/app/1.keystore
+
+      - name: Build Release APK (signed)
+        env:
+          STORE_PASS: 20090807
+          KEY_ALIAS: ${{ steps.alias.outputs.alias }}
+          KEY_PASS: 20090807
+          KEYSTORE_FILE: ${{ github.workspace }}/android/app/1.keystore
+        run: |
+          cd android
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_FILE" \
+            -Pandroid.injected.signing.store.password="$STORE_PASS" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASS"
+
+      - name: Rename APK
+        run: |
+          cd android/app/build/outputs/apk/release
+          APK_FILE=$(ls *.apk | head -n1)
+          NEW_NAME="AIChatUI-${APP_VERSION}-android.apk"
+          mv "$APK_FILE" "$NEW_NAME"
+
+      - name: Upload APK to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/AIChatUI-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
