@@ -38,7 +38,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            # 只构建 portable 和 nsis，跳过 msi 避免 light.exe 冲突
             npx electron-builder --win portable nsis --publish never
           else
             npx electron-builder --publish never
@@ -205,5 +204,145 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/release/AIChatUI-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ==================== iOS Simulator 构建（使用 sips 生成图标，解决透明问题） ====================
+  build-ios-simulator:
+    name: Build iOS Simulator app
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set version from tag
+        shell: bash
+        run: |
+          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
+          echo "APP_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+          echo "Version set to $TAG_VERSION"
+
+      - name: Setup Capacitor (web-to-mobile) for iOS
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/ios --save-dev
+
+      - name: Prepare web assets for mobile
+        run: |
+          mkdir -p www
+          rsync -av \
+            --exclude='www' \
+            --exclude='android' \
+            --exclude='ios' \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='release' \
+            ./ www/
+
+      - name: Initialize Capacitor project (iOS)
+        run: |
+          if [ ! -f capacitor.config.ts ] && [ ! -f capacitor.config.json ]; then
+            npx cap init "AIChatUI" "com.jhcwcolin.aiui" --web-dir=www
+          fi
+          if [ ! -d ios ]; then
+            npx cap add ios || echo "Capacitor iOS add had warnings, continuing"
+          fi
+          npx cap copy ios
+
+      - name: Fix iOS deployment target and install pods
+        run: |
+          if [ -f ios/App/Podfile ]; then
+            sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '15.0'/" ios/App/Podfile
+          else
+            cd ios/App && pod init
+            sed -i '' "s/# platform :ios, '[0-9.]*'/platform :ios, '15.0'/" Podfile
+          fi
+
+          PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
+          if [ -f "$PROJECT_FILE" ]; then
+            sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 14.0/IPHONEOS_DEPLOYMENT_TARGET = 15.0/g' "$PROJECT_FILE"
+          fi
+
+          cd ios/App && pod install --repo-update
+
+      # ✅ 使用 sips 生成 iOS 图标（避免 ImageMagick 导致的透明问题）
+      - name: Generate iOS icons from icon.png
+        run: |
+          ICON_DIR="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          rm -rf "$ICON_DIR"
+          mkdir -p "$ICON_DIR"
+
+          # sips 是 macOS 自带的图片处理工具，不会破坏 alpha 通道
+          sips -z 20 20 icon.png --out "$ICON_DIR/Icon-App-20x20@1x.png"
+          sips -z 40 40 icon.png --out "$ICON_DIR/Icon-App-20x20@2x.png"
+          sips -z 60 60 icon.png --out "$ICON_DIR/Icon-App-20x20@3x.png"
+          sips -z 29 29 icon.png --out "$ICON_DIR/Icon-App-29x29@1x.png"
+          sips -z 58 58 icon.png --out "$ICON_DIR/Icon-App-29x29@2x.png"
+          sips -z 87 87 icon.png --out "$ICON_DIR/Icon-App-29x29@3x.png"
+          sips -z 40 40 icon.png --out "$ICON_DIR/Icon-App-40x40@1x.png"
+          sips -z 80 80 icon.png --out "$ICON_DIR/Icon-App-40x40@2x.png"
+          sips -z 120 120 icon.png --out "$ICON_DIR/Icon-App-40x40@3x.png"
+          sips -z 120 120 icon.png --out "$ICON_DIR/Icon-App-60x60@2x.png"
+          sips -z 180 180 icon.png --out "$ICON_DIR/Icon-App-60x60@3x.png"
+          sips -z 76 76 icon.png --out "$ICON_DIR/Icon-App-76x76@1x.png"
+          sips -z 152 152 icon.png --out "$ICON_DIR/Icon-App-76x76@2x.png"
+          sips -z 167 167 icon.png --out "$ICON_DIR/Icon-App-83.5x83.5@2x.png"
+          sips -z 1024 1024 icon.png --out "$ICON_DIR/Icon-App-1024x1024@1x.png"
+
+          # 写入正确的 Contents.json
+          cat > "$ICON_DIR/Contents.json" << 'EOF'
+          {
+            "images" : [
+              {"idiom" : "iphone","scale" : "1x","size" : "20x20","filename" : "Icon-App-20x20@1x.png"},
+              {"idiom" : "iphone","scale" : "2x","size" : "20x20","filename" : "Icon-App-20x20@2x.png"},
+              {"idiom" : "iphone","scale" : "3x","size" : "20x20","filename" : "Icon-App-20x20@3x.png"},
+              {"idiom" : "iphone","scale" : "1x","size" : "29x29","filename" : "Icon-App-29x29@1x.png"},
+              {"idiom" : "iphone","scale" : "2x","size" : "29x29","filename" : "Icon-App-29x29@2x.png"},
+              {"idiom" : "iphone","scale" : "3x","size" : "29x29","filename" : "Icon-App-29x29@3x.png"},
+              {"idiom" : "iphone","scale" : "1x","size" : "40x40","filename" : "Icon-App-40x40@1x.png"},
+              {"idiom" : "iphone","scale" : "2x","size" : "40x40","filename" : "Icon-App-40x40@2x.png"},
+              {"idiom" : "iphone","scale" : "3x","size" : "40x40","filename" : "Icon-App-40x40@3x.png"},
+              {"idiom" : "iphone","scale" : "2x","size" : "60x60","filename" : "Icon-App-60x60@2x.png"},
+              {"idiom" : "iphone","scale" : "3x","size" : "60x60","filename" : "Icon-App-60x60@3x.png"},
+              {"idiom" : "ipad","scale" : "1x","size" : "20x20","filename" : "Icon-App-20x20@1x.png"},
+              {"idiom" : "ipad","scale" : "2x","size" : "20x20","filename" : "Icon-App-20x20@2x.png"},
+              {"idiom" : "ipad","scale" : "1x","size" : "29x29","filename" : "Icon-App-29x29@1x.png"},
+              {"idiom" : "ipad","scale" : "2x","size" : "29x29","filename" : "Icon-App-29x29@2x.png"},
+              {"idiom" : "ipad","scale" : "1x","size" : "40x40","filename" : "Icon-App-40x40@1x.png"},
+              {"idiom" : "ipad","scale" : "2x","size" : "40x40","filename" : "Icon-App-40x40@2x.png"},
+              {"idiom" : "ipad","scale" : "1x","size" : "76x76","filename" : "Icon-App-76x76@1x.png"},
+              {"idiom" : "ipad","scale" : "2x","size" : "76x76","filename" : "Icon-App-76x76@2x.png"},
+              {"idiom" : "ipad","scale" : "2x","size" : "83.5x83.5","filename" : "Icon-App-83.5x83.5@2x.png"},
+              {"idiom" : "ios-marketing","scale" : "1x","size" : "1024x1024","filename" : "Icon-App-1024x1024@1x.png"}
+            ],
+            "info" : {
+              "version" : 1,
+              "author" : "xcode"
+            }
+          }
+          EOF
+
+      - name: Build iOS Simulator .app
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath ./ios-build \
+            build
+
+      - name: Package Simulator .app into zip
+        run: |
+          cd ios-build/Build/Products/Debug-iphonesimulator
+          ZIPNAME="AIChatUI-${APP_VERSION}-ios-simulator.zip"
+          zip -r "$GITHUB_WORKSPACE/$ZIPNAME" App.app
+
+      - name: Upload iOS Simulator zip to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AIChatUI-*-ios-simulator.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
