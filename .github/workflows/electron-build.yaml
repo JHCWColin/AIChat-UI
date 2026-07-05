@@ -43,6 +43,19 @@ jobs:
             npx electron-builder --publish never
           fi
 
+      - name: Show build output
+        shell: bash
+        run: |
+          echo "===== release ====="
+          find release -type f 2>/dev/null || true
+
+          echo "===== dist ====="
+          find dist -type f 2>/dev/null || true
+
+          echo "===== current ====="
+          find . -type f | grep -E "\.(exe|msi|zip|dmg|deb|AppImage|yml)$" || true
+         
+
       - name: Upload artifacts to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -53,8 +66,16 @@ jobs:
             release/*.dmg
             release/*.deb
             release/*.AppImage
-            release/*.blockmap
             release/latest*.yml
+            release/*.blockmap
+            dist/*.exe
+            dist/*.msi
+            dist/*.zip
+            dist/*.dmg
+            dist/*.deb
+            dist/*.AppImage
+            dist/latest*.yml
+            dist/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
