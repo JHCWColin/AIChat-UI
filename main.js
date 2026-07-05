@@ -1,33 +1,44 @@
-const { app, BrowserWindow } = require('electron');
-const path = require('path');
+const { app, BrowserWindow } = require("electron");
+const path = require("path");
 
-let mainWindow;
+function createWindow(htmlFile = "index.html") {
+    const win = new BrowserWindow({
+        width: 1200,
+        height: 800,
+        icon: path.join(__dirname, "favicon.ico"),
+        autoHideMenuBar: true,
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      // 如果有 preload 脚本可以在这里指定
-    }
-  });
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false,
+            nativeWindowOpen: true
+        }
+    });
 
-  // 加载你的前端页面（仓库里已有的 index.html）
-  mainWindow.loadFile('index.html');
+    win.loadFile(htmlFile);
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+    // 允许 window.open()
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        return {
+            action: "allow"
+        };
+    });
+
+    return win;
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+    app.on("activate", () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
 });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+        app.quit();
+    }
 });
