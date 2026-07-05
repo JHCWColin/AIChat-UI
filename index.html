@@ -655,6 +655,162 @@
             display: flex;
         }
 
+        #settings-modal.portrait-layout {
+            padding: 0 !important;
+        }
+
+        #settings-modal.portrait-layout>div {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            max-height: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            flex-direction: column;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar {
+            flex-direction: column;
+            align-items: stretch;
+            width: 100%;
+            max-height: none;
+            padding: 0.5rem 0.4rem 0;
+            margin-bottom: 0;
+            background: rgba(20, 20, 20, 0.95);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            gap: 0.5rem;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 0.75rem;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar-header h2 {
+            display: none;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar button {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar .settings-back-btn {
+            display: inline-flex;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar nav {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            overflow-x: auto;
+            gap: 0.4rem;
+            padding: 0 0.4rem 0.4rem;
+            width: 100%;
+            white-space: nowrap;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            box-sizing: border-box;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar nav::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
+        #settings-modal.portrait-layout .settings-sidebar nav button {
+            min-width: 70px;
+            max-width: 110px;
+            padding: 0.4rem 0.65rem;
+            flex: 0 0 auto;
+            width: auto !important;
+            justify-content: center;
+            text-align: center;
+        }
+
+        #settings-modal.portrait-layout .settings-body-inner {
+            padding: 1rem;
+            overflow-y: auto;
+            max-height: calc(100vh - 7rem);
+        }
+
+        @media (max-aspect-ratio: 1/1), (orientation: portrait) {
+            #settings-modal>div {
+                width: 100vw !important;
+                height: 100vh !important;
+                max-width: none !important;
+                max-height: none !important;
+                border-radius: 0 !important;
+                margin: 0 !important;
+            }
+
+            #settings-modal .settings-sidebar {
+                flex-direction: column;
+                align-items: stretch;
+                width: 100%;
+                max-height: none;
+                padding: 0.75rem 0.75rem 0;
+                margin-bottom: 0;
+                background: rgba(20, 20, 20, 0.95);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                gap: 0.5rem;
+            }
+
+            #settings-modal .settings-sidebar-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                width: 100%;
+                gap: 0.75rem;
+            }
+
+            #settings-modal .settings-sidebar button {
+                flex: 0 0 auto;
+                white-space: nowrap;
+            }
+
+            #settings-modal .settings-sidebar .settings-back-btn {
+                display: inline-flex;
+            }
+
+            #settings-modal .settings-sidebar nav {
+                display: flex;
+                flex-direction: row !important;
+                flex-wrap: nowrap;
+                justify-content: flex-start;
+                overflow-x: auto;
+                gap: 0.4rem;
+                padding: 0 0.5rem 0.4rem;
+                width: 100%;
+                white-space: nowrap;
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+
+            #settings-modal .settings-sidebar nav::-webkit-scrollbar {
+                width: 0;
+                height: 0;
+            }
+
+            #settings-modal .settings-sidebar nav button {
+                min-width: 90px;
+                max-width: 130px;
+                padding: 0.45rem 0.8rem;
+                flex: 0 0 auto;
+                width: auto !important;
+            }
+
+            #settings-modal .settings-body-inner {
+                padding: 1rem;
+                overflow-y: auto;
+                max-height: calc(100vh - 7rem);
+            }
+        }
+
         .font-size-small .msg-bubble {
             font-size: 0.875rem;
         }
@@ -1807,7 +1963,7 @@
                                 </button>
                             </div>
                             <textarea id="user-input" rows="1"
-                                placeholder="给 AI 发送消息... 支持粘贴图片、上传Office/图片/文本"
+                                placeholder="给 AI 发送消息...   支持粘贴图片(Ctrl+V) | 上传Office/图片/文本 | /canvas 编码模式"
                                 class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none py-1 px-2 text-sm md:text-base"
                                 oninput="autoResize(this)"></textarea>
                             <input type="file" id="hidden-file-input"
@@ -1866,7 +2022,10 @@
         <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex"
             style="max-height:200vh;">
             <aside class="settings-sidebar p-3 flex flex-col">
-                <div class="flex items-center justify-between mb-3 px-2">
+                <div class="settings-sidebar-header flex items-center justify-between gap-3 mb-3 px-2">
+                    <button id="settings-back-btn" class="settings-back-btn hidden items-center gap-2 px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-200" onclick="toggleSettings()">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> 返回
+                    </button>
                     <h2 class="text-lg font-semibold text-gray-200">偏好设置</h2>
                 </div>
                 <nav class="flex flex-col gap-0.5 flex-grow">
@@ -1877,6 +2036,8 @@
                     <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
                     <button data-section="memory" onclick="switchSettingsSection('memory', this)">云端记忆</button>
                     <button data-section="voice" onclick="switchSettingsSection('voice', this)">语音输入</button>
+                    <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
+                    <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">高级设置</button>
                     <button data-section="guide" onclick="switchSettingsSection('guide', this)">使用指导</button>
                     <button data-section="about" onclick="switchSettingsSection('about', this)">关于</button>
                 </nav>
@@ -2083,6 +2244,64 @@
                         <p class="text-[11px] text-gray-500 mt-2">录音后自动使用此模型进行语音识别。</p>
                     </div>
                 </div>
+                <div id="section-other" class="settings-content-section space-y-5">
+                    <h3 class="text-base font-semibold text-gray-200 mb-3">其他</h3>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-200">LATEX 渲染</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">关闭后所有 KaTeX、数学公式、化学方程式将以原始标记显示。</span>
+                        </div>
+                        <label class="cloud-toggle">
+                            <input type="checkbox" id="math-render-toggle" onchange="onMathRenderToggleChange()" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+                <div id="section-advanced" class="settings-content-section space-y-5">
+                    <h3 class="text-base font-semibold text-gray-200 mb-3">高级设置</h3>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-200">开发者模式</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">启用后会显示调试日志和日志记录功能。</span>
+                        </div>
+                        <label class="cloud-toggle">
+                            <input type="checkbox" id="developer-mode-toggle" onchange="onDeveloperModeToggleChange()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="developer-options" class="space-y-4 hidden">
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">日志级别</label>
+                                <div class="flex gap-4 flex-wrap">
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                                        <input type="radio" name="log-level" value="info" onchange="onLogLevelChange(this)">
+                                        Info
+                                    </label>
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                                        <input type="radio" name="log-level" value="debug" onchange="onLogLevelChange(this)">
+                                        Debug
+                                    </label>
+                                </div>
+                                <p class="text-[11px] text-gray-500 mt-2">Info 模式显示基础通知，Debug 模式会输出更多控制台和流式接收日志。</p>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="block text-sm font-medium text-gray-200">记录日志</span>
+                                    <span class="text-[11px] text-gray-500">启用后会记录当前模式产生的日志。</span>
+                                </div>
+                                <label class="cloud-toggle">
+                                    <input type="checkbox" id="record-logs-toggle" onchange="onRecordLogsToggleChange()">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div id="log-actions" class="flex flex-wrap gap-2 hidden">
+                                <button onclick="exportLogs()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-xl text-sm">导出日志</button>
+                                <button onclick="clearLogs()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm">清除日志</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <div id="section-guide" class="settings-content-section space-y-4">
                     <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
                         <i data-lucide="book-open" class="w-4 h-4"></i>使用指导
@@ -2151,9 +2370,9 @@
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">AI Chat UI Demo</strong><br>
                             一个轻量级云端的智能对话应用，支持多种AI模型，具备持久化存储和多模态能力，致力于提供流畅的AI交互体验。
-                            <br>Your Next Gen Vibe Coding Toolkit.<br>现已具备全平台支持。欢迎前往github下载更多平台版本。
-                            <br>支持Windows（10+）、Linux（Ubuntu、Debian）、macOS（Intel、M）、iOS（simulator）、Android（12+）。
-                            
+                            <br>Your Next Gen Vibe Coding Toolkit.<br>
+                            享受乐趣。
+                        
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">开发者</strong><br>
@@ -2161,7 +2380,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V4.2 (build20260626)</span>
+                            <span id="app-version">V4.3 (build20260705)</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -2181,7 +2400,7 @@
     </div>
 
     <script>
-        const DEFAULT_API_KEY = 'sk-';
+        const DEFAULT_API_KEY = 'sk-2LXzp4RQCOAywuqu63EfE5D0480e46Bc9cEa8d1a5a38D117';
         const DEFAULT_BASE_URL = 'https://api.vveai.com/v1';
         const DEFAULT_LC_ID = 'G2jNexXDgQoJkiR5bf7aGqZj-gzGzoHsz';
         const DEFAULT_LC_KEY = 'tO6fRxnoCUEAJ3HyHbzmlG9R';
@@ -2536,6 +2755,12 @@
         let sessionReplaceBlocks = [];
         let cmEditor = null;
         let voiceModel = localStorage.getItem('voice_model') || 'whisper-1';
+        let mathRenderingEnabled = localStorage.getItem('math_rendering_enabled') !== 'false';
+        let developerModeEnabled = localStorage.getItem('developer_mode') === 'true';
+        let logLevel = localStorage.getItem('log_level') || 'info';
+        let recordLogsEnabled = localStorage.getItem('record_logs') === 'true';
+        let logRecords = loadLogRecords();
+        let streamBytesReceived = 0;
 
         let audioContext = null;
         let mediaStream = null;
@@ -2702,6 +2927,7 @@
                 if (idx < mathFormulas.length) {
                     const formula = mathFormulas[idx];
                     try {
+                        if (!mathRenderingEnabled) return escapeHtml(formula.original);
                         const rendered = window.katex.renderToString(formula.math, {
                             displayMode: formula.displayMode,
                             throwOnError: false
@@ -2718,7 +2944,7 @@
         }
 
         function renderMathFormulas(element) {
-            if (!window.katex) return;
+            if (!window.katex || !mathRenderingEnabled) return;
             let html = element.innerHTML;
             html = restoreAndRenderMath(html);
             element.innerHTML = html;
@@ -3404,6 +3630,25 @@
                 console.error(err);
             }
         }
+
+        async function copyTextToClipboard(text) {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                }
+                return true;
+            } catch (err) {
+                console.error(err);
+                return false;
+            }
+        }
         async function lcFetch(path = '', options = {}) {
             if (!isCloudEnabled()) throw new Error('云端模式未启用');
             const lcConfig = getLCConfig();
@@ -3533,9 +3778,30 @@
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
                 populateLCFields();
                 populateVoiceModel();
+                populateOtherSettings();
+                populateAdvancedSettings();
+                updateSettingsPortraitMode();
+            } else {
+                modal.classList.remove('portrait-layout');
             }
             lucide.createIcons();
         }
+
+        function updateSettingsPortraitMode() {
+            const modal = document.getElementById('settings-modal');
+            if (!modal) return;
+            const isPortrait = window.matchMedia('(max-aspect-ratio: 1/1), (orientation: portrait)').matches;
+            modal.classList.toggle('portrait-layout', isPortrait);
+            const backBtn = document.getElementById('settings-back-btn');
+            if (backBtn) backBtn.style.display = isPortrait ? 'inline-flex' : 'none';
+        }
+
+        window.addEventListener('resize', () => {
+            const modal = document.getElementById('settings-modal');
+            if (modal && modal.classList.contains('flex')) {
+                updateSettingsPortraitMode();
+            }
+        });
 
         function populateLCFields() {
             const lcConfig = getLCConfig();
@@ -3569,6 +3835,12 @@
             }
             if (sectionId === 'voice') {
                 populateVoiceModel();
+            }
+            if (sectionId === 'other') {
+                populateOtherSettings();
+            }
+            if (sectionId === 'advanced') {
+                populateAdvancedSettings();
             }
         }
 
@@ -3679,6 +3951,22 @@
             if (voiceSelect) {
                 voiceModel = voiceSelect.value;
                 localStorage.setItem('voice_model', voiceModel);
+            }
+            const mathToggle = document.getElementById('math-render-toggle');
+            if (mathToggle) mathRenderingEnabled = mathToggle.checked;
+            localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
+            const devToggle = document.getElementById('developer-mode-toggle');
+            if (devToggle) developerModeEnabled = devToggle.checked;
+            localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
+            const selectedLogLevel = document.querySelector('input[name="log-level"]:checked');
+            if (selectedLogLevel) logLevel = selectedLogLevel.value;
+            localStorage.setItem('log_level', logLevel);
+            const recordToggle = document.getElementById('record-logs-toggle');
+            if (recordToggle) recordLogsEnabled = recordToggle.checked;
+            localStorage.setItem('record_logs', recordLogsEnabled ? 'true' : 'false');
+            if (activeChatId) {
+                const currentChat = chats.find(c => c.id === activeChatId);
+                if (currentChat) renderMessagesWithResolvedRefs(currentChat.messages);
             }
             applyLayoutMode(currentLayoutMode);
             toggleSettings();
@@ -4298,6 +4586,27 @@
             }
         });
 
+        const messagesWrapper = document.getElementById('messages-wrapper');
+        if (messagesWrapper) {
+            messagesWrapper.addEventListener('click', async (e) => {
+                const link = e.target.closest('a');
+                if (!link) return;
+                const aiBubble = link.closest('.msg-bubble.ai-bubble');
+                if (!aiBubble) return;
+                const href = link.href || link.getAttribute('href');
+                if (!href || !/^https?:\/\//i.test(href)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const copied = await copyTextToClipboard(href);
+                appendLog('info', `拦截超链接跳转: ${href}`);
+                if (copied) {
+                    showVoiceNotification('已复制该网址 请前往浏览器查看', false, 2500, false);
+                } else {
+                    showVoiceNotification('无法自动复制链接，请手动复制', true, 2500, false);
+                }
+            });
+        }
+
         function hasImageInChat(chat) {
             if (!chat || !chat.messages) return false;
             for (const msg of chat.messages) {
@@ -4833,6 +5142,320 @@
                     img.style.borderColor = '#3d3d3d';
                 });
                 selectedThumb.style.borderColor = '#10b981';
+            }
+        }
+
+        function loadLogRecords() {
+            try {
+                return JSON.parse(localStorage.getItem('log_records') || '[]');
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveLogRecords() {
+            localStorage.setItem('log_records', JSON.stringify(logRecords));
+        }
+
+        function appendLog(level, message) {
+            const entry = {
+                time: new Date().toISOString(),
+                level,
+                message
+            };
+            if (recordLogsEnabled) {
+                logRecords.push(entry);
+                if (logRecords.length > 2000) logRecords.shift();
+                saveLogRecords();
+            }
+            if (developerModeEnabled && logLevel === 'debug') {
+                console.log(`[${level.toUpperCase()}] ${entry.time} - ${message}`);
+            }
+        }
+
+        function exportLogs() {
+            if (!logRecords.length) {
+                alert('当前没有可导出的日志。');
+                return;
+            }
+            const lines = logRecords.map(item => `${item.time} [${item.level.toUpperCase()}] ${item.message}`);
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `aiui-logs-${Date.now()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearLogs() {
+            logRecords = [];
+            saveLogRecords();
+            alert('日志已清除。');
+        }
+
+        function onMathRenderToggleChange() {
+            const toggle = document.getElementById('math-render-toggle');
+            mathRenderingEnabled = toggle ? toggle.checked : true;
+            localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
+            if (activeChatId) {
+                const currentChat = chats.find(c => c.id === activeChatId);
+                if (currentChat) renderMessagesWithResolvedRefs(currentChat.messages);
+            }
+        }
+
+        function onDeveloperModeToggleChange() {
+            const toggle = document.getElementById('developer-mode-toggle');
+            developerModeEnabled = toggle ? toggle.checked : false;
+            localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
+            populateAdvancedSettings();
+            updateLogActionVisibility();
+        }
+
+        function onLogLevelChange(el) {
+            if (!el) return;
+            logLevel = el.value;
+            localStorage.setItem('log_level', logLevel);
+        }
+
+        function onRecordLogsToggleChange() {
+            const toggle = document.getElementById('record-logs-toggle');
+            recordLogsEnabled = toggle ? toggle.checked : false;
+            localStorage.setItem('record_logs', recordLogsEnabled ? 'true' : 'false');
+            updateLogActionVisibility();
+        }
+
+        function populateOtherSettings() {
+            const mathToggle = document.getElementById('math-render-toggle');
+            if (mathToggle) mathToggle.checked = mathRenderingEnabled;
+        }
+
+        function populateAdvancedSettings() {
+            const devToggle = document.getElementById('developer-mode-toggle');
+            const developerOptions = document.getElementById('developer-options');
+            const recordToggle = document.getElementById('record-logs-toggle');
+            const selectedLogLevel = document.querySelector(`input[name="log-level"][value="${logLevel}"]`);
+            if (devToggle) devToggle.checked = developerModeEnabled;
+            if (developerOptions) developerOptions.classList.toggle('hidden', !developerModeEnabled);
+            if (recordToggle) recordToggle.checked = recordLogsEnabled;
+            if (selectedLogLevel) selectedLogLevel.checked = true;
+            updateLogActionVisibility();
+        }
+
+        function updateLogActionVisibility() {
+            const logActions = document.getElementById('log-actions');
+            if (!logActions) return;
+            logActions.classList.toggle('hidden', !(developerModeEnabled && recordLogsEnabled));
+        }
+
+        function showVoiceNotification(message, isError = false, timeout = 2500, persistent = false) {
+            const el = document.getElementById('voice-notification');
+            if (!el) return;
+            el.textContent = message;
+            el.style.color = isError ? '#f87171' : '';
+            el.classList.add('show');
+            clearTimeout(el._timeout);
+            if (persistent) {
+                el._persistent = true;
+            } else {
+                el._persistent = false;
+                el._timeout = setTimeout(() => {
+                    el.classList.remove('show');
+                }, timeout);
+            }
+        }
+
+        function hideVoiceNotification() {
+            const el = document.getElementById('voice-notification');
+            if (!el) return;
+            el.classList.remove('show');
+            el._persistent = false;
+            clearTimeout(el._timeout);
+        }
+
+        async function requestAI(userText, model, chat, sendAttachments = []) {
+            abortController = new AbortController();
+            isGenerating = true;
+            document.getElementById('send-btn').classList.add('hidden');
+            document.getElementById('stop-btn').classList.remove('hidden');
+            setCanvasEditable(false);
+            const aiRow = appendMessageToUI('assistant', '', model, true);
+            const thinkingDiv = aiRow.querySelector('.thinking-text');
+            const contentArea = aiRow.querySelector('.ai-content-area');
+            let rawFullContent = "",
+                thinkingContent = "";
+            let receivedAny = false;
+            processedReplaceCount = 0;
+            sessionReplaceBlocks = [];
+            streamBytesReceived = 0;
+            const systemWithMem = await buildSystemMessageWithMemories();
+            try {
+                const chatMessagesCopy = chat.messages.slice();
+                if (sendAttachments.length > 0 && chatMessagesCopy.length > 0) {
+                    const lastMsg = chatMessagesCopy[chatMessagesCopy.length - 1];
+                    if (lastMsg.role === 'user') lastMsg._tempAttachments = sendAttachments;
+                }
+                const apiMessages = await buildAPIMessagesWithContext(chat);
+                if (chat.canvasEnabled && apiMessages.length > 0) {
+                    const canvasContext = buildCanvasContextString(chat);
+                    if (canvasContext) {
+                        const lastApiMsg = apiMessages[apiMessages.length - 1];
+                        if (lastApiMsg.role === 'user') {
+                            if (typeof lastApiMsg.content === 'string') lastApiMsg.content += canvasContext;
+                            else if (Array.isArray(lastApiMsg.content)) {
+                                const textPart = lastApiMsg.content.find(c => c.type === 'text');
+                                if (textPart) textPart.text += canvasContext;
+                                else lastApiMsg.content.push({
+                                    type: 'text',
+                                    text: canvasContext
+                                });
+                            }
+                        }
+                    }
+                }
+                appendLog('debug', '开始请求 AI 接口');
+                const response = await fetch(`${getBaseURL()}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAPIKey()}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        temperature: currentTemp,
+                        messages: [{
+                            role: 'system',
+                            content: systemWithMem
+                        }, ...apiMessages],
+                        stream: true,
+                        ...(maxTokensLimit > 0 ? {
+                            max_tokens: maxTokensLimit
+                        } : {})
+                    }),
+                    signal: abortController.signal
+                });
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                const debugStream = developerModeEnabled && logLevel === 'debug';
+                if (debugStream) {
+                    appendLog('debug', '流式输出接收开始');
+                    showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
+                }
+                while (true) {
+                    const {
+                        done,
+                        value
+                    } = await reader.read();
+                    if (done) break;
+                    streamBytesReceived += value ? value.length : 0;
+                    const chunk = decoder.decode(value);
+                    if (debugStream) {
+                        appendLog('debug', `收到流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
+                        showVoiceNotification(`正在接收流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
+                    }
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+                            try {
+                                const json = JSON.parse(data);
+                                const delta = json.choices[0].delta || {};
+                                if (delta.reasoning_content) {
+                                    thinkingContent += delta.reasoning_content;
+                                    if (thinkingDiv) {
+                                        thinkingDiv.style.display = 'block';
+                                        thinkingDiv.innerText = thinkingContent;
+                                    }
+                                }
+                                if (delta.content) {
+                                    receivedAny = true;
+                                    rawFullContent += delta.content;
+                                    const displayContent = replaceBlocksToSummary(rawFullContent);
+                                    const preprocessedContent = extractAndPreserveMath(displayContent);
+                                    let html = marked.parse(preprocessedContent);
+                                    html = restoreAndRenderMath(html);
+                                    contentArea.innerHTML = html;
+                                    renderMathFormulas(contentArea);
+                                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                                }
+                            } catch (e) {
+                                appendLog('debug', `解析流数据失败: ${e.message}`);
+                            }
+                        }
+                    }
+                }
+                appendLog('debug', '流式输出接收完毕');
+                hideVoiceNotification();
+                if (debugStream) {
+                    showVoiceNotification(`流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
+                }
+                if (!receivedAny && !rawFullContent.trim()) rawFullContent = '';
+                const displayContent = replaceBlocksToSummary(rawFullContent);
+                const preprocessedContent = extractAndPreserveMath(displayContent);
+                let html = marked.parse(preprocessedContent);
+                html = restoreAndRenderMath(html);
+                contentArea.innerHTML = html;
+                renderMathFormulas(contentArea);
+                if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                contentArea.querySelectorAll('pre code').forEach(el => {
+                    hljs.highlightElement(el);
+                    if (!el.parentElement.querySelector('.code-copy-btn') && !el.closest('.canvas-replace-notice')) {
+                        const copyBtn = document.createElement('button');
+                        copyBtn.className = 'code-copy-btn';
+                        copyBtn.innerText = '复制代码';
+                        copyBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            copyToClipboard(el.innerText, copyBtn);
+                        };
+                        el.parentElement.appendChild(copyBtn);
+                    }
+                });
+                chat.messages.push({
+                    role: 'assistant',
+                    content: displayContent,
+                    model,
+                    reasoning: thinkingContent
+                });
+                chat.updatedAt = Date.now();
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+                renderChatHistory();
+                if (isCloudEnabled()) await syncData();
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    appendLog('debug', `AI 请求出错: ${err.message}`);
+                    contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`;
+                } else {
+                    appendLog('debug', `AI 请求被中止`);
+                    if (!rawFullContent.trim() && !receivedAny) rawFullContent = '';
+                    const displayContent = replaceBlocksToSummary(rawFullContent);
+                    const preprocessedContent = extractAndPreserveMath(displayContent || '');
+                    let html = marked.parse(preprocessedContent);
+                    html = restoreAndRenderMath(html);
+                    contentArea.innerHTML = html;
+                    renderMathFormulas(contentArea);
+                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                    chat.messages.push({
+                        role: 'assistant',
+                        content: displayContent,
+                        model,
+                        reasoning: thinkingContent
+                    });
+                    chat.updatedAt = Date.now();
+                    localStorage.setItem('ai_chats', JSON.stringify(chats));
+                    renderChatHistory();
+                    if (isCloudEnabled()) await syncData();
+                }
+            } finally {
+                abortController = null;
+                isGenerating = false;
+                document.getElementById('send-btn').classList.remove('hidden');
+                document.getElementById('stop-btn').classList.add('hidden');
+                setCanvasEditable(true);
+                lucide.createIcons();
+                document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper')
+                    .scrollHeight;
             }
         }
     </script>
