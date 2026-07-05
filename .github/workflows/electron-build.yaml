@@ -30,7 +30,7 @@ jobs:
           npm version --no-git-tag-version "$TAG_VERSION"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build Electron app (skip MSI on Windows to avoid WiX error)
         shell: bash
