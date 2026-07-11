@@ -124,6 +124,13 @@ jobs:
           fi
           npx cap sync android
 
+      - name: Add microphone permission
+        run: |
+          grep -q "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || \
+          sed -i '/<application/i\
+          <uses-permission android:name="android.permission.RECORD_AUDIO" />' \
+          android/app/src/main/AndroidManifest.xml
+
       - name: Replace app icon (generate multi-density icons)
         run: |
           sudo apt-get update -y && sudo apt-get install -y imagemagick
