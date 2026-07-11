@@ -2275,15 +2275,23 @@
                                 <label class="block text-sm font-medium mb-2 text-gray-300">日志级别</label>
                                 <div class="flex gap-4 flex-wrap">
                                     <label class="inline-flex items-center gap-2 text-sm text-gray-300">
-                                        <input type="radio" name="log-level" value="info" onchange="onLogLevelChange(this)">
-                                        Info
+                                        <input type="radio" name="log-level" value="trace" onchange="onLogLevelChange(this)">
+                                        Trace
                                     </label>
                                     <label class="inline-flex items-center gap-2 text-sm text-gray-300">
                                         <input type="radio" name="log-level" value="debug" onchange="onLogLevelChange(this)">
                                         Debug
                                     </label>
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                                        <input type="radio" name="log-level" value="info" onchange="onLogLevelChange(this)">
+                                        Info
+                                    </label>
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                                        <input type="radio" name="log-level" value="error" onchange="onLogLevelChange(this)">
+                                        Error
+                                    </label>
                                 </div>
-                                <p class="text-[11px] text-gray-500 mt-2">Info 模式显示基础通知，Debug 模式会输出更多控制台和流式接收日志。</p>
+                                <p class="text-[11px] text-gray-500 mt-2">Trace 模式记录所有日志并输出更多请求/响应详细信息，Debug 模式输出更多控制台和流式接收日志，Info 模式仅显示基础通知，Error 模式仅记录错误。</p>
                             </div>
                             <div class="flex items-center justify-between">
                                 <div>
@@ -2380,7 +2388,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V4.3 (build20260705)</span>
+                            <span id="app-version">V4.4 (build20260711)</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -2761,6 +2769,19 @@
         let recordLogsEnabled = localStorage.getItem('record_logs') === 'true';
         let logRecords = loadLogRecords();
         let streamBytesReceived = 0;
+
+        const LOG_LEVEL_PRIORITIES = {
+            trace: 0,
+            debug: 1,
+            info: 2,
+            error: 3
+        };
+
+        function shouldLog(level) {
+            const currentPriority = LOG_LEVEL_PRIORITIES[logLevel] ?? LOG_LEVEL_PRIORITIES.info;
+            const levelPriority = LOG_LEVEL_PRIORITIES[level] ?? LOG_LEVEL_PRIORITIES.info;
+            return levelPriority >= currentPriority;
+        }
 
         let audioContext = null;
         let mediaStream = null;
@@ -5163,13 +5184,20 @@
                 level,
                 message
             };
-            if (recordLogsEnabled) {
+            if (recordLogsEnabled && shouldLog(level)) {
                 logRecords.push(entry);
                 if (logRecords.length > 2000) logRecords.shift();
                 saveLogRecords();
             }
-            if (developerModeEnabled && logLevel === 'debug') {
-                console.log(`[${level.toUpperCase()}] ${entry.time} - ${message}`);
+            if (developerModeEnabled && shouldLog(level)) {
+                const formatted = `[${level.toUpperCase()}] ${entry.time} - ${message}`;
+                if (level === 'error') {
+                    console.error(formatted);
+                } else if (level === 'trace') {
+                    console.debug(formatted);
+                } else {
+                    console.log(formatted);
+                }
             }
         }
 
@@ -5314,30 +5342,38 @@
                     }
                 }
                 appendLog('debug', '开始请求 AI 接口');
+                appendLog('trace', `AI 请求 URL: ${getBaseURL()}/chat/completions`);
+                const requestBody = {
+                    model,
+                    temperature: currentTemp,
+                    messages: [{
+                        role: 'system',
+                        content: systemWithMem
+                    }, ...apiMessages],
+                    stream: true,
+                    ...(maxTokensLimit > 0 ? {
+                        max_tokens: maxTokensLimit
+                    } : {})
+                };
+                appendLog('trace', `请求体: ${JSON.stringify(requestBody)}`);
                 const response = await fetch(`${getBaseURL()}/chat/completions`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${getAPIKey()}`
                     },
-                    body: JSON.stringify({
-                        model,
-                        temperature: currentTemp,
-                        messages: [{
-                            role: 'system',
-                            content: systemWithMem
-                        }, ...apiMessages],
-                        stream: true,
-                        ...(maxTokensLimit > 0 ? {
-                            max_tokens: maxTokensLimit
-                        } : {})
-                    }),
+                    body: JSON.stringify(requestBody),
                     signal: abortController.signal
                 });
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                if (!response.ok) {
+                    appendLog('error', `AI 接口响应错误: ${response.status} ${response.statusText || ''}`);
+                    throw new Error(`API error: ${response.status}`);
+                }
+                appendLog('trace', `AI 接口响应状态: ${response.status} ${response.statusText || ''}`);
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-                const debugStream = developerModeEnabled && logLevel === 'debug';
+                const debugStream = developerModeEnabled && (logLevel === 'debug' || logLevel === 'trace');
+                const traceStream = developerModeEnabled && logLevel === 'trace';
                 if (debugStream) {
                     appendLog('debug', '流式输出接收开始');
                     showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
@@ -5353,6 +5389,9 @@
                     if (debugStream) {
                         appendLog('debug', `收到流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
                         showVoiceNotification(`正在接收流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
+                    }
+                    if (traceStream) {
+                        appendLog('trace', `原始流内容: ${chunk.replace(/\n/g, '\\n')}`);
                     }
                     const lines = chunk.split('\n');
                     for (const line of lines) {
