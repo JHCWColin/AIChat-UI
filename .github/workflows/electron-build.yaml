@@ -30,7 +30,7 @@ jobs:
           npm version --no-git-tag-version "$TAG_VERSION"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build Electron app (skip MSI on Windows to avoid WiX error)
         shell: bash
@@ -43,19 +43,6 @@ jobs:
             npx electron-builder --publish never
           fi
 
-      - name: Show build output
-        shell: bash
-        run: |
-          echo "===== release ====="
-          find release -type f 2>/dev/null || true
-
-          echo "===== dist ====="
-          find dist -type f 2>/dev/null || true
-
-          echo "===== current ====="
-          find . -type f | grep -E "\.(exe|msi|zip|dmg|deb|AppImage|yml)$" || true
-         
-
       - name: Upload artifacts to Release
         uses: softprops/action-gh-release@v2
         with:
@@ -66,16 +53,8 @@ jobs:
             release/*.dmg
             release/*.deb
             release/*.AppImage
-            release/latest*.yml
             release/*.blockmap
-            dist/*.exe
-            dist/*.msi
-            dist/*.zip
-            dist/*.dmg
-            dist/*.deb
-            dist/*.AppImage
-            dist/latest*.yml
-            dist/*.blockmap
+            release/latest*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -123,13 +102,6 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
-
-      - name: Add microphone permission
-        run: |
-          grep -q "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml || \
-          sed -i '/<application/i\
-          <uses-permission android:name="android.permission.RECORD_AUDIO" />' \
-          android/app/src/main/AndroidManifest.xml
 
       - name: Replace app icon (generate multi-density icons)
         run: |
