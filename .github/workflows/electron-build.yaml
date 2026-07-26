@@ -55,6 +55,14 @@ jobs:
             release/*.AppImage
             release/*.blockmap
             release/latest*.yml
+            dict/*.exe
+            dict/*.msi
+            dict/*.zip
+            dict/*.dmg
+            dict/*.den
+            dict/*.AppImage
+            dict/*.blockmap
+            dict/latest*/yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
