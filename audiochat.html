@@ -154,9 +154,9 @@
             align-items: center;
             overflow-y: auto;
             color: #f9fafb;
-            font-size: clamp(18px, 3.7vw, 27px);
+            font-size: clamp(17px, 3.5vw, 25px);
             font-weight: 600;
-            line-height: 1.55;
+            line-height: 1.48;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
             scrollbar-width: none;
@@ -318,17 +318,83 @@
         body.theme-light .speech-half .transcript {
             width: 100%;
             height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: block;
             overflow-y: auto;
             color: var(--call-fg);
-            font-size: clamp(22px, 4.6vw, 34px);
+            padding: clamp(18px, 3vh, 28px) 0;
+            font-size: clamp(20px, 4.1vw, 31px);
             font-weight: 600;
-            line-height: 1.55;
+            line-height: 1.46;
             text-align: center;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+            scroll-behavior: smooth;
+        }
+
+        .speech-half .transcript::-webkit-scrollbar,
+        body.theme-light .speech-half .transcript::-webkit-scrollbar {
+            display: block;
+            width: 6px;
+        }
+
+        .speech-half .transcript::-webkit-scrollbar-thumb,
+        body.theme-light .speech-half .transcript::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.28);
+        }
+
+        body.theme-light .speech-half .transcript {
+            scrollbar-color: rgba(0, 0, 0, 0.24) transparent;
+        }
+
+        body.theme-light .speech-half .transcript::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.24);
+        }
+
+        .transcript-content {
+            width: 100%;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.16em;
+        }
+
+        .transcript-content.plain {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .transcript-content.is-fading,
+        .transcript-sentence.is-fading {
+            animation: transcript-fade 0.18s ease;
+        }
+
+        .transcript-sentence {
+            display: block;
+            padding: 0.04em 0;
+            opacity: 0.66;
+            transition: opacity 0.16s ease;
+        }
+
+        .transcript-sentence.is-active {
+            opacity: 1;
+        }
+
+        .transcript-sentence.is-pending {
+            opacity: 0.9;
+        }
+
+        @keyframes transcript-fade {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
 
         .speech-half .transcript.placeholder,
@@ -385,11 +451,15 @@
 <body>
     <main class="shell" id="shell">
         <section class="speech-half">
-            <div id="ai-transcript" class="transcript"></div>
+            <div id="ai-transcript" class="transcript">
+                <div id="ai-transcript-content" class="transcript-content plain"></div>
+            </div>
         </section>
         <div class="center-divider" aria-hidden="true"></div>
         <section class="speech-half">
-            <div id="user-transcript" class="transcript"></div>
+            <div id="user-transcript" class="transcript">
+                <div id="user-transcript-content" class="transcript-content plain"></div>
+            </div>
         </section>
         <button class="end-button" id="end-call" type="button">结束语音通话</button>
         <div class="visual-status" aria-live="polite">
@@ -432,6 +502,37 @@
                 .replace(/\s+([，。！？；：,.!?;:])/g, '$1')
                 .replace(/[ \t]+/g, ' ')
                 .trim();
+        }
+
+        function normalizeSentenceKey(text) {
+            return cleanVoiceText(text).replace(/\s+/g, ' ').trim();
+        }
+
+        function splitTranscriptSentences(text) {
+            const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
+            if (!normalized) return [];
+            const sentences = [];
+            const terminalChars = '。！？!?；;\n';
+            const strongTerminalChars = '。！？!?';
+            let start = 0;
+
+            for (let index = 0; index < normalized.length; index += 1) {
+                const char = normalized[index];
+                if (!terminalChars.includes(char)) continue;
+                let end = index + 1;
+                if (char === '\n') {
+                    while (normalized[end] === '\n') end += 1;
+                } else if (strongTerminalChars.includes(char)) {
+                    while (strongTerminalChars.includes(normalized[end])) end += 1;
+                }
+                const chunk = normalized.slice(start, end).trim();
+                if (chunk) sentences.push(chunk);
+                start = end;
+            }
+
+            const tail = normalized.slice(start).trim();
+            if (tail) sentences.push(tail);
+            return sentences;
         }
 
         class AudioResampler {
@@ -804,13 +905,26 @@
                 this.maxSpeechFrames = Math.floor(30000 / 32);
 
                 this.aiElement = document.getElementById('ai-transcript');
+                this.aiContentElement = document.getElementById('ai-transcript-content');
                 this.userElement = document.getElementById('user-transcript');
+                this.userContentElement = document.getElementById('user-transcript-content');
                 this.statusElement = document.getElementById('status-text');
                 this.statusDot = document.getElementById('status-dot');
                 this.endButton = document.getElementById('end-call');
+                this.aiSentenceElements = [];
+                this.aiActiveSentenceText = '';
+                this.aiLastMatchedSentenceIndex = -1;
+                this.aiAutoScrollEnabled = true;
+                this.aiAutoScrollTimer = null;
+                this.aiProgrammaticScroll = false;
+                this.aiProgrammaticScrollTimer = null;
+                this.aiScrollFrame = 0;
+                this.aiQueuedScrollBehavior = 'auto';
+                this.aiQueuedScrollForce = false;
 
-                this.playback.onItemStart = () => {
+                this.playback.onItemStart = item => {
                     this.stopPresetAudio();
+                    this.setAIActiveSentence(item?.text || '');
                     this.setStatus('speaking', 'AI 正在说话…');
                 };
                 this.playback.onAllComplete = () => {
@@ -848,6 +962,13 @@
 
             bindEvents() {
                 this.endButton.addEventListener('click', () => this.endCall());
+                const deferAutoScroll = () => this.deferAIAutoScroll();
+                for (const eventName of ['wheel', 'touchstart', 'pointerdown']) {
+                    this.aiElement.addEventListener(eventName, deferAutoScroll, { passive: true });
+                }
+                this.aiElement.addEventListener('scroll', () => {
+                    if (!this.aiProgrammaticScroll) this.deferAIAutoScroll();
+                }, { passive: true });
                 bridge.onXunfeiPartial(text => {
                     if (this.mode === 'recording') this.setUserText(text || '');
                 });
@@ -867,15 +988,135 @@
             }
 
             setAIText(text, placeholder = false) {
-                this.aiElement.textContent = text;
                 this.aiElement.classList.toggle('placeholder', placeholder);
-                this.aiElement.scrollTop = this.aiElement.scrollHeight;
+                const value = String(text || '');
+                if (placeholder || !value) {
+                    this.aiContentElement.className = 'transcript-content plain';
+                    this.aiContentElement.textContent = value;
+                    this.aiSentenceElements = [];
+                    this.aiLastMatchedSentenceIndex = placeholder ? -1 : this.aiLastMatchedSentenceIndex;
+                    this.flashTranscript(this.aiContentElement);
+                    this.queueAITranscriptScroll('auto');
+                    return;
+                }
+
+                const sentences = splitTranscriptSentences(value);
+                if (!sentences.length) {
+                    this.aiContentElement.className = 'transcript-content plain';
+                    this.aiContentElement.textContent = value;
+                    this.aiSentenceElements = [];
+                    this.flashTranscript(this.aiContentElement);
+                    this.queueAITranscriptScroll('auto');
+                    return;
+                }
+
+                const previousActiveIndex = this.aiLastMatchedSentenceIndex;
+                const activeIndex = this.resolveAIActiveSentenceIndex(sentences);
+                const fragment = document.createDocumentFragment();
+                this.aiSentenceElements = [];
+                this.aiContentElement.className = 'transcript-content';
+
+                sentences.forEach((sentence, index) => {
+                    const line = document.createElement('span');
+                    line.className = 'transcript-sentence';
+                    if (index === activeIndex) line.classList.add('is-active');
+                    if (index === sentences.length - 1 && index > activeIndex) line.classList.add('is-pending');
+                    if (index === sentences.length - 1) line.classList.add('is-fading');
+                    line.textContent = sentence;
+                    this.aiSentenceElements.push(line);
+                    fragment.appendChild(line);
+                });
+
+                this.aiContentElement.replaceChildren(fragment);
+                this.queueAITranscriptScroll(activeIndex === previousActiveIndex ? 'auto' : 'smooth');
             }
 
             setUserText(text, placeholder = false) {
-                this.userElement.textContent = text;
+                this.userContentElement.textContent = text;
+                this.userContentElement.className = 'transcript-content plain';
                 this.userElement.classList.toggle('placeholder', placeholder);
+                this.flashTranscript(this.userContentElement);
                 this.userElement.scrollTop = this.userElement.scrollHeight;
+            }
+
+            flashTranscript(element) {
+                if (!element) return;
+                element.classList.remove('is-fading');
+                void element.offsetWidth;
+                element.classList.add('is-fading');
+            }
+
+            deferAIAutoScroll() {
+                this.aiAutoScrollEnabled = false;
+                clearTimeout(this.aiAutoScrollTimer);
+                this.aiAutoScrollTimer = setTimeout(() => {
+                    this.aiAutoScrollEnabled = true;
+                    this.queueAITranscriptScroll('smooth', true);
+                }, 5000);
+            }
+
+            setAIActiveSentence(text) {
+                this.aiActiveSentenceText = normalizeSentenceKey(text);
+                if (this.currentAssistantText) this.setAIText(this.currentAssistantText, false);
+                this.queueAITranscriptScroll('smooth');
+            }
+
+            resolveAIActiveSentenceIndex(sentences) {
+                const key = this.aiActiveSentenceText;
+                if (!key) return sentences.length - 1;
+                const startIndex = Math.max(0, this.aiLastMatchedSentenceIndex + 1);
+                let matchIndex = this.findAISentenceIndex(sentences, key, startIndex);
+                if (matchIndex < 0 && this.aiLastMatchedSentenceIndex >= 0) {
+                    matchIndex = this.findAISentenceIndex(sentences, key, 0);
+                }
+                if (matchIndex >= 0) {
+                    this.aiLastMatchedSentenceIndex = matchIndex;
+                    return matchIndex;
+                }
+                return sentences.length - 1;
+            }
+
+            findAISentenceIndex(sentences, key, startIndex) {
+                for (let index = startIndex; index < sentences.length; index += 1) {
+                    if (normalizeSentenceKey(sentences[index]) === key) return index;
+                }
+                return -1;
+            }
+
+            queueAITranscriptScroll(behavior = 'auto', force = false) {
+                if (!force && !this.aiAutoScrollEnabled) return;
+                if (behavior === 'smooth') this.aiQueuedScrollBehavior = 'smooth';
+                this.aiQueuedScrollForce = this.aiQueuedScrollForce || force;
+                if (this.aiScrollFrame) return;
+                this.aiScrollFrame = requestAnimationFrame(() => {
+                    this.aiScrollFrame = 0;
+                    const queuedBehavior = this.aiQueuedScrollBehavior;
+                    const queuedForce = this.aiQueuedScrollForce;
+                    this.aiQueuedScrollBehavior = 'auto';
+                    this.aiQueuedScrollForce = false;
+                    this.scrollAITranscriptToActiveSentence(queuedBehavior, queuedForce);
+                });
+            }
+
+            scrollAITranscriptToActiveSentence(behavior = 'auto', force = false) {
+                if (!force && !this.aiAutoScrollEnabled) return;
+                const target = this.aiSentenceElements[this.aiLastMatchedSentenceIndex] || this.aiSentenceElements.at(-1) || this.aiContentElement;
+                if (!target) return;
+                const containerRect = this.aiElement.getBoundingClientRect();
+                const targetRect = target.getBoundingClientRect();
+                const top = this.aiElement.scrollTop
+                    + (targetRect.top - containerRect.top)
+                    - ((containerRect.height - targetRect.height) / 2);
+
+                this.aiProgrammaticScroll = true;
+                clearTimeout(this.aiProgrammaticScrollTimer);
+                this.aiElement.scrollTo({
+                    top: Math.max(0, top),
+                    behavior
+                });
+                this.aiProgrammaticScrollTimer = setTimeout(() => {
+                    this.aiProgrammaticScroll = false;
+                }, behavior === 'smooth' ? 350 : 120);
             }
 
             showToast(message, error = false) {
@@ -1046,6 +1287,8 @@
                 this.responseFinished = false;
                 this.currentAssistantText = '';
                 this.currentAssistantCommitted = false;
+                this.aiActiveSentenceText = '';
+                this.aiLastMatchedSentenceIndex = -1;
                 this.setAIText('');
                 this.setStatus('responding', 'AI 正在思考…');
                 this.responseAbortController = new AbortController();
