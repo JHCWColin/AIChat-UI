@@ -1593,9 +1593,24 @@
             display: block;
         }
 
+        #settings-modal>div {
+            height: min(720px, calc(100vh - 2rem));
+            max-height: calc(100vh - 2rem);
+            align-items: stretch;
+        }
+
         .settings-body-inner {
-            max-height: 55vh;
+            min-width: 0;
+            min-height: 0;
+            height: 100%;
+            max-height: none;
             overflow-y: auto;
+        }
+
+        .plain-text-content {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .cloud-toggle {
@@ -1782,15 +1797,6 @@
             </button>
         </div>
     </aside>
-    <script>
-        const {
-            ipcRenderer
-        } = require('electron');
-
-        function openImageWindow() {
-            ipcRenderer.send('open-window', 'image.html');
-        }
-    </script>
     <main class="flex-grow flex flex-col relative chat-container w-full min-w-0">
         <header class="p-3 flex items-center border-b border-gray-800 bg-[#212121] z-10">
             <button onclick="toggleSidebar(true)" class="md:hidden p-2 hover:bg-gray-800 rounded-xl mr-2"><i
@@ -1961,6 +1967,9 @@
                                     onclick="exitImageMode(); toggleAttachMenu();">
                                     <i data-lucide="x" class="w-4 h-4"></i> 退出图像生成
                                 </button>
+                                <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
+                                    <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
+                                </button>
                             </div>
                             <textarea id="user-input" rows="1"
                                 placeholder="给 AI 发送消息...   支持粘贴图片(Ctrl+V) | 上传Office/图片/文本 | /canvas 编码模式"
@@ -2019,8 +2028,7 @@
     <div id="voice-notification"></div>
 
     <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
-        <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex"
-            style="max-height:200vh;">
+        <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex">
             <aside class="settings-sidebar p-3 flex flex-col">
                 <div class="settings-sidebar-header flex items-center justify-between gap-3 mb-3 px-2">
                     <button id="settings-back-btn" class="settings-back-btn hidden items-center gap-2 px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-200" onclick="toggleSettings()">
@@ -2036,6 +2044,7 @@
                     <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
                     <button data-section="memory" onclick="switchSettingsSection('memory', this)">云端记忆</button>
                     <button data-section="voice" onclick="switchSettingsSection('voice', this)">语音输入</button>
+                    <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
                     <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
                     <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">高级设置</button>
                     <button data-section="guide" onclick="switchSettingsSection('guide', this)">使用指导</button>
@@ -2244,6 +2253,75 @@
                         <p class="text-[11px] text-gray-500 mt-2">录音后自动使用此模型进行语音识别。</p>
                     </div>
                 </div>
+                <div id="section-voice-chat" class="settings-content-section space-y-4">
+                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
+                        <i data-lucide="audio-lines" class="w-4 h-4"></i>语音聊天
+                    </h3>
+                    <p class="text-xs text-gray-400">固定使用 Silero VAD、科大讯飞流式听写和 Fish Audio HTTP TTS。</p>
+                    <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">语音对话模型</label>
+                            <input type="text" id="voice-chat-model-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
+                                placeholder="gemini-3.5-flash-nothinking">
+                        </div>
+                    </div>
+                    <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <p class="text-xs font-semibold text-gray-300">Fish Audio TTS</p>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">API Base</label>
+                            <input type="text" id="voice-fish-base-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
+                            <input type="password" id="voice-fish-key-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">音色名称</label>
+                                <input type="text" id="voice-fish-name-input"
+                                    class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">音色 ID</label>
+                                <input type="text" id="voice-fish-id-input"
+                                    class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between text-xs text-gray-400 mb-2">
+                                <span>预制 B 组语音播放概率</span>
+                                <span id="voice-preset-probability-value">50%</span>
+                            </div>
+                            <input type="range" id="voice-preset-probability" min="0" max="100" value="50"
+                                class="w-full accent-emerald-500" oninput="updateVoicePresetProbabilityLabel()">
+                        </div>
+                        <button id="voice-preset-generate-btn" onclick="generateVoiceChatPreset()"
+                            class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">
+                            <i data-lucide="waves" class="w-4 h-4"></i> 生成/覆盖预制语音包
+                        </button>
+                    </div>
+                    <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <p class="text-xs font-semibold text-gray-300">科大讯飞流式听写</p>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">APPID</label>
+                            <input type="text" id="voice-xf-appid-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
+                            <input type="password" id="voice-xf-key-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">API Secret</label>
+                            <input type="password" id="voice-xf-secret-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                        </div>
+                    </div>
+                </div>
                 <div id="section-other" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">其他</h3>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
@@ -2388,7 +2466,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V4.4 (build20260711)</span>
+                            <span id="app-version">V5.0.0</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -2414,6 +2492,14 @@
         const DEFAULT_LC_KEY = 'tO6fRxnoCUEAJ3HyHbzmlG9R';
         const DEFAULT_LC_MASTER_KEY = 'tO6fRxnoCUEAJ3HyHbzmlG9R';
         const DEFAULT_LC_BASE = 'https://g2jnexxd.lc-cn-n1-shared.com/1.1/classes/AIChats';
+        const DEFAULT_VOICE_CHAT_MODEL = 'gemini-3.5-flash-nothinking';
+        const DEFAULT_FISH_AUDIO_BASE = 'https://fishaudio.org';
+        const DEFAULT_FISH_AUDIO_KEY = '2980c6d427bfa1406c4537cdd0077a121fef0cacaaffda62bb4d1dce5807cd42';
+        const DEFAULT_FISH_VOICE_NAME = '银狼';
+        const DEFAULT_FISH_VOICE_ID = '3aba0511-5ed7-4425-94c0-dc406490d8d9';
+        const DEFAULT_XF_APPID = '3029f9be';
+        const DEFAULT_XF_API_KEY = 'a1eff87d5b81fc49bd210a7a947916c3';
+        const DEFAULT_XF_API_SECRET = 'YzMxZjY1NmRiMDhkOWQ1ZGFiMjM1NzAy';
 
         function getAPIKey() {
             return localStorage.getItem('api_key') || DEFAULT_API_KEY;
@@ -3029,13 +3115,14 @@
         }
 
         function escapeHtml(str) {
-            return str.replace(/[&<>]/g, function (m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function (c) {
-                return c;
+            return String(str ?? '').replace(/[&<>"']/g, function (m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#39;'
+                }[m];
             });
         }
         async function buildSystemMessageWithMemories() {
@@ -3509,25 +3596,29 @@
             const bubble = document.createElement('div');
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
             if (content) {
-                const preprocessedContent = extractAndPreserveMath(content);
-                let html = marked.parse(preprocessedContent);
-                html = restoreAndRenderMath(html);
-                bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${html}</div>`;
-                const contentArea = bubble.querySelector('.ai-content-area');
-                if (contentArea) renderMathFormulas(contentArea);
-                bubble.querySelectorAll('pre').forEach(pre => {
-                    const code = pre.querySelector('code');
-                    if (code && !pre.querySelector('.code-copy-btn') && !pre.closest('.canvas-replace-notice')) {
-                        const copyBtn = document.createElement('button');
-                        copyBtn.className = 'code-copy-btn';
-                        copyBtn.innerText = '复制代码';
-                        copyBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            copyToClipboard(code.innerText, copyBtn);
-                        };
-                        pre.appendChild(copyBtn);
-                    }
-                });
+                if (isAI) {
+                    const preprocessedContent = extractAndPreserveMath(content);
+                    let html = marked.parse(preprocessedContent);
+                    html = restoreAndRenderMath(html);
+                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${html}</div>`;
+                    const contentArea = bubble.querySelector('.ai-content-area');
+                    if (contentArea) renderMathFormulas(contentArea);
+                    bubble.querySelectorAll('pre').forEach(pre => {
+                        const code = pre.querySelector('code');
+                        if (code && !pre.querySelector('.code-copy-btn') && !pre.closest('.canvas-replace-notice')) {
+                            const copyBtn = document.createElement('button');
+                            copyBtn.className = 'code-copy-btn';
+                            copyBtn.innerText = '复制代码';
+                            copyBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                copyToClipboard(code.innerText, copyBtn);
+                            };
+                            pre.appendChild(copyBtn);
+                        }
+                    });
+                } else {
+                    bubble.innerHTML = `<div class="plain-text-content">${escapeHtml(content)}</div>`;
+                }
             } else {
                 bubble.innerHTML =
                     `<div class="ai-content-area"><div class="animate-pulse text-gray-400 text-sm">AI 正在思考...</div></div>`;
@@ -3799,6 +3890,7 @@
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
                 populateLCFields();
                 populateVoiceModel();
+                populateVoiceChatSettings();
                 populateOtherSettings();
                 populateAdvancedSettings();
                 updateSettingsPortraitMode();
@@ -3844,6 +3936,61 @@
             if (select) select.value = voiceModel;
         }
 
+        function populateVoiceChatSettings() {
+            const values = {
+                'voice-chat-model-input': localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
+                'voice-fish-base-input': localStorage.getItem('voice_fish_base') || DEFAULT_FISH_AUDIO_BASE,
+                'voice-fish-key-input': localStorage.getItem('voice_fish_key') || DEFAULT_FISH_AUDIO_KEY,
+                'voice-fish-name-input': localStorage.getItem('voice_fish_name') || DEFAULT_FISH_VOICE_NAME,
+                'voice-fish-id-input': localStorage.getItem('voice_fish_id') || DEFAULT_FISH_VOICE_ID,
+                'voice-xf-appid-input': localStorage.getItem('voice_xf_appid') || DEFAULT_XF_APPID,
+                'voice-xf-key-input': localStorage.getItem('voice_xf_key') || DEFAULT_XF_API_KEY,
+                'voice-xf-secret-input': localStorage.getItem('voice_xf_secret') || DEFAULT_XF_API_SECRET
+            };
+            Object.entries(values).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) element.value = value;
+            });
+            const probability = document.getElementById('voice-preset-probability');
+            if (probability) probability.value = localStorage.getItem('voice_preset_probability') || '50';
+            updateVoicePresetProbabilityLabel();
+        }
+
+        function updateVoicePresetProbabilityLabel() {
+            const slider = document.getElementById('voice-preset-probability');
+            const label = document.getElementById('voice-preset-probability-value');
+            if (slider && label) label.textContent = `${slider.value}%`;
+        }
+
+        async function generateVoiceChatPreset() {
+            if (!window.electronAPI?.isElectron) {
+                showVoiceNotification('预制语音包只能在 Electron 桌面端生成', true);
+                return;
+            }
+            const button = document.getElementById('voice-preset-generate-btn');
+            const originalText = button ? button.innerHTML : '';
+            if (button) {
+                button.disabled = true;
+                button.textContent = '正在生成 6 条预制语音…';
+            }
+            try {
+                const result = await window.electronAPI.generateVoicePreset({
+                    apiBase: document.getElementById('voice-fish-base-input').value.trim(),
+                    apiKey: document.getElementById('voice-fish-key-input').value.trim(),
+                    voiceId: document.getElementById('voice-fish-id-input').value.trim()
+                });
+                showVoiceNotification(`预制语音包已生成，共 ${result.count || 6} 条`, false, 3000);
+            } catch (error) {
+                showVoiceNotification(error.message || '预制语音包生成失败', true, 5000);
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                    lucide.createIcons();
+                }
+            }
+        }
+
         function switchSettingsSection(sectionId, btn) {
             document.querySelectorAll('.settings-content-section').forEach(s => s.classList.remove('active-section'));
             document.querySelectorAll('.settings-sidebar button').forEach(b => b.classList.remove('active-nav'));
@@ -3856,6 +4003,9 @@
             }
             if (sectionId === 'voice') {
                 populateVoiceModel();
+            }
+            if (sectionId === 'voice-chat') {
+                populateVoiceChatSettings();
             }
             if (sectionId === 'other') {
                 populateOtherSettings();
@@ -3973,6 +4123,22 @@
                 voiceModel = voiceSelect.value;
                 localStorage.setItem('voice_model', voiceModel);
             }
+            const voiceChatFields = {
+                voice_chat_model: 'voice-chat-model-input',
+                voice_fish_base: 'voice-fish-base-input',
+                voice_fish_key: 'voice-fish-key-input',
+                voice_fish_name: 'voice-fish-name-input',
+                voice_fish_id: 'voice-fish-id-input',
+                voice_xf_appid: 'voice-xf-appid-input',
+                voice_xf_key: 'voice-xf-key-input',
+                voice_xf_secret: 'voice-xf-secret-input'
+            };
+            Object.entries(voiceChatFields).forEach(([storageKey, inputId]) => {
+                const element = document.getElementById(inputId);
+                if (element) localStorage.setItem(storageKey, element.value.trim());
+            });
+            const voicePresetProbability = document.getElementById('voice-preset-probability');
+            if (voicePresetProbability) localStorage.setItem('voice_preset_probability', voicePresetProbability.value);
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
@@ -4251,7 +4417,7 @@
 
         function filterChats() {
             const searchTerm = document.getElementById('chat-search')?.value?.toLowerCase()?.trim() || '';
-            filteredChats = searchTerm ? chats.filter(chat => chat.title.toLowerCase().includes(searchTerm)) : chats;
+            filteredChats = searchTerm ? chats.filter(chat => String(chat.title || '').toLowerCase().includes(searchTerm)) : chats;
             renderFilteredHistory();
         }
 
@@ -4259,13 +4425,30 @@
             const container = document.getElementById('chat-history');
             container.innerHTML = '';
             (filteredChats.length ? filteredChats : chats).forEach(chat => {
-                const canvasBadge = chat.canvasEnabled ?
-                    ' <span style="font-size:0.55rem;color:#10b981;">[Canvas]</span>' : '';
                 const btn = document.createElement('button');
                 btn.className =
                     `w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-sm ${activeChatId === chat.id ? 'active-chat' : ''}`;
-                btn.innerHTML =
-                    `<i data-lucide="message-square" class="w-4 h-4 text-gray-400 flex-shrink-0"></i><span class="truncate text-left flex-grow">${chat.title}${canvasBadge}</span><span class="delete-chat-btn p-1" data-chat-id="${chat.id}" onclick="event.stopPropagation(); deleteChat('${chat.id}')"><i data-lucide="trash-2" class="w-4 h-4 text-gray-400"></i></span>`;
+                const icon = document.createElement('i');
+                icon.setAttribute('data-lucide', 'message-square');
+                icon.className = 'w-4 h-4 text-gray-400 flex-shrink-0';
+                const title = document.createElement('span');
+                title.className = 'truncate text-left flex-grow';
+                title.textContent = String(chat.title || '新对话');
+                if (chat.canvasEnabled) {
+                    const canvasBadge = document.createElement('span');
+                    canvasBadge.style.cssText = 'font-size:0.55rem;color:#10b981;margin-left:0.25rem;';
+                    canvasBadge.textContent = '[Canvas]';
+                    title.appendChild(canvasBadge);
+                }
+                const deleteBtn = document.createElement('span');
+                deleteBtn.className = 'delete-chat-btn p-1';
+                deleteBtn.dataset.chatId = chat.id;
+                deleteBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4 text-gray-400"></i>';
+                deleteBtn.onclick = (event) => {
+                    event.stopPropagation();
+                    deleteChat(chat.id);
+                };
+                btn.append(icon, title, deleteBtn);
                 btn.onclick = () => switchChat(chat.id);
                 container.appendChild(btn);
             });
@@ -4637,6 +4820,111 @@
             return false;
         }
 
+        function getVoiceChatSettingsSnapshot() {
+            return {
+                apiKey: getAPIKey(),
+                baseUrl: getBaseURL(),
+                model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
+                systemPrompt: systemPrompt || '',
+                fishApiBase: localStorage.getItem('voice_fish_base') || DEFAULT_FISH_AUDIO_BASE,
+                fishApiKey: localStorage.getItem('voice_fish_key') || DEFAULT_FISH_AUDIO_KEY,
+                fishVoiceName: localStorage.getItem('voice_fish_name') || DEFAULT_FISH_VOICE_NAME,
+                fishVoiceId: localStorage.getItem('voice_fish_id') || DEFAULT_FISH_VOICE_ID,
+                xfAppId: localStorage.getItem('voice_xf_appid') || DEFAULT_XF_APPID,
+                xfApiKey: localStorage.getItem('voice_xf_key') || DEFAULT_XF_API_KEY,
+                xfApiSecret: localStorage.getItem('voice_xf_secret') || DEFAULT_XF_API_SECRET,
+                presetBProbability: parseInt(localStorage.getItem('voice_preset_probability') || '50', 10) || 0,
+                theme: localStorage.getItem('theme') || 'light',
+                backgroundImage: selectedBackgroundImage
+            };
+        }
+
+        async function startAudioChat() {
+            if (!window.electronAPI?.isElectron) {
+                showVoiceNotification('语音聊天只支持 Electron 桌面端', true);
+                return;
+            }
+            if (isGenerating) {
+                showVoiceNotification('请先停止当前文字回复，再开启语音聊天', true);
+                return;
+            }
+            const chat = chats.find(item => item.id === activeChatId);
+            if (!chat) {
+                showVoiceNotification('当前对话不存在', true);
+                return;
+            }
+            const context = (chat.messages || [])
+                .filter(message => message && (message.role === 'user' || message.role === 'assistant'))
+                .map(message => ({
+                    role: message.role,
+                    content: typeof message.content === 'string' ? message.content : ''
+                }))
+                .filter(message => message.content.trim());
+            try {
+                await window.electronAPI.openAudioChat({
+                    targetChatId: chat.id,
+                    context,
+                    settings: getVoiceChatSettingsSnapshot()
+                });
+            } catch (error) {
+                showVoiceNotification(error.message || '语音聊天窗口启动失败', true, 5000);
+            }
+        }
+
+        function loadAppliedAudioSessions() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem('applied_audio_sessions') || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        }
+
+        async function applyCompletedAudioChat(payload) {
+            if (!payload || !payload.sessionId || !payload.targetChatId) return;
+            const applied = loadAppliedAudioSessions();
+            if (applied.includes(payload.sessionId)) return;
+            applied.push(payload.sessionId);
+            localStorage.setItem('applied_audio_sessions', JSON.stringify(applied.slice(-100)));
+
+            const chat = chats.find(item => item.id === payload.targetChatId);
+            if (!chat) return;
+            const turns = (Array.isArray(payload.turns) ? payload.turns : [])
+                .filter(turn => turn && (turn.role === 'user' || turn.role === 'assistant'))
+                .map(turn => ({
+                    role: turn.role,
+                    content: String(turn.content || ''),
+                    ...(turn.role === 'assistant' ? {
+                        model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL
+                    } : {})
+                }))
+                .filter(turn => turn.content.trim());
+            if (!turns.length) return;
+
+            const wasEmpty = !chat.messages || chat.messages.length === 0;
+            if (!Array.isArray(chat.messages)) chat.messages = [];
+            chat.messages.push(...turns);
+            if (wasEmpty) {
+                const firstUser = turns.find(turn => turn.role === 'user');
+                chat.title = firstUser ? firstUser.content.trim().slice(0, 20) || '语音对话' : '语音对话';
+            }
+            chat.updatedAt = Date.now();
+            localStorage.setItem('ai_chats', JSON.stringify(chats));
+            renderChatHistory();
+            if (activeChatId === chat.id) {
+                document.getElementById('active-chat-title').innerText = chat.title;
+                await renderMessagesWithResolvedRefs(chat.messages);
+            }
+            showVoiceNotification('语音通话记录已保存到当前对话', false, 3000);
+            if (isCloudEnabled()) syncData().catch(error => console.error('语音记录云同步失败', error));
+        }
+
+        if (window.electronAPI?.isElectron) {
+            window.electronAPI.onAudioChatCompleted(payload => {
+                applyCompletedAudioChat(payload).catch(error => console.error('语音记录回传失败', error));
+            });
+        }
+
         function updateAttachMenuButtons() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
             const editBtn = document.getElementById('image-edit-btn');
@@ -4655,6 +4943,8 @@
             if (exitBtn) {
                 exitBtn.style.display = isImageMode ? 'flex' : 'none';
             }
+            const audioChatBtn = document.getElementById('audio-chat-entry-btn');
+            if (audioChatBtn) audioChatBtn.style.display = window.electronAPI?.isElectron ? 'flex' : 'none';
         }
 
         function switchToImageGeneration() {

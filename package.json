@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
@@ -20,7 +20,8 @@
       "output": "dist"
     },
     "files": [
-      "**/*"
+      "**/*",
+      "!参考.html"
     ],
     "win": {
       "target": [
@@ -53,12 +54,16 @@
       "artifactName": "AIUI-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "AIUI4.0-Portable.exe"
+      "artifactName": "AIUI5.0.0-Portable.exe"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "AIUI4.0-Setup.exe"
+      "artifactName": "AIUI5.0.0-Setup.exe"
     }
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.27.0",
+    "ws": "^8.21.1"
   }
 }
