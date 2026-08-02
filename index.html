@@ -2556,6 +2556,7 @@
 
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">绘画工具</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在对话框左侧的“+”中选择“图像生成”以进入图像生成模式，你会发现<strong>模型列表</strong>中的模型变成了图像有关的模型。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在提示词中加入宽高比关键词即可指定比例，例如“海边日落 16:9”或“人物头像 4：3”。前面的数字是宽，后面的数字是高；不填写比例时继续使用默认的 1:1。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 若会话中存在AI生成的图片或你上传的图片，可以通过在“+”中选择“图像编辑”以进入图像编辑模式，调用AI时会走向图像编辑端点，对最近的一张AI生成的图片或你上传的图片进行编辑。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在“图像生成”或“图像编辑”模式可以在“+”中选择“退出图像生成模式”以回到正常的对话模式。<strong>此时为了减少上下文负载，每次调用AI仅会附带最后一张图片作为附件！</strong></p>
 
@@ -2600,7 +2601,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V5.1.0</span>
+                            <span id="app-version">V5.2.0</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -5535,6 +5536,40 @@
             display.textContent = `${extra}预估 token: ${totalTokens} · 费用: $${price.toFixed(3)}`;
         };
 
+        function parseImageAspectRatio(prompt) {
+            const source = String(prompt || '');
+            const match = source.match(/(\d{1,5}(?:\.\d+)?)\s*[:：]\s*(\d{1,5}(?:\.\d+)?)/);
+            if (!match) return {
+                originalPrompt: source,
+                prompt: source,
+                aspectRatio: null,
+                size: '1024x1024'
+            };
+            const widthRatio = Number(match[1]);
+            const heightRatio = Number(match[2]);
+            const ratio = widthRatio / heightRatio;
+            if (!Number.isFinite(ratio) || widthRatio <= 0 || heightRatio <= 0 || ratio < 0.1 || ratio > 10) {
+                return {
+                    originalPrompt: source,
+                    prompt: source,
+                    aspectRatio: null,
+                    size: '1024x1024'
+                };
+            }
+            const longSide = ratio === 1 ? 1024 : 1536;
+            const width = ratio >= 1 ? longSide : Math.max(64, Math.round(longSide * ratio));
+            const height = ratio >= 1 ? Math.max(64, Math.round(longSide / ratio)) : longSide;
+            const cleanedPrompt = `${source.slice(0, match.index)} ${source.slice(match.index + match[0].length)}`
+                .replace(/\s+/g, ' ')
+                .trim();
+            return {
+                originalPrompt: source,
+                prompt: cleanedPrompt || '请生成一张图片',
+                aspectRatio: `${match[1]}:${match[2]}`,
+                size: `${width}x${height}`
+            };
+        }
+
         async function sendImageMessage(chat, prompt, model) {
             abortController = new AbortController();
             isGenerating = true;
@@ -5567,9 +5602,13 @@
                 prompt,
                 model,
                 imageBase64,
+                aspectRatio: parseImageAspectRatio(prompt).aspectRatio,
+                imageSize: parseImageAspectRatio(prompt).size,
                 isImage: true
             };
             window._lastImageRequest = params;
+            const ratioInfo = parseImageAspectRatio(prompt);
+            if (ratioInfo.aspectRatio) appendLog('debug', `图像比例识别：${ratioInfo.aspectRatio} -> ${ratioInfo.size}`);
             // 像正常对话一样插入占位气泡
             const aiRow = appendMessageToUI('assistant', 'AI正在绘画中……', model, true);
             const contentArea = aiRow.querySelector('.ai-content-area');
@@ -5581,9 +5620,9 @@
                     const blob = dataURLtoBlob(imageBase64);
                     const formData = new FormData();
                     formData.append('model', model);
-                    formData.append('prompt', prompt);
+                    formData.append('prompt', ratioInfo.prompt);
                     formData.append('n', 1);
-                    formData.append('size', '1024x1024');
+                    formData.append('size', ratioInfo.size);
                     formData.append('response_format', 'b64_json');
                     formData.append('image', blob, 'image.png');
                     response = await fetch(`${baseUrl}/images/edits`, {
@@ -5603,9 +5642,9 @@
                         },
                         body: JSON.stringify({
                             model,
-                            prompt,
+                            prompt: ratioInfo.prompt,
                             n: 1,
-                            size: "1024x1024",
+                            size: ratioInfo.size,
                             response_format: "b64_json"
                         }),
                         signal: abortController.signal

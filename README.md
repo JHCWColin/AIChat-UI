@@ -11,7 +11,7 @@
 附件预览与上传、云端同步以及丰富的个性化设置。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V5.1.0-blue)]()
+[![Version](https://img.shields.io/badge/version-V5.2.0-blue)]()
 
 </div>
 
@@ -164,7 +164,7 @@ AIChat-UI-Main/
 ## 👤 作者 & 版本
 
 - **开发者**：[JHCWColin](https://github.com/JHCWColin) / [abpdf](https://github.com/abpdf)
-- **版本**：V5.1.0 (build20260802)
+- **版本**：V5.2.0 (build20260803)
 
 ---
 
