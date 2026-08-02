@@ -1830,8 +1830,14 @@
                             </select>
                         </div>
                         <div class="model-selector-container flex items-center gap-2">
-                            <select id="model-select" onchange="syncRetrySelect()">
-                                <option value="gpt-5.5-2026-04-24" selected>gpt-5.5-2026-04-24</option>
+                            <select id="model-select" onchange="onModelSelectionChange()">
+                                <option value="claude-opus-5">claude-opus-5</option>
+                                <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+                                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+                                <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+                                <option value="gpt-5.6-terra" selected>gpt-5.6-terra（默认）</option>
+                                <option value="gpt-5.6-luna">gpt-5.6-luna</option>
+                                <option value="gpt-5.5-2026-04-24">gpt-5.5-2026-04-24</option>
                                 <option value="gpt-5.5">gpt-5.5</option>
                                 <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                                 <option value="DeepSeek-OCR-2">DeepSeek-OCR-2</option>
@@ -2186,6 +2192,17 @@
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
                                 placeholder="0">
                         </div>
+                        <div>
+                            <div class="flex items-center justify-between gap-3 mb-2">
+                                <label class="block text-sm font-medium text-gray-300">模型列表</label>
+                                <button type="button" onclick="resetModelListEditor()"
+                                    class="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">恢复默认</button>
+                            </div>
+                            <textarea id="model-list-input" rows="10"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm font-mono outline-none focus:border-emerald-500 transition-colors resize-y"
+                                placeholder="每行填写一个模型名称"></textarea>
+                            <p class="text-[11px] text-gray-500 mt-2">每行一个模型；可直接增加、删除或调整顺序。保存后会同步更新主模型选择器和重试模型选择器，并存储在本机 LocalStorage 中。</p>
+                        </div>
                     </div>
                 </div>
                 <div id="section-memory" class="settings-content-section space-y-4">
@@ -2398,6 +2415,7 @@
 
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">必要配置</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在开始使用AIUI之前，你需要将自己的<strong>apikey</strong>，以及对应的<strong>服务器url</strong>填入“设置 - API配置”中，你同样可以在这里调整<strong>最大Token限制</strong>，以防止单词使用超过预算金额。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• “设置 - API配置 - 模型列表”支持每行填写一个模型名称。你可以增加、删除或调整顺序；保存后主模型选择器与重试选择器会立即同步。模型列表保存在本机 LocalStorage 中，“恢复默认”只会先恢复编辑框内容，仍需点击保存设置。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 同时，若你拥有Leancloud云端存储库，同样可以在“设置 - 云端记忆”引入云端存储的功能，此项不是必要设置，若不配置云端，聊天记录将会在<strong>本地保存</strong>，云端<strong>只会保存非图片和文件的内容</strong>。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在设置的其他位置选择你喜欢的背景图片、亮暗模式以及文字大小。以及默认使用的语音输入模型。（<strong>前提是你提供的AI后端要支持语音转文字模型</strong>）。</p>
 
@@ -2405,6 +2423,12 @@
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在模型列表里选择模型（前提是AI后端要支持）进行文字对话。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 对于AI发出的所有消息，可以使用“复制”功能。对于AI发出的<strong>最后一条</strong>消息，可以使用“重试”功能。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 使用“语音转文字”模型进行语音输入，识别到的内容将会在鼠标光标（若存在）处插入，或者在末尾插入，不会影响对话框中已有内容。</p>
+
+<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">语音聊天</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 首次使用前，在“设置 - 语音聊天”填写对话模型、Fish Audio API、音色 ID 与科大讯飞流式听写凭据。Fish Audio 固定使用 HTTP TTS，语音识别固定使用科大讯飞。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 可在语音聊天设置中生成 A/B 两组预制语音。音频文件由 Electron 主进程保存在用户数据目录，语音窗口通过 IPC 读取；关闭并重新打开 Setup 或 Portable 版本后仍可继续使用。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 从输入框左侧“+”菜单进入语音聊天。当前文字上下文会自动带入；结束通话后，本次完整的人类/AI轮次会自动拼接回当前对话，随后可继续文字聊天。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 语音窗口仅显示当前 AI 回复和当前用户发言；深浅主题跟随主窗口。用户持续沉默时不会主动触发模型。</p>
 
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">画布编写</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在对话框左侧的“+”中选择“Canvas”或者手动在输入框的开头处输入指令/canvas以启动画布。</p>
@@ -2466,7 +2490,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V5.0.0</span>
+                            <span id="app-version">V5.1.0</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -2878,7 +2902,80 @@
         // 图像模式相关
         let isImageMode = false;
         let imageEditMode = false;
-        const defaultModelOptionsHTML = document.getElementById('model-select').innerHTML;
+        const MODEL_LIST_STORAGE_KEY = 'model_list';
+        const SELECTED_MODEL_STORAGE_KEY = 'selected_model';
+        const DEFAULT_CHAT_MODEL = 'gpt-5.6-terra';
+        const DEFAULT_MODEL_LIST = Array.from(document.getElementById('model-select').options)
+            .map(option => option.value.trim())
+            .filter(Boolean);
+        let textModelList = [];
+
+        function normalizeModelList(value) {
+            const source = Array.isArray(value) ? value : String(value || '').split(/\r?\n/);
+            const seen = new Set();
+            return source
+                .map(model => String(model || '').trim().slice(0, 200))
+                .filter(model => model && !seen.has(model) && seen.add(model));
+        }
+
+        function loadModelList() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(MODEL_LIST_STORAGE_KEY) || 'null');
+                const normalized = normalizeModelList(saved);
+                if (normalized.length) return normalized;
+            } catch (error) {
+                console.warn('模型列表读取失败，将使用默认列表', error);
+            }
+            const defaults = DEFAULT_MODEL_LIST.slice();
+            localStorage.setItem(MODEL_LIST_STORAGE_KEY, JSON.stringify(defaults));
+            return defaults;
+        }
+
+        function renderModelOptions(select, models) {
+            if (!select) return;
+            const fragment = document.createDocumentFragment();
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model;
+                option.textContent = model === DEFAULT_CHAT_MODEL ? `${model}（默认）` : model;
+                fragment.appendChild(option);
+            });
+            select.replaceChildren(fragment);
+        }
+
+        function applyTextModelList(models, preferredModel = '') {
+            textModelList = normalizeModelList(models);
+            if (!textModelList.length) textModelList = DEFAULT_MODEL_LIST.slice();
+            if (isImageMode) return;
+            const select = document.getElementById('model-select');
+            renderModelOptions(select, textModelList);
+            const stored = preferredModel || localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL;
+            const nextModel = textModelList.includes(stored)
+                ? stored
+                : (textModelList.includes(DEFAULT_CHAT_MODEL) ? DEFAULT_CHAT_MODEL : textModelList[0]);
+            select.value = nextModel;
+            localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, nextModel);
+            syncRetrySelect();
+        }
+
+        function populateModelListEditor() {
+            const input = document.getElementById('model-list-input');
+            if (input) input.value = (textModelList.length ? textModelList : loadModelList()).join('\n');
+        }
+
+        function resetModelListEditor() {
+            const input = document.getElementById('model-list-input');
+            if (input) input.value = DEFAULT_MODEL_LIST.join('\n');
+        }
+
+        function onModelSelectionChange() {
+            const select = document.getElementById('model-select');
+            if (!isImageMode && select?.value) {
+                localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, select.value);
+            }
+            syncRetrySelect();
+        }
+
         const IMAGE_MODELS = [{
             value: 'gemini-3.1-flash-image',
             text: 'gemini-3.1-flash-image (推荐)'
@@ -3889,6 +3986,7 @@
                 renderMemoriesToSettings();
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
                 populateLCFields();
+                populateModelListEditor();
                 populateVoiceModel();
                 populateVoiceChatSettings();
                 populateOtherSettings();
@@ -4001,6 +4099,9 @@
                 populateLCFields();
                 renderMemoriesToSettings();
             }
+            if (sectionId === 'api') {
+                populateModelListEditor();
+            }
             if (sectionId === 'voice') {
                 populateVoiceModel();
             }
@@ -4102,6 +4203,14 @@
             const maxTokensVal = parseInt(document.getElementById('max-tokens-input').value) || 0;
             localStorage.setItem('max_tokens_limit', maxTokensVal);
             maxTokensLimit = maxTokensVal;
+            const modelListInput = document.getElementById('model-list-input');
+            const editedModelList = normalizeModelList(modelListInput?.value || '');
+            const savedModelList = editedModelList.length ? editedModelList : DEFAULT_MODEL_LIST.slice();
+            const currentTextModel = isImageMode
+                ? localStorage.getItem(SELECTED_MODEL_STORAGE_KEY)
+                : document.getElementById('model-select')?.value;
+            localStorage.setItem(MODEL_LIST_STORAGE_KEY, JSON.stringify(savedModelList));
+            applyTextModelList(savedModelList, currentTextModel || DEFAULT_CHAT_MODEL);
             const lcAppId = document.getElementById('lc-app-id-input').value.trim();
             if (lcAppId) localStorage.setItem('lc_app_id', lcAppId);
             else localStorage.removeItem('lc_app_id');
@@ -4196,7 +4305,9 @@
         function syncRetrySelect() {
             const mainSelect = document.getElementById('model-select');
             const retrySelect = document.getElementById('retry-model-select');
+            if (!mainSelect || !retrySelect) return;
             retrySelect.innerHTML = mainSelect.innerHTML;
+            retrySelect.value = mainSelect.value;
         }
 
         function openRetryMenu(e) {
@@ -4979,8 +5090,7 @@
         function exitImageMode() {
             isImageMode = false;
             imageEditMode = false;
-            document.getElementById('model-select').innerHTML = defaultModelOptionsHTML;
-            syncRetrySelect();
+            applyTextModelList(textModelList.length ? textModelList : loadModelList());
             updateAttachMenuButtons();
             updateTokenEstimate();
             showVoiceNotification('已退出图像生成模式', false);
@@ -5356,6 +5466,7 @@
             await migrateOldChats();
             const savedTheme = localStorage.getItem('theme') || 'light';
             setTheme(savedTheme, false);
+            applyTextModelList(loadModelList(), localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL);
             document.body.classList.add(`font-size-${currentFontSize}`);
             lucide.createIcons();
             document.getElementById('sys-prompt').value = systemPrompt;
