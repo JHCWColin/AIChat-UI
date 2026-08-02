@@ -1765,6 +1765,81 @@
             opacity: 1;
         }
 
+        #compact-confirm-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.32);
+            backdrop-filter: blur(12px) saturate(130%);
+            -webkit-backdrop-filter: blur(12px) saturate(130%);
+        }
+
+        #compact-confirm-modal.visible {
+            display: flex;
+        }
+
+        #compact-confirm-modal > div {
+            width: min(440px, 100%);
+            padding: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 1.15rem;
+            background: rgba(32, 32, 38, 0.78);
+            color: #f5f5f5;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+            backdrop-filter: blur(30px) saturate(160%);
+            -webkit-backdrop-filter: blur(30px) saturate(160%);
+        }
+
+        body.theme-light #compact-confirm-modal {
+            background: rgba(0, 0, 0, 0.16);
+        }
+
+        body.theme-light #compact-confirm-modal > div {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: rgba(255, 255, 255, 0.82);
+            color: #1f1f1f;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.14);
+        }
+
+        #compact-confirm-modal .compact-confirm-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.6rem;
+            margin-top: 1.2rem;
+        }
+
+        #compact-confirm-modal button {
+            min-width: 88px;
+            padding: 0.55rem 0.9rem;
+            border-radius: 0.7rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            cursor: pointer;
+        }
+
+        body.theme-light #compact-confirm-modal button {
+            border-color: rgba(0, 0, 0, 0.14);
+        }
+
+        #compact-confirm-modal .compact-cancel {
+            background: rgba(255, 255, 255, 0.08);
+            color: inherit;
+        }
+
+        body.theme-light #compact-confirm-modal .compact-cancel {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        #compact-confirm-modal .compact-confirm {
+            border-color: rgba(16, 185, 129, 0.7);
+            background: #10b981;
+            color: #07140f;
+            font-weight: 700;
+        }
+
         #voice-btn.recording {
             background: rgba(220, 38, 38, 0.7);
             border-color: rgba(220, 38, 38, 0.9);
@@ -1973,12 +2048,15 @@
                                     onclick="exitImageMode(); toggleAttachMenu();">
                                     <i data-lucide="x" class="w-4 h-4"></i> 退出图像生成
                                 </button>
+                                <button onclick="requestManualCompaction(); toggleAttachMenu();">
+                                    <i data-lucide="file-scan" class="w-4 h-4"></i> 压缩上下文
+                                </button>
                                 <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
                                     <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
                                 </button>
                             </div>
                             <textarea id="user-input" rows="1"
-                                placeholder="给 AI 发送消息...   支持粘贴图片(Ctrl+V) | 上传Office/图片/文本 | /canvas 编码模式"
+                                placeholder="给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文"
                                 class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none py-1 px-2 text-sm md:text-base"
                                 oninput="autoResize(this)"></textarea>
                             <input type="file" id="hidden-file-input"
@@ -2074,6 +2152,33 @@
                             <button class="temp-btn rounded-xl" data-temp="1.2"
                                 onclick="setTemp(1.2, this)">创意性</button>
                         </div>
+                    </div>
+                    <div class="pt-2">
+                        <label class="block text-sm font-medium mb-3 text-gray-300">自动摘要</label>
+                        <div class="space-y-2">
+                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="0" class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">不进行自动压缩</strong><small class="block mt-1 text-xs text-gray-500">不压缩上下文，消耗更多 Token；上下文更完整、回复通常更精确，但处理时间可能更长。</small></span>
+                            </label>
+                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="10" class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">默认：每 10 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次，将前 10 轮交给摘要助手整理，后续调用使用摘要与未压缩原文。</small></span>
+                            </label>
+                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="15" class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份独立摘要，原始聊天记录仍会保留在界面中。</small></span>
+                            </label>
+                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="20" class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份独立摘要，适合希望保留更长原文上下文的对话。</small></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">上下文压缩模型</label>
+                        <select id="context-compaction-model-select"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"></select>
+                        <p class="text-[11px] text-gray-500 mt-2">建议选择价格较低、响应较快的模型；摘要助手越便宜，整体使用体验通常越好，成本也越低。</p>
                     </div>
                 </div>
                 <div id="section-appearance" class="settings-content-section space-y-5">
@@ -2424,6 +2529,11 @@
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 对于AI发出的所有消息，可以使用“复制”功能。对于AI发出的<strong>最后一条</strong>消息，可以使用“重试”功能。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 使用“语音转文字”模型进行语音输入，识别到的内容将会在鼠标光标（若存在）处插入，或者在末尾插入，不会影响对话框中已有内容。</p>
 
+<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">上下文压缩</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在“设置 - 对话设置”中可关闭自动摘要，或选择每 10、15、20 个完整对话轮次生成一份独立摘要。摘要只影响发送给模型的上下文，界面中的原始聊天记录不会被删除或隐藏。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在输入框开头输入 <strong>/compact</strong>，或使用“+ - 压缩上下文”，可以手动压缩自上次压缩结束后至今的完整轮次。/compact 后面的文字会作为本次摘要的额外要求。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 图片、附件和 AI 生成图片不会发送给上下文压缩助手。摘要模型沿用全局 API Key 与 Base URL，可在对话设置中单独指定。</p>
+
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">语音聊天</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 首次使用前，在“设置 - 语音聊天”填写对话模型、Fish Audio API、音色 ID 与科大讯飞流式听写凭据。Fish Audio 固定使用 HTTP TTS，语音识别固定使用科大讯飞。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 可在语音聊天设置中生成 A/B 两组预制语音。音频文件由 Electron 主进程保存在用户数据目录，语音窗口通过 IPC 读取；关闭并重新打开 Setup 或 Portable 版本后仍可继续使用。</p>
@@ -2508,6 +2618,16 @@
             </div>
         </div>
     </div>
+    <div id="compact-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="compact-confirm-title">
+        <div>
+            <h3 id="compact-confirm-title" class="text-base font-semibold">压缩上下文</h3>
+            <p class="mt-3 text-sm leading-relaxed opacity-80">手动压缩会将上次压缩结束后至今的完整对话整理成摘要。压缩可能会或多或少降低模型的回复质量，但有助于缩短上下文、节省请求成本。</p>
+            <div class="compact-confirm-actions">
+                <button type="button" class="compact-cancel" onclick="resolveCompactionConfirm(false)">取消</button>
+                <button type="button" class="compact-confirm" onclick="resolveCompactionConfirm(true)">确定</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const DEFAULT_API_KEY = 'sk-2LXzp4RQCOAywuqu63EfE5D0480e46Bc9cEa8d1a5a38D117';
@@ -2517,6 +2637,8 @@
         const DEFAULT_LC_MASTER_KEY = 'tO6fRxnoCUEAJ3HyHbzmlG9R';
         const DEFAULT_LC_BASE = 'https://g2jnexxd.lc-cn-n1-shared.com/1.1/classes/AIChats';
         const DEFAULT_VOICE_CHAT_MODEL = 'gemini-3.5-flash-nothinking';
+        const DEFAULT_CONTEXT_COMPACTION_MODEL = 'gemini-3.5-flash-lite';
+        const CONTEXT_COMPACTION_PROMPT = '你是上下文压缩助手。分析下面的历史对话，生成一个精简但信息完整的上下文摘要。1. 保留用户的重要信息、偏好、约束条件。2. 保留当前正在进行的任务、项目状态和关键技术细节。3. 保留已经做出的决定和不可重复询问的信息。4. 删除无关闲聊、重复内容和临时信息。5. 摘要必须让另一个AI仅凭此内容继续对话，不丢失关键上下文。请输出结构化摘要。';
         const DEFAULT_FISH_AUDIO_BASE = 'https://fishaudio.org';
         const DEFAULT_FISH_AUDIO_KEY = '2980c6d427bfa1406c4537cdd0077a121fef0cacaaffda62bb4d1dce5807cd42';
         const DEFAULT_FISH_VOICE_NAME = '银狼';
@@ -2751,6 +2873,208 @@
             return null;
         }
 
+        function ensureContextCompactionState(chat) {
+            if (!chat || typeof chat !== 'object') return { version: 1, summaries: [] };
+            if (!chat.contextCompaction || typeof chat.contextCompaction !== 'object') {
+                chat.contextCompaction = { version: 1, summaries: [] };
+            }
+            if (!Array.isArray(chat.contextCompaction.summaries)) chat.contextCompaction.summaries = [];
+            chat.contextCompaction.version = 1;
+            chat.contextCompaction.summaries = chat.contextCompaction.summaries
+                .filter(summary => summary && typeof summary.content === 'string' && summary.content.trim() && Array.isArray(summary.sourceMessageIndexes) && summary.sourceMessageIndexes.length)
+                .map(summary => ({
+                    id: String(summary.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+                    startMessageIndex: Number.isInteger(summary.startMessageIndex) ? summary.startMessageIndex : Math.min(...summary.sourceMessageIndexes),
+                    endMessageIndex: Number.isInteger(summary.endMessageIndex) ? summary.endMessageIndex : Math.max(...summary.sourceMessageIndexes),
+                    sourceMessageIndexes: [...new Set(summary.sourceMessageIndexes.map(Number).filter(Number.isInteger))].sort((a, b) => a - b),
+                    turnCount: Number(summary.turnCount) || 0,
+                    content: summary.content.trim(),
+                    model: String(summary.model || ''),
+                    trigger: summary.trigger === 'manual' ? 'manual' : 'auto',
+                    extraInstruction: String(summary.extraInstruction || ''),
+                    createdAt: Number(summary.createdAt) || Date.now()
+                }))
+                .sort((a, b) => a.startMessageIndex - b.startMessageIndex);
+            return chat.contextCompaction;
+        }
+
+        function getCompactedMessageIndexes(chat) {
+            const state = ensureContextCompactionState(chat);
+            const indexes = new Set();
+            state.summaries.forEach(summary => summary.sourceMessageIndexes.forEach(index => indexes.add(index)));
+            return indexes;
+        }
+
+        function getCompleteConversationTurns(chat) {
+            const messages = Array.isArray(chat?.messages) ? chat.messages : [];
+            const compactedIndexes = getCompactedMessageIndexes(chat);
+            const turns = [];
+            for (let index = 0; index < messages.length - 1; index += 1) {
+                const user = messages[index];
+                const assistant = messages[index + 1];
+                if (user?.role !== 'user' || assistant?.role !== 'assistant') continue;
+                const assistantText = String(assistant.content || '').trim();
+                if ((!assistantText && !assistant.generatedImages?.length) || assistant.failed === true || /^❌\s*生成失败/.test(assistantText)) continue;
+                if (compactedIndexes.has(index) || compactedIndexes.has(index + 1)) continue;
+                turns.push({
+                    userIndex: index,
+                    assistantIndex: index + 1,
+                    messages: [user, assistant]
+                });
+                index += 1;
+            }
+            return turns;
+        }
+
+        function getPlainCompactionMessages(turns) {
+            return turns.flatMap(turn => turn.messages.map(message => ({
+                role: message.role,
+                content: String(message.content || '').trim()
+            })));
+        }
+
+        async function requestContextSummary(turns, extraInstruction = '') {
+            const messages = getPlainCompactionMessages(turns);
+            if (!messages.length) throw new Error('没有可压缩的完整对话轮次');
+            const extra = String(extraInstruction || '').trim();
+            const prompt = extra ? `${CONTEXT_COMPACTION_PROMPT}\n\n本次摘要的额外要求：${extra}` : CONTEXT_COMPACTION_PROMPT;
+            const model = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL;
+            appendLog('debug', `上下文压缩请求开始：模型=${model}，轮次=${turns.length}，字符数=${messages.reduce((sum, item) => sum + item.content.length, 0)}`);
+            const startedAt = Date.now();
+            const response = await fetch(`${getBaseURL()}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getAPIKey()}`
+                },
+                body: JSON.stringify({
+                    model,
+                    temperature: 0.2,
+                    messages: [{ role: 'system', content: prompt }, ...messages],
+                    stream: false
+                })
+            });
+            if (!response.ok) {
+                const detail = await response.text().catch(() => '');
+                throw new Error(`上下文压缩接口错误 ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`);
+            }
+            const data = await response.json();
+            const content = String(data?.choices?.[0]?.message?.content || '').trim();
+            if (!content) throw new Error('上下文压缩助手未返回摘要');
+            appendLog('debug', `上下文压缩请求完成：模型=${model}，输出字符数=${content.length}，耗时=${Date.now() - startedAt}ms`);
+            if (developerModeEnabled) appendLog('trace', `上下文压缩摘要正文：\n${content}`);
+            return { content, model, duration: Date.now() - startedAt };
+        }
+
+        async function compactConversationTurns(chat, turns, trigger = 'auto', extraInstruction = '') {
+            if (!turns.length) return null;
+            const result = await requestContextSummary(turns, extraInstruction);
+            const state = ensureContextCompactionState(chat);
+            const sourceMessageIndexes = turns.flatMap(turn => [turn.userIndex, turn.assistantIndex]);
+            const summary = {
+                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                startMessageIndex: Math.min(...sourceMessageIndexes),
+                endMessageIndex: Math.max(...sourceMessageIndexes),
+                sourceMessageIndexes,
+                turnCount: turns.length,
+                content: result.content,
+                model: result.model,
+                trigger: trigger === 'manual' ? 'manual' : 'auto',
+                extraInstruction: String(extraInstruction || '').trim(),
+                createdAt: Date.now()
+            };
+            state.summaries.push(summary);
+            state.summaries.sort((a, b) => a.startMessageIndex - b.startMessageIndex);
+            chat.updatedAt = Date.now();
+            localStorage.setItem('ai_chats', JSON.stringify(chats));
+            appendLog('info', `上下文压缩成功：方式=${summary.trigger === 'manual' ? '手动' : '自动'}，轮次=${summary.turnCount}，模型=${summary.model}`);
+            return summary;
+        }
+
+        async function performAutomaticCompaction(chat) {
+            if (!chat || autoSummaryInterval === 0) return true;
+            const turns = getCompleteConversationTurns(chat);
+            const batches = Math.floor(turns.length / autoSummaryInterval);
+            if (batches <= 0) return true;
+            showVoiceNotification(`正在压缩上下文（${batches} 段）`, false, 0, true);
+            try {
+                for (let index = 0; index < batches; index += 1) {
+                    const batch = turns.slice(index * autoSummaryInterval, (index + 1) * autoSummaryInterval);
+                    showVoiceNotification(`正在压缩上下文（${index + 1}/${batches}）`, false, 0, true);
+                    await compactConversationTurns(chat, batch, 'auto');
+                }
+                hideVoiceNotification();
+                if (isCloudEnabled()) syncData().catch(error => appendLog('error', `上下文压缩后云端同步失败：${error.message}`));
+                return true;
+            } catch (error) {
+                hideVoiceNotification();
+                appendLog('error', `自动上下文压缩失败：${error.message}`);
+                showVoiceNotification(`上下文压缩失败，已使用完整上下文继续：${error.message}`, true, 5000);
+                return false;
+            }
+        }
+
+        function buildCompactedChatMessages(chat) {
+            const messages = Array.isArray(chat?.messages) ? chat.messages : [];
+            const state = ensureContextCompactionState(chat);
+            const compactedIndexes = getCompactedMessageIndexes(chat);
+            const summariesByStart = new Map(state.summaries.map(summary => [summary.startMessageIndex, summary]));
+            const result = [];
+            for (let index = 0; index < messages.length; index += 1) {
+                const summary = summariesByStart.get(index);
+                if (summary) {
+                    result.push({
+                        role: 'system',
+                        content: `以下是历史对话的独立摘要（第 ${state.summaries.indexOf(summary) + 1} 段）。摘要之间相互独立，不要将摘要再次概括：\n${summary.content}`
+                    });
+                }
+                if (!compactedIndexes.has(index)) result.push(messages[index]);
+            }
+            return result;
+        }
+
+        function showCompactionConfirm() {
+            const modal = document.getElementById('compact-confirm-modal');
+            if (!modal) return Promise.resolve(false);
+            modal.classList.add('visible');
+            return new Promise(resolve => {
+                compactionConfirmResolver = resolve;
+            });
+        }
+
+        function resolveCompactionConfirm(confirmed) {
+            const modal = document.getElementById('compact-confirm-modal');
+            if (modal) modal.classList.remove('visible');
+            const resolver = compactionConfirmResolver;
+            compactionConfirmResolver = null;
+            if (resolver) resolver(Boolean(confirmed));
+        }
+
+        async function requestManualCompaction(extraInstruction = '') {
+            if (isGenerating) return;
+            const chat = activeChatId ? chats.find(item => item.id === activeChatId) : null;
+            if (!chat) return;
+            const confirmed = await showCompactionConfirm();
+            if (!confirmed) return;
+            const turns = getCompleteConversationTurns(chat);
+            if (!turns.length) {
+                showVoiceNotification('当前没有可压缩的完整对话', false, 2500);
+                return;
+            }
+            showVoiceNotification('正在压缩上下文…', false, 0, true);
+            try {
+                await compactConversationTurns(chat, turns, 'manual', extraInstruction);
+                hideVoiceNotification();
+                renderChatHistory();
+                if (isCloudEnabled()) syncData().catch(error => appendLog('error', `手动压缩后云端同步失败：${error.message}`));
+                showVoiceNotification('上下文压缩完成', false, 2500);
+            } catch (error) {
+                hideVoiceNotification();
+                appendLog('error', `手动上下文压缩失败：${error.message}`);
+                showVoiceNotification(`上下文压缩失败：${error.message}`, true, 5000);
+            }
+        }
+
         // 构建 API 消息数组（异步），自动附加最后一张图片到最后一个用户消息
         async function buildAPIMessagesWithTemp(chatMessages) {
             const apiMessages = [];
@@ -2819,7 +3143,7 @@
 
         // 为发送消息时使用的增强版，会在最后一个 user 消息中附加最后一张图片
         async function buildAPIMessagesWithContext(chat) {
-            const chatMessagesCopy = chat.messages.slice();
+            const chatMessagesCopy = buildCompactedChatMessages(chat);
             // 先构建基础数组
             let apiMessages = await buildAPIMessagesWithTemp(chatMessagesCopy);
             // 获取最后一张图片
@@ -2868,6 +3192,11 @@
         let cachedMemories = [];
         let currentAttachments = [];
         let maxTokensLimit = parseInt(localStorage.getItem('max_tokens_limit') || '0') || 0;
+        let autoSummaryInterval = parseInt(localStorage.getItem('auto_summary_interval') || '10', 10);
+        if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 10;
+        if (localStorage.getItem('auto_summary_interval') === null) localStorage.setItem('auto_summary_interval', '10');
+        if (localStorage.getItem('context_compaction_model') === null) localStorage.setItem('context_compaction_model', DEFAULT_CONTEXT_COMPACTION_MODEL);
+        let compactionConfirmResolver = null;
         let canvasPanelVisible = false;
         let processedReplaceCount = 0;
         let sessionReplaceBlocks = [];
@@ -2946,7 +3275,10 @@
         function applyTextModelList(models, preferredModel = '') {
             textModelList = normalizeModelList(models);
             if (!textModelList.length) textModelList = DEFAULT_MODEL_LIST.slice();
-            if (isImageMode) return;
+            if (isImageMode) {
+                populateContextCompactionModel();
+                return;
+            }
             const select = document.getElementById('model-select');
             renderModelOptions(select, textModelList);
             const stored = preferredModel || localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL;
@@ -2956,6 +3288,7 @@
             select.value = nextModel;
             localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, nextModel);
             syncRetrySelect();
+            populateContextCompactionModel();
         }
 
         function populateModelListEditor() {
@@ -3888,7 +4221,8 @@
                 messages: cleanMessages,
                 updatedAtMs: chat.updatedAt || Date.now(),
                 canvasEnabled: chat.canvasEnabled || false,
-                canvasCode: chat.canvasCode || ['']
+                canvasCode: chat.canvasCode || [''],
+                contextCompaction: chat.contextCompaction || { version: 1, summaries: [] }
             };
             const path = method === 'PUT' ? chat.lcObjectId : '';
             try {
@@ -3932,7 +4266,8 @@
                             updatedAt: c.updatedAtMs || 0,
                             lcObjectId: c.objectId,
                             canvasEnabled: c.canvasEnabled || false,
-                            canvasCode: c.canvasCode || ['']
+                            canvasCode: c.canvasCode || [''],
+                            contextCompaction: c.contextCompaction || { version: 1, summaries: [] }
                         });
                         else Object.assign(l, {
                             id: c.chatId,
@@ -3941,7 +4276,8 @@
                             updatedAt: c.updatedAtMs || 0,
                             lcObjectId: c.objectId,
                             canvasEnabled: c.canvasEnabled || false,
-                            canvasCode: c.canvasCode || ['']
+                            canvasCode: c.canvasCode || [''],
+                            contextCompaction: c.contextCompaction || { version: 1, summaries: [] }
                         });
                         hasLocalChange = true;
                     }
@@ -3985,6 +4321,7 @@
             if (modal.classList.contains('flex')) {
                 renderMemoriesToSettings();
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
+                populateAutoSummarySettings();
                 populateLCFields();
                 populateModelListEditor();
                 populateVoiceModel();
@@ -4032,6 +4369,21 @@
         function populateVoiceModel() {
             const select = document.getElementById('voice-model-select');
             if (select) select.value = voiceModel;
+        }
+
+        function populateAutoSummarySettings() {
+            const radio = document.querySelector(`input[name="auto-summary-interval"][value="${autoSummaryInterval}"]`);
+            if (radio) radio.checked = true;
+            populateContextCompactionModel();
+        }
+
+        function populateContextCompactionModel() {
+            const select = document.getElementById('context-compaction-model-select');
+            if (!select || typeof renderModelOptions !== 'function') return;
+            const models = textModelList.length ? textModelList : loadModelList();
+            renderModelOptions(select, models);
+            const stored = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL;
+            select.value = models.includes(stored) ? stored : (models.includes(DEFAULT_CONTEXT_COMPACTION_MODEL) ? DEFAULT_CONTEXT_COMPACTION_MODEL : models[0]);
         }
 
         function populateVoiceChatSettings() {
@@ -4098,6 +4450,9 @@
             if (sectionId === 'memory') {
                 populateLCFields();
                 renderMemoriesToSettings();
+            }
+            if (sectionId === 'ai-chat') {
+                populateAutoSummarySettings();
             }
             if (sectionId === 'api') {
                 populateModelListEditor();
@@ -4209,8 +4564,19 @@
             const currentTextModel = isImageMode
                 ? localStorage.getItem(SELECTED_MODEL_STORAGE_KEY)
                 : document.getElementById('model-select')?.value;
+            const selectedContextModel = document.getElementById('context-compaction-model-select')?.value || '';
             localStorage.setItem(MODEL_LIST_STORAGE_KEY, JSON.stringify(savedModelList));
             applyTextModelList(savedModelList, currentTextModel || DEFAULT_CHAT_MODEL);
+            const selectedSummaryRadio = document.querySelector('input[name="auto-summary-interval"]:checked');
+            autoSummaryInterval = selectedSummaryRadio ? parseInt(selectedSummaryRadio.value, 10) : 10;
+            if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 10;
+            localStorage.setItem('auto_summary_interval', String(autoSummaryInterval));
+            const contextModelSelect = document.getElementById('context-compaction-model-select');
+            const savedContextModel = savedModelList.includes(selectedContextModel)
+                ? selectedContextModel
+                : (savedModelList.includes(DEFAULT_CONTEXT_COMPACTION_MODEL) ? DEFAULT_CONTEXT_COMPACTION_MODEL : savedModelList[0]);
+            if (contextModelSelect && savedContextModel) contextModelSelect.value = savedContextModel;
+            if (savedContextModel) localStorage.setItem('context_compaction_model', savedContextModel);
             const lcAppId = document.getElementById('lc-app-id-input').value.trim();
             if (lcAppId) localStorage.setItem('lc_app_id', lcAppId);
             else localStorage.removeItem('lc_app_id');
@@ -4604,7 +4970,8 @@
                 messages: [],
                 updatedAt: Date.now(),
                 canvasEnabled: false,
-                canvasCode: ['']
+                canvasCode: [''],
+                contextCompaction: { version: 1, summaries: [] }
             };
             chats.unshift(newChat);
             localStorage.setItem('ai_chats', JSON.stringify(chats));
@@ -4621,6 +4988,7 @@
             if (!chat) return;
             if (chat.canvasEnabled === undefined) chat.canvasEnabled = false;
             if (!chat.canvasCode || !Array.isArray(chat.canvasCode)) chat.canvasCode = [''];
+            ensureContextCompactionState(chat);
             document.getElementById('active-chat-title').innerText = chat.title;
             renderMessagesWithResolvedRefs(chat.messages);
             renderChatHistory();
@@ -4646,6 +5014,12 @@
             if (!text && currentAttachments.length === 0) return;
             const model = document.getElementById('model-select').value;
             const chat = chats.find(c => c.id === activeChatId);
+            const compactCommand = text.match(/^\/compact([\s\S]*)$/i);
+            if (compactCommand) {
+                resetInputState();
+                await requestManualCompaction(String(compactCommand[1] || '').trim());
+                return;
+            }
             if (isImageMode) {
                 await sendImageMessage(chat, text, model);
                 return;
@@ -4708,6 +5082,7 @@
             renderChatHistory();
             localStorage.setItem('ai_chats', JSON.stringify(chats));
             if (isCloudEnabled()) syncData();
+            await performAutomaticCompaction(chat);
             await requestAI(actualMessage, model, chat, attachmentsToSend);
         }
         async function requestAI(userText, model, chat, sendAttachments = []) {
@@ -5261,7 +5636,8 @@
                     role: 'assistant',
                     content: err.name === 'AbortError' ? '⏹️ 生成已停止' : `❌ 生成失败: ${err.message}`,
                     generatedImages: [],
-                    model
+                    model,
+                    failed: err.name !== 'AbortError'
                 };
                 chat.messages.push(aiMsg);
                 chat.updatedAt = Date.now();
@@ -5503,7 +5879,11 @@
             highlightLayoutBtn(currentLayoutMode);
             applyLayoutMode(currentLayoutMode);
             document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') closeLightbox();
+                if (e.key === 'Escape') {
+                    const compactModal = document.getElementById('compact-confirm-modal');
+                    if (compactModal?.classList.contains('visible')) resolveCompactionConfirm(false);
+                    else closeLightbox();
+                }
             });
             updateTokenEstimate();
             updateImageDetailVisibility();
