@@ -489,6 +489,64 @@
                 .trim();
         }
 
+        function audioBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+            }
+            return btoa(binary);
+        }
+
+        async function requestFishSpeechDirect(text, settings) {
+            const base = String(settings?.fishApiBase || 'https://fishaudio.org').trim().replace(/\/$/, '');
+            const apiKey = String(settings?.fishApiKey || '').trim();
+            const voiceId = String(settings?.fishVoiceId || '').trim();
+            if (!apiKey || !voiceId) throw new Error('请先填写 Fish Audio API Key 和音色 ID');
+
+            const url = `${base}/api/open/v1/speech/tts`;
+            const body = JSON.stringify({ text, voiceId, format: 'mp3', speed: 1 });
+            let lastError = null;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 90000);
+                console.info(`[AudioChat][TTS][Network] request attempt=${attempt + 1} url=${url} voiceId=${voiceId} chars=${String(text || '').length}`);
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body,
+                        signal: controller.signal
+                    });
+                    console.info(`[AudioChat][TTS][Network] response status=${response.status} attempt=${attempt + 1}`);
+                    if (response.ok) {
+                        const audio = await response.arrayBuffer();
+                        if (!audio.byteLength) throw new Error('Fish Audio 返回了空音频');
+                        console.info(`[AudioChat][TTS][Network] success bytes=${audio.byteLength} attempt=${attempt + 1}`);
+                        return audioBufferToBase64(audio);
+                    }
+
+                    const detail = await response.text();
+                    lastError = new Error(`Fish Audio 请求失败 (${response.status}): ${detail.slice(0, 500)}`);
+                    if (attempt === 0 && (response.status === 401 || response.status >= 500)) continue;
+                    lastError.retryable = false;
+                    throw lastError;
+                } catch (error) {
+                    lastError = error?.name === 'AbortError' ? new Error('Fish Audio 请求超时') : error;
+                    if (lastError?.retryable === false) throw lastError;
+                    if (attempt === 0) continue;
+                    throw lastError;
+                } finally {
+                    clearTimeout(timeout);
+                }
+            }
+            throw lastError || new Error('Fish Audio 请求失败');
+        }
+
         function normalizeSentenceKey(text) {
             return cleanVoiceText(text).replace(/\s+/g, ' ').trim();
         }
@@ -1338,12 +1396,11 @@
                 const clean = cleanVoiceText(text);
                 if (!clean) return;
                 const index = this.currentVoiceSegmentPromises.length;
-                const audioPromise = bridge.requestFishSpeech({
-                    text: clean,
-                    apiBase: this.settings.fishApiBase,
-                    apiKey: this.settings.fishApiKey,
-                    voiceId: this.settings.fishVoiceId
-                });
+                console.info(`[AudioChat][TTS] enqueue sentence=${index + 1} chars=${clean.length} voiceId=${this.settings.fishVoiceId || '(empty)'}`);
+                const audioPromise = requestFishSpeechDirect(clean, this.settings);
+                audioPromise
+                    .then(audioBase64 => console.info(`[AudioChat][TTS] received sentence=${index + 1} bytes=${String(audioBase64 || '').length}`))
+                    .catch(error => console.error(`[AudioChat][TTS] failed sentence=${index + 1}`, error));
                 const segmentPromise = audioPromise
                     .then(audioBase64 => ({
                         index,

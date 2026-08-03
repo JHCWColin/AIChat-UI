@@ -115,6 +115,7 @@ async function requestFishAudio(text, config) {
     let lastError = null;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
+        console.info(`[FishAudio][TTS] request attempt=${attempt + 1} url=${url} voiceId=${voiceId} chars=${String(text || '').length}`);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 90000);
         try {
@@ -128,9 +129,11 @@ async function requestFishAudio(text, config) {
                 body,
                 signal: controller.signal
             });
+            console.info(`[FishAudio][TTS] response status=${response.status} attempt=${attempt + 1}`);
             if (response.ok) {
                 const audio = Buffer.from(await response.arrayBuffer());
                 if (!audio.length) throw new Error("Fish Audio 返回了空音频");
+                console.info(`[FishAudio][TTS] success bytes=${audio.length} attempt=${attempt + 1}`);
                 return audio;
             }
 
@@ -435,6 +438,7 @@ ipcMain.handle("audio-chat:get-preset", async (event, config) => {
 ipcMain.handle("audio-chat:tts", async (event, request) => {
     if (!isAudioSender(event)) throw new Error("非法的 Fish Audio 请求");
     const source = request && typeof request === "object" ? request : {};
+    console.info(`[AudioChat][IPC] audio-chat:tts received chars=${String(source.text || '').length} voiceId=${String(source.voiceId || '').trim() || '(empty)'}`);
     const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), {
         apiBase: source.apiBase,
         apiKey: source.apiKey,
