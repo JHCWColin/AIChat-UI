@@ -1100,7 +1100,7 @@
 
             resolveAIActiveSentenceIndex(sentences) {
                 const key = this.aiActiveSentenceText;
-                if (!key) return sentences.length - 1;
+                if (!key) return 0;
                 const startIndex = Math.max(0, this.aiLastMatchedSentenceIndex + 1);
                 let matchIndex = this.findAISentenceIndex(sentences, key, startIndex);
                 if (matchIndex < 0 && this.aiLastMatchedSentenceIndex >= 0) {
@@ -1337,6 +1337,7 @@
             enqueueSpeech(text) {
                 const clean = cleanVoiceText(text);
                 if (!clean) return;
+                const index = this.currentVoiceSegmentPromises.length;
                 const audioPromise = bridge.requestFishSpeech({
                     text: clean,
                     apiBase: this.settings.fishApiBase,
@@ -1345,6 +1346,7 @@
                 });
                 const segmentPromise = audioPromise
                     .then(audioBase64 => ({
+                        index,
                         text: clean,
                         audioBase64
                     }))

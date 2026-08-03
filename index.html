@@ -1804,10 +1804,10 @@
 
         #voice-replay-island {
             position: fixed;
-            top: 72px;
+            top: 24px;
             left: 50%;
             transform: translateX(-50%) translateY(-10px) scale(0.985);
-            width: min(760px, calc(100vw - 1.5rem));
+            width: min(420px, calc(100vw - 1.5rem));
             z-index: 260;
             opacity: 0;
             pointer-events: none;
@@ -1821,14 +1821,18 @@
         }
 
         #voice-replay-island > div {
-            padding: 0.9rem 1rem;
-            border-radius: 1.3rem;
+            min-height: 34px;
+            padding: 0.2rem 0.5rem 0.2rem 0.7rem;
+            border-radius: 2rem;
             border: 1px solid rgba(255, 255, 255, 0.18);
             background: rgba(32, 32, 38, 0.84);
             backdrop-filter: blur(28px) saturate(170%);
             -webkit-backdrop-filter: blur(28px) saturate(170%);
-            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
             color: #f5f5f5;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
         }
 
         body.theme-light #voice-replay-island > div {
@@ -1838,61 +1842,38 @@
             box-shadow: 0 18px 60px rgba(0, 0, 0, 0.12);
         }
 
-        #voice-replay-island .voice-replay-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
-            margin-bottom: 0.55rem;
-        }
-
-        #voice-replay-island .voice-replay-text {
-            display: flex;
-            flex-direction: column;
-            gap: 0.12rem;
-            min-width: 0;
-        }
-
-        #voice-replay-title {
-            font-size: 0.9rem;
-            font-weight: 700;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        #voice-replay-state {
-            font-size: 0.72rem;
-            opacity: 0.72;
-        }
-
         #voice-replay-progress {
-            width: 100%;
+            flex: 0 1 54%;
+            min-width: 120px;
             accent-color: #10b981;
-            margin: 0.15rem 0 0.6rem;
+            margin: 0;
         }
 
         #voice-replay-island .voice-replay-actions {
             display: flex;
             align-items: center;
             justify-content: flex-end;
-            gap: 0.55rem;
-            flex-wrap: wrap;
+            gap: 0.35rem;
+            flex: 1;
         }
 
         #voice-replay-island .voice-replay-actions button {
-            min-width: 92px;
-            min-height: 38px;
-            padding: 0.55rem 0.9rem;
-            border-radius: 0.85rem;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border-radius: 50%;
             border: 1px solid rgba(255, 255, 255, 0.14);
             background: rgba(255, 255, 255, 0.08);
             color: inherit;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.35rem;
             cursor: pointer;
+        }
+
+        #voice-replay-island .voice-replay-actions button svg {
+            width: 14px;
+            height: 14px;
         }
 
         body.theme-light #voice-replay-island .voice-replay-actions button {
@@ -2272,16 +2253,14 @@
     <div id="voice-notification"></div>
     <div id="voice-replay-island" aria-live="polite">
         <div>
-            <div class="voice-replay-top">
-                <div class="voice-replay-text">
-                    <span id="voice-replay-title">语音回放</span>
-                    <span id="voice-replay-state">等待播放</span>
-                </div>
-            </div>
             <input id="voice-replay-progress" type="range" min="0" max="1000" value="0">
             <div class="voice-replay-actions">
-                <button type="button" id="voice-replay-toggle-btn">暂停</button>
-                <button type="button" id="voice-replay-stop-btn">停止</button>
+                <button type="button" id="voice-replay-toggle-btn" aria-label="暂停" title="暂停">
+                    <i data-lucide="pause"></i>
+                </button>
+                <button type="button" id="voice-replay-stop-btn" aria-label="停止" title="停止">
+                    <i data-lucide="square"></i>
+                </button>
             </div>
         </div>
     </div>
@@ -2792,7 +2771,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V5.4.0</span>
+                            <span id="app-version">V5.5.0</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -3091,8 +3070,6 @@
         class VoiceReplayController {
             constructor() {
                 this.host = document.getElementById('voice-replay-island');
-                this.titleEl = document.getElementById('voice-replay-title');
-                this.stateEl = document.getElementById('voice-replay-state');
                 this.progressEl = document.getElementById('voice-replay-progress');
                 this.toggleBtn = document.getElementById('voice-replay-toggle-btn');
                 this.stopBtn = document.getElementById('voice-replay-stop-btn');
@@ -3113,7 +3090,7 @@
 
             bindEvents() {
                 if (this.toggleBtn) this.toggleBtn.addEventListener('click', () => this.togglePause());
-                if (this.stopBtn) this.stopBtn.addEventListener('click', () => this.stop(true));
+                if (this.stopBtn) this.stopBtn.addEventListener('click', () => this.stop());
                 if (this.progressEl) {
                     this.progressEl.addEventListener('pointerdown', () => { this.isSeeking = true; });
                     this.progressEl.addEventListener('pointerup', () => {
@@ -3139,16 +3116,15 @@
                 else this.hideTimer = setTimeout(() => this.host.classList.remove('show'), 3000);
             }
 
-            setState(text) {
-                if (this.stateEl) this.stateEl.textContent = text;
-            }
-
-            setTitle(text) {
-                if (this.titleEl) this.titleEl.textContent = text || '语音回放';
-            }
-
             updateButtons() {
-                if (this.toggleBtn) this.toggleBtn.textContent = this.paused ? '继续' : '暂停';
+                if (this.toggleBtn) {
+                    const icon = this.paused ? 'play' : 'pause';
+                    const label = this.paused ? '继续' : '暂停';
+                    this.toggleBtn.innerHTML = `<i data-lucide="${icon}"></i>`;
+                    this.toggleBtn.setAttribute('aria-label', label);
+                    this.toggleBtn.title = label;
+                    lucide.createIcons();
+                }
                 if (this.progressEl) this.progressEl.disabled = !this.currentSegments.length || !this.totalDuration;
             }
 
@@ -3195,7 +3171,7 @@
                 this.currentAudio = null;
             }
 
-            async play(recordId, label = '语音回放') {
+            async play(recordId) {
                 if (!recordId) return;
                 this.playbackToken += 1;
                 const token = this.playbackToken;
@@ -3207,8 +3183,6 @@
                 this.currentTime = 0;
                 this.playing = false;
                 this.paused = false;
-                this.setTitle(label);
-                this.setState('正在加载');
                 this.renderProgress(0);
                 this.updateButtons();
                 this.show();
@@ -3216,26 +3190,24 @@
                 const record = await VoiceRecordStore.getRecord(recordId).catch(() => null);
                 if (token !== this.playbackToken) return;
                 if (!record || !Array.isArray(record.segments) || !record.segments.length) {
-                    this.setState('语音已被清除');
                     this.hide(false);
                     return;
                 }
 
                 this.currentRecord = record;
-                this.currentSegments = record.segments.map(segment => ({
+                this.currentSegments = record.segments.map((segment, index) => ({
+                    index: Number.isFinite(Number(segment?.index)) ? Number(segment.index) : index,
                     text: String(segment?.text || ''),
                     url: toAudioDataUrl(segment?.audioBase64 || segment?.audioUrl || segment?.audio || '')
-                })).filter(segment => segment.url);
+                })).filter(segment => segment.url).sort((a, b) => a.index - b.index);
                 if (!this.currentSegments.length) {
-                    this.setState('暂无可播放语音');
                     this.hide(false);
                     return;
                 }
 
-                for (const segment of this.currentSegments) {
-                    segment.duration = await this.loadDuration(segment.url);
-                    if (token !== this.playbackToken) return;
-                }
+                const durations = await Promise.all(this.currentSegments.map(segment => this.loadDuration(segment.url)));
+                if (token !== this.playbackToken) return;
+                this.currentSegments.forEach((segment, index) => { segment.duration = durations[index] || 0; });
                 this.segmentDurations = this.currentSegments.map(segment => segment.duration || 0);
                 this.totalDuration = this.segmentDurations.reduce((sum, value) => sum + (value || 0), 0);
                 if (this.totalDuration <= 0) {
@@ -3246,7 +3218,6 @@
 
                 this.playing = true;
                 this.paused = false;
-                this.setState('正在播放');
                 this.updateButtons();
                 this.startAt(0, true, token);
             }
@@ -3295,7 +3266,6 @@
                 audio.onpause = () => {
                     if (token !== this.playbackToken) return;
                     if (!this.paused) return;
-                    this.setState('已暂停');
                 };
             }
 
@@ -3306,7 +3276,6 @@
                         this.paused = true;
                         this.playing = false;
                         this.currentAudio.pause();
-                        this.setState('已暂停');
                         this.updateButtons();
                     }
                     return;
@@ -3314,7 +3283,6 @@
                 if (this.paused && this.currentAudio) {
                     this.paused = false;
                     this.playing = true;
-                    this.setState('正在播放');
                     this.updateButtons();
                     this.currentAudio.play().catch(() => this.finish(this.playbackToken));
                 }
@@ -3329,7 +3297,6 @@
                 if (!resume) {
                     this.paused = true;
                     this.playing = false;
-                    this.setState('已暂停');
                     this.updateButtons();
                 }
             }
@@ -3339,12 +3306,11 @@
                 this.clearCurrentAudio();
                 this.playing = false;
                 this.paused = false;
-                this.setState('播放结束');
                 this.updateButtons();
                 this.hide(false);
             }
 
-            stop(userInitiated = false) {
+            stop() {
                 this.playbackToken += 1;
                 this.clearCurrentAudio();
                 this.currentRecord = null;
@@ -3355,18 +3321,16 @@
                 this.playing = false;
                 this.paused = false;
                 this.renderProgress(0);
-                this.setState('已停止');
                 this.updateButtons();
-                this.show();
-                this.hide(userInitiated ? false : true);
+                this.hide(true);
             }
         }
 
         voiceReplayController = new VoiceReplayController();
 
-        function playVoiceRecord(recordId, label = '语音回放') {
+        function playVoiceRecord(recordId) {
             if (!voiceReplayController) return;
-            voiceReplayController.play(recordId, label);
+            voiceReplayController.play(recordId);
         }
 
         async function resolveMessageReferences(msg) {
@@ -3663,21 +3627,7 @@
         async function requestClearVoiceRecords() {
             const confirmed = await showDangerConfirm();
             if (!confirmed) return;
-            if (voiceReplayController) voiceReplayController.stop(true);
-            await VoiceRecordStore.clearRecords().catch(error => {
-                console.error('清除语音记录失败', error);
-            });
-            if (activeChatId) {
-                const chat = chats.find(item => item.id === activeChatId);
-                if (chat) await renderMessagesWithResolvedRefs(chat.messages);
-            }
-            showVoiceNotification('语音记录已清除', false, 2500);
-        }
-
-        async function requestClearVoiceRecords() {
-            const confirmed = await showDangerConfirm();
-            if (!confirmed) return;
-            if (voiceReplayController) voiceReplayController.stop(true);
+            if (voiceReplayController) voiceReplayController.stop();
             try {
                 await VoiceRecordStore.clearRecords();
             } catch (error) {
@@ -3689,7 +3639,6 @@
                 const chat = chats.find(item => item.id === activeChatId);
                 if (chat) await renderMessagesWithResolvedRefs(chat.messages);
             }
-            showVoiceNotification('语音记录已清除', false, 2500);
         }
 
         async function requestManualCompaction(extraInstruction = '') {
@@ -4788,7 +4737,7 @@
                         replayBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> 回放`;
                         replayBtn.onclick = (e) => {
                             e.stopPropagation();
-                            playVoiceRecord(record.id, content || '');
+                            playVoiceRecord(record.id);
                         };
                         btnGroup.appendChild(replayBtn);
                         lucide.createIcons();
@@ -6374,18 +6323,6 @@
             return new Blob([u8arr], {
                 type: mime
             });
-        }
-
-        function showVoiceNotification(message, isError = false) {
-            const el = document.getElementById('voice-notification');
-            if (!el) return;
-            el.textContent = message;
-            el.style.color = isError ? '#f87171' : '';
-            el.classList.add('show');
-            clearTimeout(el._timeout);
-            el._timeout = setTimeout(() => {
-                el.classList.remove('show');
-            }, 2500);
         }
 
         function setVoiceStatus(text, isError = false) {

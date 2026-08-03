@@ -8,7 +8,7 @@
 基于前端页面与 Electron 的 AI 对话桌面应用，覆盖文字聊天、Canvas 编码、语音聊天、附件解析、图像生成与 Windows 本地打包。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V5.4.0-blue)]()
+[![Version](https://img.shields.io/badge/version-V5.5.0-blue)]()
 
 </div>
 
@@ -30,11 +30,17 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
+### V5.5.0
+
+- 回放灵动岛改为单行通知高度，只显示整段回复进度和图标控制键。
+- 回放会按顺序连续播放该次 AI 回复中全部成功生成的语音句子。
+- 修复清除语音记录后播放条闪现，以及首条语音播放前字幕定位到最后一句的问题。
+
 ### V5.4.0
 
 - 语音聊天模式生成的 AI 语音现在会保存到 IndexedDB。
 - 主对话中，来自语音聊天模式的 AI 回复会显示“回放”按钮。
-- 新增顶部“灵动岛”式回放条，支持暂停、停止、拖动进度和自动切换播放。
+- 新增顶部“灵动岛”式回放条，支持暂停、停止、拖动整段回复进度和自动切换播放。
 - 偏好设置“其他”新增“清除语音记录”，会通过自定义警告弹窗删除所有非预制语音记录。
 
 ### V5.3.0
@@ -61,7 +67,7 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 独立 `audiochat.html` 页面，采用上下双分区字幕布局。
 - 上半区显示 AI 字幕，下半区显示用户识别文本。
 - AI 字幕支持按句自动跟随与逐句淡入。
-- 语音聊天生成的 AI 语音可在主对话中按条回放。
+- 语音聊天生成的 AI 语音可在主对话中按整次回复连续回放。
 - 可在偏好设置中一键清除历史语音记录，不影响预制语音与后续新记录。
 
 ### 3. 多模型与 API 配置
@@ -101,8 +107,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI5.4.0-Portable.exe`
-- Setup：`AIUI5.4.0-Setup.exe`
+- Portable：`AIUI5.5.0-Portable.exe`
+- Setup：`AIUI5.5.0-Setup.exe`
 
 构建命令：
 
@@ -127,7 +133,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V5.4.0`
+- 当前版本：`V5.5.0`
 - 当前构建标识：`build20260803`
 
 ---
