@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, session } = require("electron");
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
@@ -106,24 +106,51 @@ function presetDirectoryKey(apiBase, voiceId) {
 
 async function requestFishAudio(text, config) {
     const base = String(config.apiBase || "https://fishaudio.org").replace(/\/$/, "");
-    const response = await fetch(`${base}/api/open/v1/speech/tts`, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${config.apiKey || ""}`,
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            text,
-            voiceId: config.voiceId,
-            format: "mp3",
-            speed: 1
-        })
-    });
-    if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(`Fish Audio 请求失败 (${response.status}): ${detail.slice(0, 500)}`);
+    const apiKey = String(config.apiKey || "").trim();
+    const voiceId = String(config.voiceId || "").trim();
+    if (!apiKey || !voiceId) throw new Error("请先填写 Fish Audio API Key 和音色 ID");
+
+    const url = `${base}/api/open/v1/speech/tts`;
+    const body = JSON.stringify({ text, voiceId, format: "mp3", speed: 1 });
+    let lastError = null;
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 90000);
+        try {
+            // Electron's session network stack follows Chromium/system proxy rules (for example Clash).
+            const response = await session.defaultSession.fetch(url, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body,
+                signal: controller.signal
+            });
+            if (response.ok) {
+                const audio = Buffer.from(await response.arrayBuffer());
+                if (!audio.length) throw new Error("Fish Audio 返回了空音频");
+                return audio;
+            }
+
+            const detail = await response.text();
+            lastError = new Error(`Fish Audio 请求失败 (${response.status}): ${detail.slice(0, 500)}`);
+            if (attempt === 0 && (response.status === 401 || response.status >= 500)) continue;
+            lastError.retryable = false;
+            throw lastError;
+        } catch (error) {
+            lastError = error?.name === "AbortError"
+                ? new Error("Fish Audio 请求超时")
+                : error;
+            if (lastError?.retryable === false) throw lastError;
+            if (attempt === 0) continue;
+            throw lastError;
+        } finally {
+            clearTimeout(timeout);
+        }
     }
-    return Buffer.from(await response.arrayBuffer());
+    throw lastError || new Error("Fish Audio 请求失败");
 }
 
 async function generateVoicePreset(config) {
