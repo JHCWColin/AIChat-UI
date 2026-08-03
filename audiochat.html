@@ -328,29 +328,14 @@
             text-align: center;
             white-space: pre-wrap;
             overflow-wrap: anywhere;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
             scroll-behavior: smooth;
         }
 
         .speech-half .transcript::-webkit-scrollbar,
         body.theme-light .speech-half .transcript::-webkit-scrollbar {
-            display: block;
-            width: 6px;
-        }
-
-        .speech-half .transcript::-webkit-scrollbar-thumb,
-        body.theme-light .speech-half .transcript::-webkit-scrollbar-thumb {
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.28);
-        }
-
-        body.theme-light .speech-half .transcript {
-            scrollbar-color: rgba(0, 0, 0, 0.24) transparent;
-        }
-
-        body.theme-light .speech-half .transcript::-webkit-scrollbar-thumb {
-            background: rgba(0, 0, 0, 0.24);
+            display: none;
         }
 
         .transcript-content {
@@ -534,6 +519,58 @@
             if (tail) sentences.push(tail);
             return sentences;
         }
+
+        function countCompletedTranscriptSentences(text, sentences = null) {
+            const normalized = String(text || '').replace(/\r\n/g, '\n').trimEnd();
+            if (!normalized) return 0;
+            const parts = Array.isArray(sentences) ? sentences : splitTranscriptSentences(normalized);
+            if (!parts.length) return 0;
+            return /[。！？!?；;\n]$/.test(normalized) ? parts.length : Math.max(0, parts.length - 1);
+        }
+
+        const VoiceRecordStore = (() => {
+            const DB_NAME = 'AIChatVoiceRecords';
+            const DB_VERSION = 1;
+            const STORE_NAME = 'records';
+            let dbPromise = null;
+
+            function openDB() {
+                if (dbPromise) return dbPromise;
+                dbPromise = new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = () => reject(request.error);
+                });
+                return dbPromise;
+            }
+
+            async function storeRecord(record) {
+                const db = await openDB();
+                const payload = {
+                    ...record,
+                    id: String(record?.id || (crypto.randomUUID ? crypto.randomUUID() : `voice_${Date.now()}_${Math.random().toString(16).slice(2)}`)),
+                    createdAt: Number(record?.createdAt) || Date.now(),
+                    segments: Array.isArray(record?.segments) ? record.segments : []
+                };
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.put(payload);
+                    req.onsuccess = () => resolve(payload);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            return {
+                storeRecord
+            };
+        })();
 
         class AudioResampler {
             constructor(inputRate, outputRate) {
@@ -914,6 +951,7 @@
                 this.aiSentenceElements = [];
                 this.aiActiveSentenceText = '';
                 this.aiLastMatchedSentenceIndex = -1;
+                this.aiCompletedSentenceCount = 0;
                 this.aiAutoScrollEnabled = true;
                 this.aiAutoScrollTimer = null;
                 this.aiProgrammaticScroll = false;
@@ -921,6 +959,10 @@
                 this.aiScrollFrame = 0;
                 this.aiQueuedScrollBehavior = 'auto';
                 this.aiQueuedScrollForce = false;
+                this.currentVoiceRecordId = '';
+                this.currentVoiceSegments = [];
+                this.currentVoiceSegmentPromises = [];
+                this.currentVoiceRecordStored = false;
 
                 this.playback.onItemStart = item => {
                     this.stopPresetAudio();
@@ -994,8 +1036,8 @@
                     this.aiContentElement.className = 'transcript-content plain';
                     this.aiContentElement.textContent = value;
                     this.aiSentenceElements = [];
+                    this.aiCompletedSentenceCount = 0;
                     this.aiLastMatchedSentenceIndex = placeholder ? -1 : this.aiLastMatchedSentenceIndex;
-                    this.flashTranscript(this.aiContentElement);
                     this.queueAITranscriptScroll('auto');
                     return;
                 }
@@ -1005,13 +1047,15 @@
                     this.aiContentElement.className = 'transcript-content plain';
                     this.aiContentElement.textContent = value;
                     this.aiSentenceElements = [];
-                    this.flashTranscript(this.aiContentElement);
+                    this.aiCompletedSentenceCount = 0;
                     this.queueAITranscriptScroll('auto');
                     return;
                 }
 
                 const previousActiveIndex = this.aiLastMatchedSentenceIndex;
                 const activeIndex = this.resolveAIActiveSentenceIndex(sentences);
+                const completedSentenceCount = countCompletedTranscriptSentences(value, sentences);
+                const fadeStartIndex = this.aiCompletedSentenceCount;
                 const fragment = document.createDocumentFragment();
                 this.aiSentenceElements = [];
                 this.aiContentElement.className = 'transcript-content';
@@ -1021,13 +1065,14 @@
                     line.className = 'transcript-sentence';
                     if (index === activeIndex) line.classList.add('is-active');
                     if (index === sentences.length - 1 && index > activeIndex) line.classList.add('is-pending');
-                    if (index === sentences.length - 1) line.classList.add('is-fading');
+                    if (index >= fadeStartIndex && index < completedSentenceCount) line.classList.add('is-fading');
                     line.textContent = sentence;
                     this.aiSentenceElements.push(line);
                     fragment.appendChild(line);
                 });
 
                 this.aiContentElement.replaceChildren(fragment);
+                this.aiCompletedSentenceCount = completedSentenceCount;
                 this.queueAITranscriptScroll(activeIndex === previousActiveIndex ? 'auto' : 'smooth');
             }
 
@@ -1035,15 +1080,7 @@
                 this.userContentElement.textContent = text;
                 this.userContentElement.className = 'transcript-content plain';
                 this.userElement.classList.toggle('placeholder', placeholder);
-                this.flashTranscript(this.userContentElement);
                 this.userElement.scrollTop = this.userElement.scrollHeight;
-            }
-
-            flashTranscript(element) {
-                if (!element) return;
-                element.classList.remove('is-fading');
-                void element.offsetWidth;
-                element.classList.add('is-fading');
             }
 
             deferAIAutoScroll() {
@@ -1256,7 +1293,10 @@
                 return [
                     { role: 'system', content: this.voiceSystemPrompt() },
                     ...this.context,
-                    ...this.turns
+                    ...this.turns.map(turn => ({
+                        role: turn.role,
+                        content: turn.content
+                    }))
                 ];
             }
 
@@ -1270,6 +1310,30 @@
                 return -1;
             }
 
+            resetCurrentVoiceRecord() {
+                this.currentVoiceRecordId = crypto.randomUUID ? crypto.randomUUID() : `voice_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+                this.currentVoiceSegments = [];
+                this.currentVoiceSegmentPromises = [];
+                this.currentVoiceRecordStored = false;
+            }
+
+            async storeCurrentVoiceRecord(text) {
+                if (this.currentVoiceRecordStored) return this.currentVoiceRecordId || '';
+                if (!this.currentVoiceRecordId || !text || !this.currentVoiceSegmentPromises.length) return '';
+                const resolved = await Promise.all(this.currentVoiceSegmentPromises).catch(() => []);
+                const segments = resolved.filter(segment => segment && segment.audioBase64);
+                if (!segments.length) return '';
+                await VoiceRecordStore.storeRecord({
+                    id: this.currentVoiceRecordId,
+                    chatId: this.session?.targetChatId || '',
+                    sessionId: this.session?.sessionId || '',
+                    text,
+                    segments
+                });
+                this.currentVoiceRecordStored = true;
+                return this.currentVoiceRecordId;
+            }
+
             enqueueSpeech(text) {
                 const clean = cleanVoiceText(text);
                 if (!clean) return;
@@ -1279,6 +1343,13 @@
                     apiKey: this.settings.fishApiKey,
                     voiceId: this.settings.fishVoiceId
                 });
+                const segmentPromise = audioPromise
+                    .then(audioBase64 => ({
+                        text: clean,
+                        audioBase64
+                    }))
+                    .catch(() => null);
+                this.currentVoiceSegmentPromises.push(segmentPromise);
                 this.playback.enqueue({ text: clean, audioPromise });
             }
 
@@ -1289,6 +1360,8 @@
                 this.currentAssistantCommitted = false;
                 this.aiActiveSentenceText = '';
                 this.aiLastMatchedSentenceIndex = -1;
+                this.aiCompletedSentenceCount = 0;
+                this.resetCurrentVoiceRecord();
                 this.setAIText('');
                 this.setStatus('responding', 'AI 正在思考…');
                 this.responseAbortController = new AbortController();
@@ -1364,7 +1437,12 @@
                 this.currentAssistantCommitted = true;
                 const text = cleanVoiceText(this.currentAssistantText);
                 if (text) {
-                    this.turns.push({ role: 'assistant', content: text });
+                    const voiceRecordId = await this.storeCurrentVoiceRecord(text);
+                    this.turns.push({
+                        role: 'assistant',
+                        content: text,
+                        ...(voiceRecordId ? { voiceRecordId } : {})
+                    });
                     await this.checkpoint();
                 }
             }

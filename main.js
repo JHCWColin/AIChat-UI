@@ -47,10 +47,16 @@ function sanitizeTurns(turns) {
     if (!Array.isArray(turns)) return [];
     return turns
         .filter((item) => item && (item.role === "user" || item.role === "assistant"))
-        .map((item) => ({
-            role: item.role,
-            content: String(item.content || "").slice(0, 200000)
-        }))
+        .map((item) => {
+            const clean = {
+                role: item.role,
+                content: String(item.content || "").slice(0, 200000)
+            };
+            if (item.role === "assistant" && typeof item.voiceRecordId === "string" && item.voiceRecordId.trim()) {
+                clean.voiceRecordId = item.voiceRecordId.trim();
+            }
+            return clean;
+        })
         .filter((item) => item.content.trim().length > 0)
         .slice(-500);
 }

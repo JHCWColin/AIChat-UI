@@ -655,6 +655,43 @@
             display: flex;
         }
 
+        #settings-modal,
+        #compact-confirm-modal,
+        #danger-confirm-modal {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.22s ease;
+        }
+
+        #settings-modal > div,
+        #compact-confirm-modal > div,
+        #danger-confirm-modal > div {
+            opacity: 0;
+            transform: translateY(14px) scale(0.985);
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+
+        #settings-modal.modal-active,
+        #compact-confirm-modal.modal-active,
+        #danger-confirm-modal.modal-active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #settings-modal.modal-active > div,
+        #compact-confirm-modal.modal-active > div,
+        #danger-confirm-modal.modal-active > div {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        #settings-modal.modal-closing,
+        #compact-confirm-modal.modal-closing,
+        #danger-confirm-modal.modal-closing {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         #settings-modal.portrait-layout {
             padding: 0 !important;
         }
@@ -1765,11 +1802,110 @@
             opacity: 1;
         }
 
-        #compact-confirm-modal {
+        #voice-replay-island {
+            position: fixed;
+            top: 72px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px) scale(0.985);
+            width: min(760px, calc(100vw - 1.5rem));
+            z-index: 260;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+
+        #voice-replay-island.show {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        #voice-replay-island > div {
+            padding: 0.9rem 1rem;
+            border-radius: 1.3rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(32, 32, 38, 0.84);
+            backdrop-filter: blur(28px) saturate(170%);
+            -webkit-backdrop-filter: blur(28px) saturate(170%);
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+            color: #f5f5f5;
+        }
+
+        body.theme-light #voice-replay-island > div {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: rgba(255, 255, 255, 0.84);
+            color: #1f1f1f;
+            box-shadow: 0 18px 60px rgba(0, 0, 0, 0.12);
+        }
+
+        #voice-replay-island .voice-replay-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.55rem;
+        }
+
+        #voice-replay-island .voice-replay-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.12rem;
+            min-width: 0;
+        }
+
+        #voice-replay-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #voice-replay-state {
+            font-size: 0.72rem;
+            opacity: 0.72;
+        }
+
+        #voice-replay-progress {
+            width: 100%;
+            accent-color: #10b981;
+            margin: 0.15rem 0 0.6rem;
+        }
+
+        #voice-replay-island .voice-replay-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+        }
+
+        #voice-replay-island .voice-replay-actions button {
+            min-width: 92px;
+            min-height: 38px;
+            padding: 0.55rem 0.9rem;
+            border-radius: 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.08);
+            color: inherit;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            cursor: pointer;
+        }
+
+        body.theme-light #voice-replay-island .voice-replay-actions button {
+            border-color: rgba(0, 0, 0, 0.12);
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        #compact-confirm-modal,
+        #danger-confirm-modal {
             position: fixed;
             inset: 0;
             z-index: 300;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             padding: 1rem;
@@ -1782,7 +1918,8 @@
             display: flex;
         }
 
-        #compact-confirm-modal > div {
+        #compact-confirm-modal > div,
+        #danger-confirm-modal > div {
             width: min(440px, 100%);
             padding: 1.25rem;
             border: 1px solid rgba(255, 255, 255, 0.18);
@@ -1794,42 +1931,54 @@
             -webkit-backdrop-filter: blur(30px) saturate(160%);
         }
 
-        body.theme-light #compact-confirm-modal {
+        body.theme-light #compact-confirm-modal,
+        body.theme-light #danger-confirm-modal {
             background: rgba(0, 0, 0, 0.16);
         }
 
-        body.theme-light #compact-confirm-modal > div {
+        body.theme-light #compact-confirm-modal > div,
+        body.theme-light #danger-confirm-modal > div {
             border-color: rgba(0, 0, 0, 0.12);
             background: rgba(255, 255, 255, 0.82);
             color: #1f1f1f;
             box-shadow: 0 18px 60px rgba(0, 0, 0, 0.14);
         }
 
-        #compact-confirm-modal .compact-confirm-actions {
+        #compact-confirm-modal .compact-confirm-actions,
+        #danger-confirm-modal .compact-confirm-actions {
             display: flex;
-            justify-content: flex-end;
-            gap: 0.6rem;
+            flex-direction: column;
+            gap: 0.75rem;
             margin-top: 1.2rem;
         }
 
-        #compact-confirm-modal button {
-            min-width: 88px;
-            padding: 0.55rem 0.9rem;
+        #compact-confirm-modal button,
+        #danger-confirm-modal button {
+            width: 100%;
+            min-height: 46px;
+            padding: 0.7rem 1rem;
             border-radius: 0.7rem;
             border: 1px solid rgba(255, 255, 255, 0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
             cursor: pointer;
         }
 
-        body.theme-light #compact-confirm-modal button {
+        body.theme-light #compact-confirm-modal button,
+        body.theme-light #danger-confirm-modal button {
             border-color: rgba(0, 0, 0, 0.14);
         }
 
-        #compact-confirm-modal .compact-cancel {
+        #compact-confirm-modal .compact-cancel,
+        #danger-confirm-modal .compact-cancel {
             background: rgba(255, 255, 255, 0.08);
             color: inherit;
         }
 
-        body.theme-light #compact-confirm-modal .compact-cancel {
+        body.theme-light #compact-confirm-modal .compact-cancel,
+        body.theme-light #danger-confirm-modal .compact-cancel {
             background: rgba(0, 0, 0, 0.06);
         }
 
@@ -1838,6 +1987,17 @@
             background: #10b981;
             color: #07140f;
             font-weight: 700;
+        }
+
+        #danger-confirm-modal .danger-confirm {
+            border-color: rgba(239, 68, 68, 0.7);
+            background: #ef4444;
+            color: white;
+            font-weight: 700;
+        }
+
+        body.theme-light #danger-confirm-modal .danger-confirm {
+            background: #dc2626;
         }
 
         #voice-btn.recording {
@@ -2110,6 +2270,21 @@
         </div>
     </main>
     <div id="voice-notification"></div>
+    <div id="voice-replay-island" aria-live="polite">
+        <div>
+            <div class="voice-replay-top">
+                <div class="voice-replay-text">
+                    <span id="voice-replay-title">语音回放</span>
+                    <span id="voice-replay-state">等待播放</span>
+                </div>
+            </div>
+            <input id="voice-replay-progress" type="range" min="0" max="1000" value="0">
+            <div class="voice-replay-actions">
+                <button type="button" id="voice-replay-toggle-btn">暂停</button>
+                <button type="button" id="voice-replay-stop-btn">停止</button>
+            </div>
+        </div>
+    </div>
 
     <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
         <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex">
@@ -2162,17 +2337,18 @@
                             </label>
                             <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
                                 <input type="radio" name="auto-summary-interval" value="10" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">默认：每 10 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次，将前 10 轮交给摘要助手整理，后续调用使用摘要与未压缩原文。</small></span>
+                                <span><strong class="block text-sm text-gray-200">默认：每 10 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次生成一份摘要。</small></span>
                             </label>
                             <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
                                 <input type="radio" name="auto-summary-interval" value="15" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份独立摘要，原始聊天记录仍会保留在界面中。</small></span>
+                                <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份摘要。</small></span>
                             </label>
                             <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
                                 <input type="radio" name="auto-summary-interval" value="20" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份独立摘要，适合希望保留更长原文上下文的对话。</small></span>
+                                <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份摘要。</small></span>
                             </label>
                         </div>
+                        <p class="text-[11px] text-gray-500 mt-2">摘要不会替换界面的原本聊天记录，也不会展示。</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-gray-300">上下文压缩模型</label>
@@ -2379,13 +2555,14 @@
                     <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
                         <i data-lucide="audio-lines" class="w-4 h-4"></i>语音聊天
                     </h3>
-                    <p class="text-xs text-gray-400">固定使用 Silero VAD、科大讯飞流式听写和 Fish Audio HTTP TTS。</p>
+                    <p class="text-xs text-gray-400">使用 Silero VAD、科大讯飞流式听写和 Fish Audio HTTP TTS。</p>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div>
                             <label class="block text-sm font-medium mb-2 text-gray-300">语音对话模型</label>
                             <input type="text" id="voice-chat-model-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
                                 placeholder="gemini-3.5-flash-nothinking">
+                                <p class="text-[11px] text-gray-500 mt-2">推荐选择速度优先的模型。</p>
                         </div>
                     </div>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
@@ -2394,6 +2571,7 @@
                             <label class="block text-sm font-medium mb-2 text-gray-300">API Base</label>
                             <input type="text" id="voice-fish-base-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <p class="text-[11px] text-gray-500 mt-2">注意区分FishAudio的国际版和国内版链接。</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
@@ -2411,6 +2589,7 @@
                                 <input type="text" id="voice-fish-id-input"
                                     class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             </div>
+                            <p class="text-[11px] text-gray-500 mt-2">银色ID可前往FishAudio官网或镜像站进行获取。</p>
                         </div>
                         <div>
                             <div class="flex items-center justify-between text-xs text-gray-400 mb-2">
@@ -2424,6 +2603,7 @@
                             class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">
                             <i data-lucide="waves" class="w-4 h-4"></i> 生成/覆盖预制语音包
                         </button>
+                        <p class="text-[11px] text-gray-500 mt-2">预制语音包可以明显减少语音聊天的等待感。</p>
                     </div>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <p class="text-xs font-semibold text-gray-300">科大讯飞流式听写</p>
@@ -2442,6 +2622,7 @@
                             <input type="password" id="voice-xf-secret-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                         </div>
+                        <p class="text-[11px] text-gray-500 mt-2">过期后可前往讯飞开放平台重新获取。</p>
                     </div>
                 </div>
                 <div id="section-other" class="settings-content-section space-y-5">
@@ -2455,6 +2636,16 @@
                             <input type="checkbox" id="math-render-toggle" onchange="onMathRenderToggleChange()" checked>
                             <span class="slider"></span>
                         </label>
+                    </div>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col pr-3">
+                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
+                        </div>
+                        <button type="button" onclick="requestClearVoiceRecords()"
+                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                            清除
+                        </button>
                     </div>
                 </div>
                 <div id="section-advanced" class="settings-content-section space-y-5">
@@ -2601,7 +2792,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V5.3.0</span>
+                            <span id="app-version">V5.4.0</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -2621,11 +2812,22 @@
     </div>
     <div id="compact-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="compact-confirm-title">
         <div>
-            <h3 id="compact-confirm-title" class="text-base font-semibold">压缩上下文</h3>
+            <h3 id="compact-confirm-title" class="text-base font-semibold" style="text-align: center">压缩上下文</h3>
             <p class="mt-3 text-sm leading-relaxed opacity-80">手动压缩会将上次压缩结束后至今的完整对话整理成摘要。压缩可能会或多或少降低模型的回复质量，但有助于缩短上下文、节省请求成本。</p>
             <div class="compact-confirm-actions">
                 <button type="button" class="compact-cancel" onclick="resolveCompactionConfirm(false)">取消</button>
                 <button type="button" class="compact-confirm" onclick="resolveCompactionConfirm(true)">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="danger-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title">
+        <div>
+            <h3 id="danger-confirm-title" class="text-base font-semibold" style="text-align: center">警告</h3>
+            <p id="danger-confirm-message" class="mt-3 text-sm leading-relaxed opacity-80">确定继续吗？</p>
+            <div class="compact-confirm-actions">
+                <button type="button" class="compact-cancel" onclick="resolveDangerConfirm(false)">取消</button>
+                <button type="button" class="danger-confirm" onclick="resolveDangerConfirm(true)">清除</button>
             </div>
         </div>
     </div>
@@ -2647,6 +2849,37 @@
         const DEFAULT_XF_APPID = '3029f9be';
         const DEFAULT_XF_API_KEY = 'a1eff87d5b81fc49bd210a7a947916c3';
         const DEFAULT_XF_API_SECRET = 'YzMxZjY1NmRiMDhkOWQ1ZGFiMjM1NzAy';
+        const MODAL_ANIMATION_MS = 220;
+        let voiceReplayController = null;
+        let dangerConfirmResolver = null;
+
+        function openAnimatedModal(modal, visibleClass) {
+            if (!modal) return;
+            const closeTimer = Number(modal.dataset.closeTimer || 0);
+            if (closeTimer) window.clearTimeout(closeTimer);
+            modal.dataset.closeTimer = '';
+            modal.classList.remove('modal-closing');
+            modal.classList.add(visibleClass);
+            requestAnimationFrame(() => {
+                modal.classList.add('modal-active');
+            });
+        }
+
+        function closeAnimatedModal(modal, visibleClass, onClosed = null) {
+            if (!modal || !modal.classList.contains(visibleClass)) {
+                if (typeof onClosed === 'function') onClosed();
+                return;
+            }
+            const closeTimer = Number(modal.dataset.closeTimer || 0);
+            if (closeTimer) window.clearTimeout(closeTimer);
+            modal.classList.remove('modal-active');
+            modal.classList.add('modal-closing');
+            modal.dataset.closeTimer = String(window.setTimeout(() => {
+                modal.classList.remove(visibleClass, 'modal-closing');
+                modal.dataset.closeTimer = '';
+                if (typeof onClosed === 'function') onClosed();
+            }, MODAL_ANIMATION_MS));
+        }
 
         function getAPIKey() {
             return localStorage.getItem('api_key') || DEFAULT_API_KEY;
@@ -2778,7 +3011,364 @@
             return typeof str === 'string' && str.startsWith('img:');
         }
 
+        const VoiceRecordStore = (() => {
+            const DB_NAME = 'AIChatVoiceRecords';
+            const DB_VERSION = 1;
+            const STORE_NAME = 'records';
+            let dbPromise = null;
+
+            function openDB() {
+                if (dbPromise) return dbPromise;
+                dbPromise = new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = () => reject(request.error);
+                });
+                return dbPromise;
+            }
+
+            async function storeRecord(record) {
+                const db = await openDB();
+                const id = String(record?.id || (crypto.randomUUID ? crypto.randomUUID() : `voice_${Date.now()}_${Math.random().toString(16).slice(2)}`));
+                const payload = {
+                    ...record,
+                    id,
+                    createdAt: Number(record?.createdAt) || Date.now(),
+                    segments: Array.isArray(record?.segments) ? record.segments : []
+                };
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.put(payload);
+                    req.onsuccess = () => resolve(payload);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function getRecord(id) {
+                if (!id) return null;
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.get(String(id));
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function clearRecords() {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.clear();
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            return {
+                storeRecord,
+                getRecord,
+                clearRecords
+            };
+        })();
+
+        function toAudioDataUrl(base64) {
+            const value = String(base64 || '').trim();
+            if (!value) return '';
+            return value.startsWith('data:') ? value : `data:audio/mpeg;base64,${value}`;
+        }
+
         // 将消息中的图片引用解析为真实 dataUrl (修改副本)
+        class VoiceReplayController {
+            constructor() {
+                this.host = document.getElementById('voice-replay-island');
+                this.titleEl = document.getElementById('voice-replay-title');
+                this.stateEl = document.getElementById('voice-replay-state');
+                this.progressEl = document.getElementById('voice-replay-progress');
+                this.toggleBtn = document.getElementById('voice-replay-toggle-btn');
+                this.stopBtn = document.getElementById('voice-replay-stop-btn');
+                this.currentRecord = null;
+                this.currentSegments = [];
+                this.segmentDurations = [];
+                this.currentAudio = null;
+                this.playbackToken = 0;
+                this.playing = false;
+                this.paused = false;
+                this.currentTime = 0;
+                this.totalDuration = 0;
+                this.hideTimer = 0;
+                this.isSeeking = false;
+                this.bindEvents();
+                this.hide(false);
+            }
+
+            bindEvents() {
+                if (this.toggleBtn) this.toggleBtn.addEventListener('click', () => this.togglePause());
+                if (this.stopBtn) this.stopBtn.addEventListener('click', () => this.stop(true));
+                if (this.progressEl) {
+                    this.progressEl.addEventListener('pointerdown', () => { this.isSeeking = true; });
+                    this.progressEl.addEventListener('pointerup', () => {
+                        this.isSeeking = false;
+                        this.seekFromSlider();
+                    });
+                    this.progressEl.addEventListener('change', () => this.seekFromSlider());
+                    this.progressEl.addEventListener('input', () => {
+                        if (this.isSeeking) this.renderProgress(this.sliderToTime());
+                    });
+                }
+            }
+
+            show() {
+                clearTimeout(this.hideTimer);
+                if (this.host) this.host.classList.add('show');
+            }
+
+            hide(immediate = true) {
+                clearTimeout(this.hideTimer);
+                if (!this.host) return;
+                if (immediate) this.host.classList.remove('show');
+                else this.hideTimer = setTimeout(() => this.host.classList.remove('show'), 3000);
+            }
+
+            setState(text) {
+                if (this.stateEl) this.stateEl.textContent = text;
+            }
+
+            setTitle(text) {
+                if (this.titleEl) this.titleEl.textContent = text || '语音回放';
+            }
+
+            updateButtons() {
+                if (this.toggleBtn) this.toggleBtn.textContent = this.paused ? '继续' : '暂停';
+                if (this.progressEl) this.progressEl.disabled = !this.currentSegments.length || !this.totalDuration;
+            }
+
+            renderProgress(time) {
+                this.currentTime = Math.max(0, Math.min(time, this.totalDuration || time || 0));
+                if (!this.progressEl) return;
+                const value = this.totalDuration > 0 ? Math.round((this.currentTime / this.totalDuration) * 1000) : 0;
+                this.progressEl.value = String(Math.max(0, Math.min(1000, value)));
+            }
+
+            sliderToTime() {
+                const value = Number(this.progressEl?.value || 0) / 1000;
+                return this.totalDuration > 0 ? this.totalDuration * value : 0;
+            }
+
+            locateTime(time) {
+                let elapsed = 0;
+                for (let index = 0; index < this.segmentDurations.length; index += 1) {
+                    const duration = this.segmentDurations[index] || 0;
+                    const end = elapsed + duration;
+                    if (time <= end || index === this.segmentDurations.length - 1) {
+                        return { index, offset: Math.max(0, time - elapsed), elapsedBefore: elapsed };
+                    }
+                    elapsed = end;
+                }
+                return { index: 0, offset: 0, elapsedBefore: 0 };
+            }
+
+            loadDuration(url) {
+                return new Promise((resolve) => {
+                    const audio = new Audio();
+                    audio.preload = 'metadata';
+                    audio.onloadedmetadata = () => resolve(Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0);
+                    audio.onerror = () => resolve(0);
+                    audio.src = url;
+                });
+            }
+
+            clearCurrentAudio() {
+                if (this.currentAudio) {
+                    try { this.currentAudio.pause(); } catch {}
+                    this.currentAudio.src = '';
+                }
+                this.currentAudio = null;
+            }
+
+            async play(recordId, label = '语音回放') {
+                if (!recordId) return;
+                this.playbackToken += 1;
+                const token = this.playbackToken;
+                this.clearCurrentAudio();
+                this.currentRecord = null;
+                this.currentSegments = [];
+                this.segmentDurations = [];
+                this.totalDuration = 0;
+                this.currentTime = 0;
+                this.playing = false;
+                this.paused = false;
+                this.setTitle(label);
+                this.setState('正在加载');
+                this.renderProgress(0);
+                this.updateButtons();
+                this.show();
+
+                const record = await VoiceRecordStore.getRecord(recordId).catch(() => null);
+                if (token !== this.playbackToken) return;
+                if (!record || !Array.isArray(record.segments) || !record.segments.length) {
+                    this.setState('语音已被清除');
+                    this.hide(false);
+                    return;
+                }
+
+                this.currentRecord = record;
+                this.currentSegments = record.segments.map(segment => ({
+                    text: String(segment?.text || ''),
+                    url: toAudioDataUrl(segment?.audioBase64 || segment?.audioUrl || segment?.audio || '')
+                })).filter(segment => segment.url);
+                if (!this.currentSegments.length) {
+                    this.setState('暂无可播放语音');
+                    this.hide(false);
+                    return;
+                }
+
+                for (const segment of this.currentSegments) {
+                    segment.duration = await this.loadDuration(segment.url);
+                    if (token !== this.playbackToken) return;
+                }
+                this.segmentDurations = this.currentSegments.map(segment => segment.duration || 0);
+                this.totalDuration = this.segmentDurations.reduce((sum, value) => sum + (value || 0), 0);
+                if (this.totalDuration <= 0) {
+                    this.totalDuration = Math.max(this.currentSegments.length, 1);
+                    const fallback = this.totalDuration / this.currentSegments.length;
+                    this.segmentDurations = this.currentSegments.map(() => fallback);
+                }
+
+                this.playing = true;
+                this.paused = false;
+                this.setState('正在播放');
+                this.updateButtons();
+                this.startAt(0, true, token);
+            }
+
+            startAt(time, autoPlay, token = this.playbackToken) {
+                if (token !== this.playbackToken || !this.currentSegments.length) return;
+                const target = Math.max(0, Math.min(time, this.totalDuration));
+                const { index, offset, elapsedBefore } = this.locateTime(target);
+                const segment = this.currentSegments[index];
+                if (!segment) {
+                    this.finish(token);
+                    return;
+                }
+
+                this.clearCurrentAudio();
+                const audio = new Audio(segment.url);
+                audio.preload = 'auto';
+                this.currentAudio = audio;
+                this.currentTime = target;
+                this.renderProgress(target);
+                this.updateButtons();
+
+                audio.onloadedmetadata = () => {
+                    if (token !== this.playbackToken) return;
+                    try {
+                        audio.currentTime = Math.min(offset, Math.max(0, Math.max(0, audio.duration - 0.01)));
+                    } catch {}
+                    if (autoPlay) audio.play().catch(() => this.finish(token));
+                };
+                audio.ontimeupdate = () => {
+                    if (token !== this.playbackToken) return;
+                    this.renderProgress(elapsedBefore + audio.currentTime);
+                };
+                audio.onended = () => {
+                    if (token !== this.playbackToken) return;
+                    const nextTime = elapsedBefore + (segment.duration || 0) + 0.001;
+                    if (nextTime >= this.totalDuration) this.finish(token);
+                    else this.startAt(nextTime, true, token);
+                };
+                audio.onerror = () => {
+                    if (token !== this.playbackToken) return;
+                    const nextTime = elapsedBefore + (segment.duration || 0) + 0.001;
+                    if (nextTime >= this.totalDuration) this.finish(token);
+                    else this.startAt(nextTime, true, token);
+                };
+                audio.onpause = () => {
+                    if (token !== this.playbackToken) return;
+                    if (!this.paused) return;
+                    this.setState('已暂停');
+                };
+            }
+
+            togglePause() {
+                if (!this.currentSegments.length) return;
+                if (this.playing) {
+                    if (this.currentAudio) {
+                        this.paused = true;
+                        this.playing = false;
+                        this.currentAudio.pause();
+                        this.setState('已暂停');
+                        this.updateButtons();
+                    }
+                    return;
+                }
+                if (this.paused && this.currentAudio) {
+                    this.paused = false;
+                    this.playing = true;
+                    this.setState('正在播放');
+                    this.updateButtons();
+                    this.currentAudio.play().catch(() => this.finish(this.playbackToken));
+                }
+            }
+
+            seekFromSlider() {
+                if (!this.currentSegments.length || !this.totalDuration) return;
+                const resume = this.playing;
+                const time = this.sliderToTime();
+                this.currentTime = time;
+                this.startAt(time, resume, this.playbackToken);
+                if (!resume) {
+                    this.paused = true;
+                    this.playing = false;
+                    this.setState('已暂停');
+                    this.updateButtons();
+                }
+            }
+
+            finish(token = this.playbackToken) {
+                if (token !== this.playbackToken) return;
+                this.clearCurrentAudio();
+                this.playing = false;
+                this.paused = false;
+                this.setState('播放结束');
+                this.updateButtons();
+                this.hide(false);
+            }
+
+            stop(userInitiated = false) {
+                this.playbackToken += 1;
+                this.clearCurrentAudio();
+                this.currentRecord = null;
+                this.currentSegments = [];
+                this.segmentDurations = [];
+                this.totalDuration = 0;
+                this.currentTime = 0;
+                this.playing = false;
+                this.paused = false;
+                this.renderProgress(0);
+                this.setState('已停止');
+                this.updateButtons();
+                this.show();
+                this.hide(userInitiated ? false : true);
+            }
+        }
+
+        voiceReplayController = new VoiceReplayController();
+
+        function playVoiceRecord(recordId, label = '语音回放') {
+            if (!voiceReplayController) return;
+            voiceReplayController.play(recordId, label);
+        }
+
         async function resolveMessageReferences(msg) {
             const resolved = {
                 ...msg
@@ -3037,7 +3627,7 @@
         function showCompactionConfirm() {
             const modal = document.getElementById('compact-confirm-modal');
             if (!modal) return Promise.resolve(false);
-            modal.classList.add('visible');
+            openAnimatedModal(modal, 'visible');
             return new Promise(resolve => {
                 compactionConfirmResolver = resolve;
             });
@@ -3045,10 +3635,61 @@
 
         function resolveCompactionConfirm(confirmed) {
             const modal = document.getElementById('compact-confirm-modal');
-            if (modal) modal.classList.remove('visible');
+            closeAnimatedModal(modal, 'visible');
             const resolver = compactionConfirmResolver;
             compactionConfirmResolver = null;
             if (resolver) resolver(Boolean(confirmed));
+        }
+
+        function showDangerConfirm() {
+            const modal = document.getElementById('danger-confirm-modal');
+            if (!modal) return Promise.resolve(false);
+            const message = modal.querySelector('#danger-confirm-message');
+            if (message) message.textContent = '将删除所有语音聊天生成的语音记录（预制语音除外），是否继续？';
+            openAnimatedModal(modal, 'modal-active');
+            return new Promise(resolve => {
+                dangerConfirmResolver = resolve;
+            });
+        }
+
+        function resolveDangerConfirm(confirmed) {
+            const modal = document.getElementById('danger-confirm-modal');
+            closeAnimatedModal(modal, 'modal-active');
+            const resolver = dangerConfirmResolver;
+            dangerConfirmResolver = null;
+            if (resolver) resolver(Boolean(confirmed));
+        }
+
+        async function requestClearVoiceRecords() {
+            const confirmed = await showDangerConfirm();
+            if (!confirmed) return;
+            if (voiceReplayController) voiceReplayController.stop(true);
+            await VoiceRecordStore.clearRecords().catch(error => {
+                console.error('清除语音记录失败', error);
+            });
+            if (activeChatId) {
+                const chat = chats.find(item => item.id === activeChatId);
+                if (chat) await renderMessagesWithResolvedRefs(chat.messages);
+            }
+            showVoiceNotification('语音记录已清除', false, 2500);
+        }
+
+        async function requestClearVoiceRecords() {
+            const confirmed = await showDangerConfirm();
+            if (!confirmed) return;
+            if (voiceReplayController) voiceReplayController.stop(true);
+            try {
+                await VoiceRecordStore.clearRecords();
+            } catch (error) {
+                console.error('清除语音记录失败', error);
+                showVoiceNotification('清除语音记录失败', true, 2500);
+                return;
+            }
+            if (activeChatId) {
+                const chat = chats.find(item => item.id === activeChatId);
+                if (chat) await renderMessagesWithResolvedRefs(chat.messages);
+            }
+            showVoiceNotification('语音记录已清除', false, 2500);
         }
 
         async function requestManualCompaction(extraInstruction = '') {
@@ -4001,13 +4642,13 @@
             messages.forEach((msg, idx) => {
                 const isLast = idx === messages.length - 1;
                 appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
-                    .reasoning || '', msg.attachments || [], msg.generatedImages || []);
+                    .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '');
             });
             wrapper.scrollTop = wrapper.scrollHeight;
         }
 
         function appendMessageToUI(role, content, model, showActions = false, reasoning = '', attachments = [],
-            generatedImages = []) {
+            generatedImages = [], voiceRecordId = '') {
             const wrapper = document.getElementById('messages-wrapper');
             const isAI = role === 'assistant';
             const row = document.createElement('div');
@@ -4137,6 +4778,21 @@
                         copyToClipboard(content || '', copyMsgBtn);
                     };
                     btnGroup.appendChild(copyMsgBtn);
+                }
+                if (voiceRecordId) {
+                    void (async () => {
+                        const record = await VoiceRecordStore.getRecord(voiceRecordId).catch(() => null);
+                        if (!record) return;
+                        const replayBtn = document.createElement('span');
+                        replayBtn.className = 'action-btn';
+                        replayBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> 回放`;
+                        replayBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            playVoiceRecord(record.id, content || '');
+                        };
+                        btnGroup.appendChild(replayBtn);
+                        lucide.createIcons();
+                    })();
                 }
                 footer.appendChild(modelSpan);
                 footer.appendChild(btnGroup);
@@ -4317,9 +4973,9 @@
 
         function toggleSettings() {
             const modal = document.getElementById('settings-modal');
-            modal.classList.toggle('flex');
-            modal.classList.toggle('hidden');
-            if (modal.classList.contains('flex')) {
+            const shouldOpen = !modal.classList.contains('flex');
+            if (shouldOpen) {
+                openAnimatedModal(modal, 'flex');
                 renderMemoriesToSettings();
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
                 populateAutoSummarySettings();
@@ -4331,7 +4987,9 @@
                 populateAdvancedSettings();
                 updateSettingsPortraitMode();
             } else {
-                modal.classList.remove('portrait-layout');
+                closeAnimatedModal(modal, 'flex', () => {
+                    modal.classList.remove('portrait-layout');
+                });
             }
             lucide.createIcons();
         }
@@ -5382,7 +6040,8 @@
                     role: turn.role,
                     content: String(turn.content || ''),
                     ...(turn.role === 'assistant' ? {
-                        model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL
+                        model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
+                        voiceRecordId: String(turn.voiceRecordId || '').trim()
                     } : {})
                 }))
                 .filter(turn => turn.content.trim());
@@ -5920,7 +6579,9 @@
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
                     const compactModal = document.getElementById('compact-confirm-modal');
-                    if (compactModal?.classList.contains('visible')) resolveCompactionConfirm(false);
+                    const dangerModal = document.getElementById('danger-confirm-modal');
+                    if (dangerModal?.classList.contains('modal-active')) resolveDangerConfirm(false);
+                    else if (compactModal?.classList.contains('visible')) resolveCompactionConfirm(false);
                     else closeLightbox();
                 }
             });
