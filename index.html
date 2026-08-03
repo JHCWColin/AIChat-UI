@@ -3165,8 +3165,14 @@
 
             clearCurrentAudio() {
                 if (this.currentAudio) {
-                    try { this.currentAudio.pause(); } catch {}
-                    this.currentAudio.src = '';
+                    const audio = this.currentAudio;
+                    audio.onloadedmetadata = null;
+                    audio.ontimeupdate = null;
+                    audio.onended = null;
+                    audio.onerror = null;
+                    audio.onpause = null;
+                    try { audio.pause(); } catch {}
+                    audio.src = '';
                 }
                 this.currentAudio = null;
             }
@@ -3205,16 +3211,13 @@
                     return;
                 }
 
-                const durations = await Promise.all(this.currentSegments.map(segment => this.loadDuration(segment.url)));
-                if (token !== this.playbackToken) return;
-                this.currentSegments.forEach((segment, index) => { segment.duration = durations[index] || 0; });
-                this.segmentDurations = this.currentSegments.map(segment => segment.duration || 0);
-                this.totalDuration = this.segmentDurations.reduce((sum, value) => sum + (value || 0), 0);
-                if (this.totalDuration <= 0) {
-                    this.totalDuration = Math.max(this.currentSegments.length, 1);
-                    const fallback = this.totalDuration / this.currentSegments.length;
-                    this.segmentDurations = this.currentSegments.map(() => fallback);
+                for (const segment of this.currentSegments) {
+                    segment.duration = await this.loadDuration(segment.url);
+                    if (token !== this.playbackToken) return;
                 }
+                this.segmentDurations = this.currentSegments.map(segment => segment.duration > 0 ? segment.duration : 1);
+                this.totalDuration = this.segmentDurations.reduce((sum, value) => sum + (value || 0), 0);
+                console.info(`[VoiceReplay] loaded segments=${this.currentSegments.length} durations=${this.segmentDurations.join(',')}`);
 
                 this.playing = true;
                 this.paused = false;
@@ -3231,6 +3234,7 @@
                     this.finish(token);
                     return;
                 }
+                console.info(`[VoiceReplay] start segment=${index + 1}/${this.currentSegments.length} offset=${offset.toFixed(3)} duration=${(segment.duration || 0).toFixed(3)}`);
 
                 this.clearCurrentAudio();
                 const audio = new Audio(segment.url);
@@ -3241,30 +3245,44 @@
                 this.updateButtons();
 
                 audio.onloadedmetadata = () => {
-                    if (token !== this.playbackToken) return;
+                    if (token !== this.playbackToken || audio !== this.currentAudio) return;
                     try {
                         audio.currentTime = Math.min(offset, Math.max(0, Math.max(0, audio.duration - 0.01)));
                     } catch {}
-                    if (autoPlay) audio.play().catch(() => this.finish(token));
+                    if (autoPlay) {
+                        console.info(`[VoiceReplay] metadata segment=${index + 1} audioDuration=${audio.duration}`);
+                        audio.play().catch(error => {
+                            console.error(`[VoiceReplay] play failed segment=${index + 1}`, error);
+                            this.finish(token);
+                        });
+                    }
                 };
                 audio.ontimeupdate = () => {
-                    if (token !== this.playbackToken) return;
+                    if (token !== this.playbackToken || audio !== this.currentAudio) return;
                     this.renderProgress(elapsedBefore + audio.currentTime);
                 };
                 audio.onended = () => {
-                    if (token !== this.playbackToken) return;
-                    const nextTime = elapsedBefore + (segment.duration || 0) + 0.001;
-                    if (nextTime >= this.totalDuration) this.finish(token);
-                    else this.startAt(nextTime, true, token);
+                    if (token !== this.playbackToken || audio !== this.currentAudio) return;
+                    const nextIndex = index + 1;
+                    console.info(`[VoiceReplay] ended segment=${index + 1}, next=${nextIndex + 1}`);
+                    if (nextIndex >= this.currentSegments.length) this.finish(token);
+                    else {
+                        const nextTime = this.segmentDurations.slice(0, nextIndex).reduce((sum, duration) => sum + duration, 0) + 0.001;
+                        this.startAt(nextTime, true, token);
+                    }
                 };
                 audio.onerror = () => {
-                    if (token !== this.playbackToken) return;
-                    const nextTime = elapsedBefore + (segment.duration || 0) + 0.001;
-                    if (nextTime >= this.totalDuration) this.finish(token);
-                    else this.startAt(nextTime, true, token);
+                    if (token !== this.playbackToken || audio !== this.currentAudio) return;
+                    const nextIndex = index + 1;
+                    console.error(`[VoiceReplay] audio error segment=${index + 1}, next=${nextIndex + 1}`);
+                    if (nextIndex >= this.currentSegments.length) this.finish(token);
+                    else {
+                        const nextTime = this.segmentDurations.slice(0, nextIndex).reduce((sum, duration) => sum + duration, 0) + 0.001;
+                        this.startAt(nextTime, true, token);
+                    }
                 };
                 audio.onpause = () => {
-                    if (token !== this.playbackToken) return;
+                    if (token !== this.playbackToken || audio !== this.currentAudio) return;
                     if (!this.paused) return;
                 };
             }
