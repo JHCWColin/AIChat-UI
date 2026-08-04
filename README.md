@@ -2,7 +2,8 @@
 
 ![Logo](logo.png)
 
-# AIUI
+![preview](screenshot/preview.png)
+
 ### Your Next Gen Vibe Coding Toolkit
 
 基于前端页面与 Electron 的 AI 对话桌面应用，覆盖文字聊天、Canvas 编码、语音聊天、附件解析、图像生成与 Windows 本地打包。
@@ -65,17 +66,24 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 1. Canvas 编码模式
 
+![canvas](screenshot/code%20with%20canvas.png)
+
 - 在输入框发送 `/canvas` 后，右侧进入代码画布模式。
 - 画布基于 CodeMirror，支持语法高亮、行号与手动编辑。
 - AI 可通过 `[replace]` 风格的替换指令精确修改画布内容。
 
 ### 2. 语音聊天模式
 
+![audiochat](screenshot/audiochat.png)
+
 - 独立 `audiochat.html` 页面，采用上下双分区字幕布局。
 - 上半区显示 AI 字幕，下半区显示用户识别文本。
 - AI 字幕支持按句自动跟随与逐句淡入。
 - 语音聊天生成的 AI 语音可在主对话中按整次回复连续回放。
 - 可在偏好设置中一键清除历史语音记录，不影响预制语音与后续新记录。
+- 语音聊天可以从文字对话中途开始也可以之后转成文本继续对话。
+
+![audiotext](screenshot/audiochat%20can%20be%20saved%20to%20textchat.png)
 
 ### 3. 多模型与 API 配置
 
