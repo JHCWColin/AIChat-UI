@@ -8,7 +8,7 @@
 基于前端页面与 Electron 的 AI 对话桌面应用，覆盖文字聊天、Canvas 编码、语音聊天、附件解析、图像生成与 Windows 本地打包。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V5.5.0-blue)]()
+[![Version](https://img.shields.io/badge/version-V5.6.0-blue)]()
 
 </div>
 
@@ -29,6 +29,13 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+
+## V5.6.0
+
+- 修复手动停止 AI 生成后，灵动岛通知仍然常驻的问题；现在会像正常回复结束一样在短暂时间后自动消失。
+- 继续完善 Responses API 的流式输出兼容，已能正确返回非流式回复，并在收到增量内容时实时刷新消息内容。
+- 微调设置内容的布局。
 
 ### V5.5.0
 
@@ -107,8 +114,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI5.5.0-Portable.exe`
-- Setup：`AIUI5.5.0-Setup.exe`
+- Portable：`AIUI5.6.0-Portable.exe`
+- Setup：`AIUI5.6.0-Setup.exe`
 
 构建命令：
 
@@ -133,7 +140,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V5.5.0`
+- 当前版本：`V5.6.0`
 - 当前构建标识：`build20260803`
 
 ---

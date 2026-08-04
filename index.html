@@ -2003,10 +2003,6 @@
         </button>
         <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
         <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
-            <button id="sidebar-sync-btn" onclick="syncData()"
-                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors text-emerald-400">
-                <i data-lucide="cloud-download" class="w-5 h-5"></i><span class="text-sm font-medium">云端同步</span>
-            </button>
             <button onclick="toggleSettings()"
                 class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
                 <i data-lucide="settings" class="w-5 h-5"></i><span class="text-sm">设置</span>
@@ -2280,11 +2276,9 @@
                     <button data-section="appearance" onclick="switchSettingsSection('appearance', this)">外观设置</button>
                     <button data-section="coding" onclick="switchSettingsSection('coding', this)">编码模式</button>
                     <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
-                    <button data-section="memory" onclick="switchSettingsSection('memory', this)">云端记忆</button>
-                    <button data-section="voice" onclick="switchSettingsSection('voice', this)">语音输入</button>
-                    <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
                     <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
-                    <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">高级设置</button>
+                    <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
+                    <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">开发调试</button>
                     <button data-section="guide" onclick="switchSettingsSection('guide', this)">使用指导</button>
                     <button data-section="about" onclick="switchSettingsSection('about', this)">关于</button>
                 </nav>
@@ -2438,6 +2432,26 @@
                             <input type="password" id="api-key-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
                                 placeholder="sk-...">
+                            <div class="mt-2 space-y-2">
+                                <button type="button" onclick="applyPresetApiKey('sk-qCYR1epX8QPqdhPX72495e405e2d4c3681958aD362Cc2856')"
+                                    class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
+                                    <span class="block text-sm font-medium text-gray-200">替换为 default-only</span>
+                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">虽然价格贵，但 gpt 系列模型支持流式输出。</span>
+                                    <span class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-qCYR1epX8QPqdhPX72495e405e2d4c3681958aD362Cc2856</span>
+                                </button>
+                                <button type="button" onclick="applyPresetApiKey('sk-FPEXIE4gifZDTZxR7c2819B2A7144fD8B73b7258FeE28345')"
+                                    class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
+                                    <span class="block text-sm font-medium text-gray-200">替换为 codex-only</span>
+                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">仅支持 gpt 系列的最近模型且不支持流式，但价格五折。</span>
+                                    <span class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-FPEXIE4gifZDTZxR7c2819B2A7144fD8B73b7258FeE28345</span>
+                                </button>
+                                <button type="button" onclick="applyPresetApiKey('sk-SPD6RQoYGGOSnVOk6eBe37F04d9544B2B63e7454FfDd9aC5')"
+                                    class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
+                                    <span class="block text-sm font-medium text-gray-200">替换为 codex-default</span>
+                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">成本优先，非 gpt 系列支持流式，gpt 最新系列仍享受五折但不支持流式。</span>
+                                    <span class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-SPD6RQoYGGOSnVOk6eBe37F04d9544B2B63e7454FfDd9aC5</span>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-gray-300">Base URL</label>
@@ -2453,6 +2467,20 @@
                                 placeholder="0">
                         </div>
                         <div>
+                            <label class="block text-sm font-medium mb-3 text-gray-300">请求端点</label>
+                            <div class="space-y-2">
+                                <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/chat/completions" class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">/chat/completions</strong><small class="block mt-1 text-xs text-gray-500">兼容当前聊天接口，适用于大多数 OpenAI 风格服务端。</small></span>
+                                </label>
+                                <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/responses" class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">/responses</strong><small class="block mt-1 text-xs text-gray-500">使用响应式接口，适合支持 Responses API 的服务端。</small></span>
+                                </label>
+                            </div>
+                            <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。</p>
+                        </div>
+                        <div>
                             <div class="flex items-center justify-between gap-3 mb-2">
                                 <label class="block text-sm font-medium text-gray-300">模型列表</label>
                                 <button type="button" onclick="resetModelListEditor()"
@@ -2463,71 +2491,6 @@
                                 placeholder="每行填写一个模型名称"></textarea>
                             <p class="text-[11px] text-gray-500 mt-2">每行一个模型；可直接增加、删除或调整顺序。保存后会同步更新主模型选择器和重试模型选择器，并存储在本机 LocalStorage 中。</p>
                         </div>
-                    </div>
-                </div>
-                <div id="section-memory" class="settings-content-section space-y-4">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="brain" class="w-4 h-4"></i>云端记忆
-                    </h3>
-                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col">
-                            <span class="text-sm font-medium text-gray-200">启用云端</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">开启后向LC云端同步数据并获取记忆</span>
-                        </div>
-                        <label class="cloud-toggle">
-                            <input type="checkbox" id="cloud-enabled-toggle" onchange="onCloudToggleChange()" checked>
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div id="cloud-config-area" class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <p class="text-xs text-gray-400 mb-1">LeanCloud 配置（云端存储所需）</p>
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">LC App ID</label>
-                            <input type="text" id="lc-app-id-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="G2jNexXDgQoJkiR5bf7aGqZj-gzGzoHsz">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">LC API Key</label>
-                            <input type="password" id="lc-api-key-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="tO6fRxnoCUEAJ3HyHbzmlG9R">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">LC Master Key</label>
-                            <input type="password" id="lc-master-key-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="tO6fRxnoCUEAJ3HyHbzmlG9R">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">LC Base URL</label>
-                            <input type="text" id="lc-base-url-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="https://g2jnexxd.lc-cn-n1-shared.com/1.1/classes/AIChats">
-                        </div>
-                    </div>
-                    <button id="cloud-sync-btn-inline" onclick="syncDataFromSettings()"
-                        class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">
-                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> 立即同步云端
-                    </button>
-                    <div id="memory-list-container" class="memory-list space-y-2">
-                        <div class="text-gray-400 text-xs italic p-2">加载记忆中...</div>
-                    </div>
-                    <p class="text-[11px] text-gray-500 mt-2">记忆由管理员在云端维护，每次对话AI都会参考这些信息。</p>
-                </div>
-                <div id="section-voice" class="settings-content-section space-y-4">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="mic" class="w-4 h-4"></i>语音输入
-                    </h3>
-                    <div>
-                        <label class="block text-sm font-medium mb-2 text-gray-300">语音转文字模型</label>
-                        <select id="voice-model-select"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors text-white">
-                            <option value="whisper-1" selected>whisper-1 (默认)</option>
-                            <option value="whisper-base">whisper-base</option>
-                            <option value="whisper-large">whisper-large</option>
-                        </select>
-                        <p class="text-[11px] text-gray-500 mt-2">录音后自动使用此模型进行语音识别。</p>
                     </div>
                 </div>
                 <div id="section-voice-chat" class="settings-content-section space-y-4">
@@ -2606,6 +2569,18 @@
                 </div>
                 <div id="section-other" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">其他</h3>
+                    <div class="space-y-4">
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                            <label class="block text-sm font-medium mb-2 text-gray-300">语音转文字模型</label>
+                            <select id="voice-model-select"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors text-white">
+                                <option value="whisper-1" selected>whisper-1 (默认)</option>
+                                <option value="whisper-base">whisper-base</option>
+                                <option value="whisper-large">whisper-large</option>
+                            </select>
+                            <p class="text-[11px] text-gray-500 mt-2">录音后自动使用此模型进行语音识别。</p>
+                        </div>
+                    </div>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex flex-col">
                             <span class="text-sm font-medium text-gray-200">LATEX 渲染</span>
@@ -2628,7 +2603,7 @@
                     </div>
                 </div>
                 <div id="section-advanced" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">高级设置</h3>
+                    <h3 class="text-base font-semibold text-gray-200 mb-3">开发调试</h3>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex flex-col">
                             <span class="text-sm font-medium text-gray-200">开发者模式</span>
@@ -2691,7 +2666,7 @@
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">必要配置</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在开始使用AIUI之前，你需要将自己的<strong>apikey</strong>，以及对应的<strong>服务器url</strong>填入“设置 - API配置”中，你同样可以在这里调整<strong>最大Token限制</strong>，以防止单词使用超过预算金额。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• “设置 - API配置 - 模型列表”支持每行填写一个模型名称。你可以增加、删除或调整顺序；保存后主模型选择器与重试选择器会立即同步。模型列表保存在本机 LocalStorage 中，“恢复默认”只会先恢复编辑框内容，仍需点击保存设置。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 同时，若你拥有Leancloud云端存储库，同样可以在“设置 - 云端记忆”引入云端存储的功能，此项不是必要设置，若不配置云端，聊天记录将会在<strong>本地保存</strong>，云端<strong>只会保存非图片和文件的内容</strong>。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 当前版本已移除云端同步与云端记忆入口，所有聊天与记忆仅保存在本地。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在设置的其他位置选择你喜欢的背景图片、亮暗模式以及文字大小。以及默认使用的语音输入模型。（<strong>前提是你提供的AI后端要支持语音转文字模型</strong>）。</p>
 
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">文字对话</p>
@@ -2878,37 +2853,19 @@
         }
 
         function isCloudEnabled() {
-            return localStorage.getItem('cloud_enabled') !== 'false';
+            return false;
         }
 
         function setCloudEnabledUI(enabled) {
-            const sidebarBtn = document.getElementById('sidebar-sync-btn');
-            if (sidebarBtn) sidebarBtn.style.display = enabled ? '' : 'none';
-            const syncBtnInline = document.getElementById('cloud-sync-btn-inline');
-            if (syncBtnInline) syncBtnInline.style.display = enabled ? '' : 'none';
-            const configArea = document.getElementById('cloud-config-area');
-            if (configArea) {
-                configArea.style.opacity = enabled ? '1' : '0.5';
-                configArea.style.pointerEvents = enabled ? '' : 'none';
-            }
-            const toggle = document.getElementById('cloud-enabled-toggle');
-            if (toggle) toggle.checked = enabled;
+            return;
         }
 
         function onCloudToggleChange() {
-            const toggle = document.getElementById('cloud-enabled-toggle');
-            const enabled = toggle ? toggle.checked : true;
-            localStorage.setItem('cloud_enabled', enabled ? 'true' : 'false');
-            setCloudEnabledUI(enabled);
-            if (enabled) renderMemoriesToSettings();
+            return;
         }
 
         function syncDataFromSettings() {
-            if (!isCloudEnabled()) {
-                alert('请先启用云端模式');
-                return;
-            }
-            syncData();
+            return;
         }
 
         // ========== IndexedDB 图片存储封装 ==========
@@ -3514,18 +3471,28 @@
             const model = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL;
             appendLog('debug', `上下文压缩请求开始：模型=${model}，轮次=${turns.length}，字符数=${messages.reduce((sum, item) => sum + item.content.length, 0)}`);
             const startedAt = Date.now();
-            const response = await fetch(`${getBaseURL()}/chat/completions`, {
+            const promptCacheKey = String(localStorage.getItem('prompt_cache_key') || '').trim();
+            const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
+            const requestBody = buildRequestPayloadForEndpoint({
+                model,
+                temperature: 0.2,
+                messages: [{ role: 'system', content: prompt }, ...messages],
+                stream: false,
+                ...(promptCacheKey ? {
+                    prompt_cache_key: promptCacheKey
+                } : {}),
+                ...(cacheControl ? {
+                    cache_control: cacheControl
+                } : {})
+            }, getRequestEndpoint());
+            lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
+            const response = await fetch(`${getBaseURL()}${getRequestEndpoint()}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${getAPIKey()}`
                 },
-                body: JSON.stringify({
-                    model,
-                    temperature: 0.2,
-                    messages: [{ role: 'system', content: prompt }, ...messages],
-                    stream: false
-                })
+                body: JSON.stringify(requestBody)
             });
             if (!response.ok) {
                 const detail = await response.text().catch(() => '');
@@ -3684,107 +3651,379 @@
             }
         }
 
-        // 构建 API 消息数组（异步），自动附加最后一张图片到最后一个用户消息
-        async function buildAPIMessagesWithTemp(chatMessages) {
-            const apiMessages = [];
-            for (let i = 0; i < chatMessages.length; i++) {
-                const msg = chatMessages[i];
-                const tempAtts = msg._tempAttachments;
-                const existingAtts = msg.attachments;
-                const attsToUse = tempAtts || existingAtts || [];
-                const isLastUser = (i === chatMessages.length - 1 && msg.role === 'user');
-                if (msg.role === 'user' && attsToUse.length > 0) {
-                    const contentArray = [];
-                    if (msg.content && msg.content.trim()) contentArray.push({
-                        type: 'text',
-                        text: msg.content
-                    });
-                    for (const att of attsToUse) {
-                        if (att.isImage && att.fullDataUrl) {
-                            let url = att.fullDataUrl;
-                            if (isImageRef(url)) {
-                                const dataUrl = await ImageStore.getImage(url.slice(4));
-                                if (dataUrl) url = dataUrl;
-                            }
-                            contentArray.push({
-                                type: 'image_url',
-                                image_url: {
-                                    url
-                                }
-                            });
-                        } else if ((att.isText) && att.data) {
-                            const existingTextIdx = contentArray.findIndex(c => c.type === 'text');
-                            const fileLabel = `\n\n[文件: ${att.name}]\n${att.data}\n[/文件: ${att.name}]`;
-                            if (existingTextIdx >= 0) contentArray[existingTextIdx].text += fileLabel;
-                            else contentArray.push({
-                                type: 'text',
-                                text: fileLabel
-                            });
+        async function buildSingleApiMessage(msg, chat, isLastUserMessage = false) {
+            const tempAtts = msg._tempAttachments;
+            const existingAtts = msg.attachments;
+            const attsToUse = tempAtts || existingAtts || [];
+            const isLastUser = msg.role === 'user' && isLastUserMessage;
+            if (msg.role === 'user' && attsToUse.length > 0) {
+                const contentArray = [];
+                if (msg.content && msg.content.trim()) contentArray.push({
+                    type: 'text',
+                    text: msg.content
+                });
+                for (const att of attsToUse) {
+                    if (att.isImage && att.fullDataUrl) {
+                        let url = att.fullDataUrl;
+                        if (isImageRef(url)) {
+                            const dataUrl = await ImageStore.getImage(url.slice(4));
+                            if (dataUrl) url = dataUrl;
                         }
-                    }
-                    if (contentArray.length === 1 && contentArray[0].type === 'text' && !isLastUser) {
-                        apiMessages.push({
-                            role: 'user',
-                            content: contentArray[0].text
+                        contentArray.push({
+                            type: 'image_url',
+                            image_url: {
+                                url
+                            }
                         });
-                    } else if (contentArray.length > 0) {
-                        apiMessages.push({
-                            role: 'user',
-                            content: contentArray
-                        });
-                    } else {
-                        apiMessages.push({
-                            role: 'user',
-                            content: msg.content || ''
-                        });
-                    }
-                } else {
-                    apiMessages.push({
-                        role: msg.role,
-                        content: msg.content || ''
-                    });
-                }
-            }
-            // 清除临时附件
-            chatMessages.forEach(m => delete m._tempAttachments);
-            return apiMessages;
-        }
-
-        // 为发送消息时使用的增强版，会在最后一个 user 消息中附加最后一张图片
-        async function buildAPIMessagesWithContext(chat) {
-            const chatMessagesCopy = buildCompactedChatMessages(chat);
-            // 先构建基础数组
-            let apiMessages = await buildAPIMessagesWithTemp(chatMessagesCopy);
-            // 获取最后一张图片
-            const lastImageUrl = await getLastImageInChat(chat);
-            if (lastImageUrl) {
-                // 找到最后一条 user 消息
-                const lastUserMsg = apiMessages[apiMessages.length - 1];
-                if (lastUserMsg && lastUserMsg.role === 'user') {
-                    let content = lastUserMsg.content;
-                    if (typeof content === 'string') {
-                        content = [{
+                    } else if ((att.isText) && att.data) {
+                        const existingTextIdx = contentArray.findIndex(c => c.type === 'text');
+                        const fileLabel = `\n\n[文件: ${att.name}]\n${att.data}\n[/文件: ${att.name}]`;
+                        if (existingTextIdx >= 0) contentArray[existingTextIdx].text += fileLabel;
+                        else contentArray.push({
                             type: 'text',
-                            text: content
-                        }];
+                            text: fileLabel
+                        });
                     }
-                    if (Array.isArray(content)) {
-                        // 检查是否已包含该图片，避免重复
-                        const alreadyHas = content.some(c => c.type === 'image_url' && c.image_url && c.image_url.url ===
-                            lastImageUrl);
+                }
+                if (isLastUser) {
+                    const lastImageUrl = await getLastImageInChat(chat);
+                    if (lastImageUrl) {
+                        const alreadyHas = contentArray.some(c => c.type === 'image_url' && c.image_url && c.image_url.url === lastImageUrl);
                         if (!alreadyHas) {
-                            content.push({
+                            contentArray.push({
                                 type: 'image_url',
                                 image_url: {
                                     url: lastImageUrl
                                 }
                             });
                         }
-                        lastUserMsg.content = content;
                     }
                 }
+                if (contentArray.length === 1 && contentArray[0].type === 'text' && !isLastUser) {
+                    return {
+                        role: 'user',
+                        content: contentArray[0].text
+                    };
+                }
+                if (contentArray.length > 0) {
+                    return {
+                        role: 'user',
+                        content: contentArray
+                    };
+                }
+                return {
+                    role: 'user',
+                    content: msg.content || ''
+                };
             }
+            return {
+                role: msg.role,
+                content: msg.content || ''
+            };
+        }
+
+        async function buildAPIMessagesWithTemp(chatMessages) {
+            const apiMessages = [];
+            for (let i = 0; i < chatMessages.length; i++) {
+                const msg = chatMessages[i];
+                const builtMessage = await buildSingleApiMessage(msg, null, false);
+                apiMessages.push(builtMessage);
+            }
+            chatMessages.forEach(m => delete m._tempAttachments);
             return apiMessages;
+        }
+
+        async function buildAPIMessagesWithContext(chat) {
+            const chatMessagesCopy = buildCompactedChatMessages(chat);
+            if (!chatMessagesCopy.length) return [];
+            const historyMessages = chatMessagesCopy.slice(0, -1);
+            const currentMessage = chatMessagesCopy[chatMessagesCopy.length - 1];
+            const prefixMessages = await buildAPIMessagesWithTemp(historyMessages);
+            const currentApiMessage = currentMessage ? await buildSingleApiMessage(currentMessage, chat, true) : null;
+            return currentApiMessage ? [...prefixMessages, currentApiMessage] : prefixMessages;
+        }
+
+        function stableSerializeForPromptDebug(value) {
+            if (value === null || value === undefined) return 'null';
+            if (typeof value === 'string') return value;
+            if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+            if (Array.isArray(value)) {
+                return `[${value.map(item => stableSerializeForPromptDebug(item)).join(',')}]`;
+            }
+            if (typeof value === 'object') {
+                const keys = Object.keys(value).sort();
+                return `{${keys.map(key => `${key}:${stableSerializeForPromptDebug(value[key])}`).join(',')}}`;
+            }
+            return String(value);
+        }
+
+        function hashStringForPromptDebug(value) {
+            const text = String(value ?? '');
+            let hash = 2166136261;
+            for (let index = 0; index < text.length; index += 1) {
+                hash ^= text.charCodeAt(index);
+                hash = Math.imul(hash, 16777619);
+            }
+            return (hash >>> 0).toString(16);
+        }
+
+        function getRequestEndpoint() {
+            const stored = String(localStorage.getItem('request_endpoint') || '').trim();
+            return stored === '/chat/completions' ? '/chat/completions' : '/responses';
+        }
+
+        function extractResponsesTextContent(contentValue) {
+            if (typeof contentValue === 'string') return contentValue;
+            if (Array.isArray(contentValue)) {
+                return contentValue
+                    .map(part => {
+                        if (typeof part?.text === 'string') return part.text;
+                        if (part?.type === 'text' && typeof part?.text === 'string') return part.text;
+                        return '';
+                    })
+                    .filter(Boolean)
+                    .join('\n');
+            }
+            return String(contentValue || '');
+        }
+
+        function buildResponsesInputFromMessages(messages) {
+            const filteredMessages = (Array.isArray(messages) ? messages : []).filter(message => message?.role !== 'system');
+            const hasImageContent = filteredMessages.some(message => {
+                if (Array.isArray(message?.content)) {
+                    return message.content.some(part => part?.type === 'image_url' || part?.type === 'input_image');
+                }
+                return false;
+            });
+
+            if (!hasImageContent) {
+                return filteredMessages
+                    .map(message => {
+                        const text = extractResponsesTextContent(message?.content).trim();
+                        if (!text) return '';
+                        const label = message?.role === 'assistant' ? 'assistant' : 'user';
+                        return `${label}: ${text}`;
+                    })
+                    .filter(Boolean)
+                    .join('\n\n');
+            }
+
+            return filteredMessages.map(message => {
+                const content = (() => {
+                    if (typeof message?.content === 'string') return [{ type: 'input_text', text: message.content }];
+                    if (Array.isArray(message?.content)) {
+                        return message.content.map(part => {
+                            if (part?.type === 'image_url') {
+                                const imageUrl = typeof part.image_url === 'string'
+                                    ? part.image_url
+                                    : (part.image_url?.url || '');
+                                return {
+                                    type: 'input_image',
+                                    image_url: imageUrl
+                                };
+                            }
+                            if (part?.type === 'input_image' || part?.type === 'input_file') return part;
+                            if (part?.type === 'text' && typeof part?.text === 'string') {
+                                return {
+                                    type: 'input_text',
+                                    text: part.text
+                                };
+                            }
+                            return {
+                                type: 'input_text',
+                                text: part?.text || ''
+                            };
+                        });
+                    }
+                    return [{ type: 'input_text', text: String(message?.content || '') }];
+                })();
+                return {
+                    role: message?.role === 'assistant' ? 'assistant' : 'user',
+                    content
+                };
+            });
+        }
+
+        function buildRequestPayloadForEndpoint(basePayload, endpoint) {
+            if (endpoint !== '/responses') return basePayload;
+            const messages = Array.isArray(basePayload?.messages) ? basePayload.messages : [];
+            const systemMessage = messages.find(message => message?.role === 'system');
+            const { messages: _, max_tokens, prompt_cache_key, cache_control, ...rest } = basePayload;
+            const payload = {
+                ...rest,
+                input: buildResponsesInputFromMessages(messages),
+                ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {})
+            };
+            if (systemMessage) {
+                const systemText = extractResponsesTextContent(systemMessage.content);
+                if (systemText.trim()) payload.instructions = systemText;
+            }
+            return payload;
+        }
+
+        function extractStreamingTextDelta(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            if (typeof payload?.delta === 'string') return payload.delta;
+            if (payload?.delta && typeof payload.delta === 'object') {
+                if (typeof payload.delta?.text === 'string') return payload.delta.text;
+                if (typeof payload.delta?.content === 'string') return payload.delta.content;
+                if (typeof payload.delta?.output_text === 'string') return payload.delta.output_text;
+            }
+            if (typeof payload?.text === 'string') return payload.text;
+            if (typeof payload?.output_text === 'string') return payload.output_text;
+            if (payload?.type === 'response.output_text.delta' && typeof payload?.delta === 'string') return payload.delta;
+            if (payload?.type === 'response.output_text.delta' && payload?.delta && typeof payload.delta === 'object' && typeof payload.delta?.text === 'string') return payload.delta.text;
+            if (payload?.type === 'response.output_text.done' && typeof payload?.text === 'string') return payload.text;
+            if (payload?.type === 'response.output_text.done' && typeof payload?.output_text === 'string') return payload.output_text;
+            if (payload?.type === 'response.completed' && payload?.response?.output && Array.isArray(payload.response.output)) {
+                let collected = '';
+                payload.response.output.forEach(item => {
+                    if (!item || typeof item !== 'object') return;
+                    if (Array.isArray(item.content)) {
+                        item.content.forEach(part => {
+                            if (part && typeof part.text === 'string') collected += part.text;
+                            if (part && typeof part.output_text === 'string') collected += part.output_text;
+                        });
+                    }
+                });
+                return collected;
+            }
+            return '';
+        }
+
+        function extractStreamingReasoningDelta(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            if (typeof payload?.delta === 'string') return payload.delta;
+            if (payload?.delta && typeof payload.delta === 'object') {
+                if (typeof payload.delta?.reasoning_content === 'string') return payload.delta.reasoning_content;
+                if (typeof payload.delta?.reasoning === 'string') return payload.delta.reasoning;
+                if (typeof payload.delta?.text === 'string') return payload.delta.text;
+            }
+            if (typeof payload?.reasoning === 'string') return payload.reasoning;
+            if (typeof payload?.reasoning_content === 'string') return payload.reasoning_content;
+            if (payload?.type === 'response.reasoning_text.delta' && typeof payload?.delta === 'string') return payload.delta;
+            if (payload?.type === 'response.reasoning_text.delta' && payload?.delta && typeof payload.delta === 'object') {
+                if (typeof payload.delta?.reasoning_content === 'string') return payload.delta.reasoning_content;
+                if (typeof payload.delta?.reasoning === 'string') return payload.delta.reasoning;
+            }
+            if (payload?.type === 'response.completed' && typeof payload?.response?.reasoning === 'string') return payload.response.reasoning;
+            return '';
+        }
+
+        function buildPromptCacheDebugInfo(requestBody) {
+            const messages = Array.isArray(requestBody?.messages) ? requestBody.messages : (Array.isArray(requestBody?.input) ? requestBody.input.map(item => ({
+                role: item?.role || '',
+                content: item?.content
+            })) : []);
+            const tools = Array.isArray(requestBody?.tools) ? requestBody.tools : [];
+            const systemMessage = messages.find(message => message && message.role === 'system') || null;
+            const systemHash = systemMessage ? hashStringForPromptDebug(stableSerializeForPromptDebug(systemMessage)) : '';
+            const toolsHash = hashStringForPromptDebug(stableSerializeForPromptDebug(tools));
+            const messageHashes = messages.map((message, index) => ({
+                index,
+                role: message?.role || '',
+                hash: hashStringForPromptDebug(stableSerializeForPromptDebug(message))
+            }));
+            const promptHash = hashStringForPromptDebug(stableSerializeForPromptDebug({
+                model: requestBody?.model,
+                messages,
+                tools,
+                temperature: requestBody?.temperature,
+                stream: requestBody?.stream,
+                max_tokens: requestBody?.max_tokens,
+                prompt_cache_key: requestBody?.prompt_cache_key,
+                cache_control: requestBody?.cache_control
+            }));
+            return {
+                systemHash,
+                toolsHash,
+                promptHash,
+                messageHashes,
+                firstNHashes: messageHashes.slice(0, 5).map(item => `message[${item.index}](${item.role}): ${item.hash}`).join('\n')
+            };
+        }
+
+        function comparePromptCachePrefixes(previousDebug, currentDebug) {
+            if (!previousDebug || !currentDebug) return null;
+            const maxLen = Math.max(previousDebug.messageHashes.length, currentDebug.messageHashes.length);
+            for (let index = 0; index < maxLen; index += 1) {
+                const prevItem = previousDebug.messageHashes[index];
+                const currItem = currentDebug.messageHashes[index];
+                if (!prevItem || !currItem) {
+                    return {
+                        index,
+                        reason: prevItem ? 'current-shorter' : 'previous-shorter',
+                        prevItem,
+                        currItem
+                    };
+                }
+                if (prevItem.hash !== currItem.hash || prevItem.role !== currItem.role) {
+                    return {
+                        index,
+                        reason: 'message-diff',
+                        prevItem,
+                        currItem
+                    };
+                }
+            }
+            if (previousDebug.systemHash !== currentDebug.systemHash) {
+                return {
+                    index: 'system',
+                    reason: 'system-diff',
+                    prevItem: { hash: previousDebug.systemHash },
+                    currItem: { hash: currentDebug.systemHash }
+                };
+            }
+            if (previousDebug.toolsHash !== currentDebug.toolsHash) {
+                return {
+                    index: 'tools',
+                    reason: 'tools-diff',
+                    prevItem: { hash: previousDebug.toolsHash },
+                    currItem: { hash: currentDebug.toolsHash }
+                };
+            }
+            if (previousDebug.promptHash !== currentDebug.promptHash) {
+                return {
+                    index: 'full-prompt',
+                    reason: 'prompt-diff',
+                    prevItem: { hash: previousDebug.promptHash },
+                    currItem: { hash: currentDebug.promptHash }
+                };
+            }
+            return {
+                index: -1,
+                reason: 'same-prefix'
+            };
+        }
+
+        function logPromptCacheDebug(requestBody, previousDebug) {
+            if (!developerModeEnabled && localStorage.getItem('prompt_cache_debug') !== 'true') return previousDebug;
+            const currentDebug = buildPromptCacheDebugInfo(requestBody);
+            const diff = comparePromptCachePrefixes(previousDebug, currentDebug);
+            const lines = [
+                'Prompt Cache Debug',
+                'Previous prefix:',
+                `system hash: ${previousDebug ? previousDebug.systemHash : 'n/a'}`,
+                `tools hash: ${previousDebug ? previousDebug.toolsHash : 'n/a'}`,
+                previousDebug ? previousDebug.firstNHashes : 'message hashes: n/a',
+                '',
+                'Current prefix:',
+                `system hash: ${currentDebug.systemHash}`,
+                `tools hash: ${currentDebug.toolsHash}`,
+                currentDebug.firstNHashes,
+                `full prompt hash: ${currentDebug.promptHash}`
+            ];
+            if (diff) {
+                if (diff.index === -1) {
+                    lines.push('first difference: none (identical prefix)');
+                } else {
+                    lines.push(`first difference: ${diff.reason} @ ${diff.index}`);
+                    if (diff.prevItem) lines.push(`previous: ${diff.prevItem.hash || JSON.stringify(diff.prevItem)}`);
+                    if (diff.currItem) lines.push(`current: ${diff.currItem.hash || JSON.stringify(diff.currItem)}`);
+                }
+            }
+            appendLog('trace', lines.join('\n'));
+            return currentDebug;
         }
 
         let chats = JSON.parse(localStorage.getItem('ai_chats') || '[]');
@@ -3802,6 +4041,7 @@
         let currentAttachments = [];
         let maxTokensLimit = parseInt(localStorage.getItem('max_tokens_limit') || '0') || 0;
         let autoSummaryInterval = parseInt(localStorage.getItem('auto_summary_interval') || '10', 10);
+        let lastPromptCacheDebug = null;
         if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 10;
         if (localStorage.getItem('auto_summary_interval') === null) localStorage.setItem('auto_summary_interval', '10');
         if (localStorage.getItem('context_compaction_model') === null) localStorage.setItem('context_compaction_model', DEFAULT_CONTEXT_COMPACTION_MODEL);
@@ -3903,6 +4143,14 @@
         function populateModelListEditor() {
             const input = document.getElementById('model-list-input');
             if (input) input.value = (textModelList.length ? textModelList : loadModelList()).join('\n');
+        }
+
+        function populateRequestEndpointSettings() {
+            const endpoint = String(localStorage.getItem('request_endpoint') || '').trim();
+            const selectedValue = endpoint === '/chat/completions' ? '/chat/completions' : '/responses';
+            document.querySelectorAll('input[name="request-endpoint"]').forEach(radio => {
+                radio.checked = radio.value === selectedValue;
+            });
         }
 
         function resetModelListEditor() {
@@ -4165,19 +4413,7 @@
             });
         }
         async function buildSystemMessageWithMemories() {
-            let baseSys = systemPrompt || "";
-            if (!isCloudEnabled()) return baseSys;
-            try {
-                const memories = await fetchMemoriesFromCloud();
-                if (memories && memories.length > 0) {
-                    const memorySection = "\n\n#关于对话者的常用记忆\n" + memories.map((m, idx) => `${idx + 1}. ${m}`).join("\n") +
-                        "\n\n请参考以上信息，并结合对话者的背景进行回复。";
-                    return baseSys + memorySection;
-                }
-            } catch (e) {
-                console.warn("记忆合并失败", e);
-            }
-            return baseSys;
+            return systemPrompt || "";
         }
 
         function compressImage(base64Data, maxWidth = 800, quality = 0.7) {
@@ -4207,9 +4443,7 @@
         function estimateTotalTokens() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
             const messages = chat ? chat.messages.slice() : [];
-            const memText = (cachedMemories && cachedMemories.length > 0) ? "\n\n#关于对话者的常用记忆\n" + cachedMemories.map((m,
-                idx) => `${idx + 1}. ${m}`).join("\n") + "\n\n请参考以上信息，并结合对话者的背景进行回复。" : "";
-            const systemContent = (systemPrompt || "") + memText;
+            const systemContent = (systemPrompt || "");
             const inputText = document.getElementById('user-input')?.value || '';
             let currentAttachmentText = '';
             for (const att of currentAttachments) {
@@ -5082,6 +5316,8 @@
             }
             if (sectionId === 'api') {
                 populateModelListEditor();
+                populateRequestEndpointSettings();
+                populateRequestEndpointSettings();
             }
             if (sectionId === 'voice') {
                 populateVoiceModel();
@@ -5167,6 +5403,19 @@
             if (chat) updateCanvasPanelForChat(chat);
         }
 
+        function applyPresetApiKey(value) {
+            const apiKeyInput = document.getElementById('api-key-input');
+            if (!apiKeyInput) return;
+            apiKeyInput.value = value;
+            apiKeyInput.type = 'text';
+            if (value) localStorage.setItem('api_key', value);
+            else localStorage.removeItem('api_key');
+            clearTimeout(apiKeyInput._presetRevealTimer);
+            apiKeyInput._presetRevealTimer = setTimeout(() => {
+                apiKeyInput.type = 'password';
+            }, 3000);
+        }
+
         function saveSettings() {
             systemPrompt = document.getElementById('sys-prompt').value;
             localStorage.setItem('sys_prompt', systemPrompt);
@@ -5203,22 +5452,8 @@
                 : (savedModelList.includes(DEFAULT_CONTEXT_COMPACTION_MODEL) ? DEFAULT_CONTEXT_COMPACTION_MODEL : savedModelList[0]);
             if (contextModelSelect && savedContextModel) contextModelSelect.value = savedContextModel;
             if (savedContextModel) localStorage.setItem('context_compaction_model', savedContextModel);
-            const lcAppId = document.getElementById('lc-app-id-input').value.trim();
-            if (lcAppId) localStorage.setItem('lc_app_id', lcAppId);
-            else localStorage.removeItem('lc_app_id');
-            const lcApiKey = document.getElementById('lc-api-key-input').value.trim();
-            if (lcApiKey) localStorage.setItem('lc_api_key', lcApiKey);
-            else localStorage.removeItem('lc_api_key');
-            const lcMasterKey = document.getElementById('lc-master-key-input').value.trim();
-            if (lcMasterKey) localStorage.setItem('lc_master_key', lcMasterKey);
-            else localStorage.removeItem('lc_master_key');
-            const lcBaseUrl = document.getElementById('lc-base-url-input').value.trim();
-            if (lcBaseUrl) localStorage.setItem('lc_base_url', lcBaseUrl);
-            else localStorage.removeItem('lc_base_url');
-            const cloudToggle = document.getElementById('cloud-enabled-toggle');
-            const cloudEnabled = cloudToggle ? cloudToggle.checked : true;
-            localStorage.setItem('cloud_enabled', cloudEnabled ? 'true' : 'false');
-            setCloudEnabledUI(cloudEnabled);
+            const selectedEndpoint = document.querySelector('input[name="request-endpoint"]:checked')?.value || '/responses';
+            localStorage.setItem('request_endpoint', selectedEndpoint);
             const voiceSelect = document.getElementById('voice-model-select');
             if (voiceSelect) {
                 voiceModel = voiceSelect.value;
@@ -5340,6 +5575,7 @@
                 document.getElementById('send-btn').classList.remove('hidden');
                 document.getElementById('stop-btn').classList.add('hidden');
                 setCanvasEditable(true);
+                showVoiceNotification('已停止', false, 1800, false);
             }
         }
 
@@ -5711,172 +5947,6 @@
             await performAutomaticCompaction(chat);
             await requestAI(actualMessage, model, chat, attachmentsToSend);
         }
-        async function requestAI(userText, model, chat, sendAttachments = []) {
-            abortController = new AbortController();
-            isGenerating = true;
-            document.getElementById('send-btn').classList.add('hidden');
-            document.getElementById('stop-btn').classList.remove('hidden');
-            setCanvasEditable(false);
-            const aiRow = appendMessageToUI('assistant', '', model, true);
-            const thinkingDiv = aiRow.querySelector('.thinking-text');
-            const contentArea = aiRow.querySelector('.ai-content-area');
-            let rawFullContent = "",
-                thinkingContent = "";
-            let receivedAny = false;
-            processedReplaceCount = 0;
-            sessionReplaceBlocks = [];
-            const systemWithMem = await buildSystemMessageWithMemories();
-            try {
-                const chatMessagesCopy = chat.messages.slice();
-                if (sendAttachments.length > 0 && chatMessagesCopy.length > 0) {
-                    const lastMsg = chatMessagesCopy[chatMessagesCopy.length - 1];
-                    if (lastMsg.role === 'user') lastMsg._tempAttachments = sendAttachments;
-                }
-                const apiMessages = await buildAPIMessagesWithContext(chat);
-                if (chat.canvasEnabled && apiMessages.length > 0) {
-                    const canvasContext = buildCanvasContextString(chat);
-                    if (canvasContext) {
-                        const lastApiMsg = apiMessages[apiMessages.length - 1];
-                        if (lastApiMsg.role === 'user') {
-                            if (typeof lastApiMsg.content === 'string') lastApiMsg.content += canvasContext;
-                            else if (Array.isArray(lastApiMsg.content)) {
-                                const textPart = lastApiMsg.content.find(c => c.type === 'text');
-                                if (textPart) textPart.text += canvasContext;
-                                else lastApiMsg.content.push({
-                                    type: 'text',
-                                    text: canvasContext
-                                });
-                            }
-                        }
-                    }
-                }
-                const response = await fetch(`${getBaseURL()}/chat/completions`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${getAPIKey()}`
-                    },
-                    body: JSON.stringify({
-                        model,
-                        temperature: currentTemp,
-                        messages: [{
-                            role: 'system',
-                            content: systemWithMem
-                        }, ...apiMessages],
-                        stream: true,
-                        ...(maxTokensLimit > 0 ? {
-                            max_tokens: maxTokensLimit
-                        } : {})
-                    }),
-                    signal: abortController.signal
-                });
-                if (!response.ok) throw new Error(`API error: ${response.status}`);
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                while (true) {
-                    const {
-                        done,
-                        value
-                    } = await reader.read();
-                    if (done) break;
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
-                            if (data === '[DONE]') continue;
-                            try {
-                                const json = JSON.parse(data);
-                                const delta = json.choices[0].delta || {};
-                                if (delta.reasoning_content) {
-                                    thinkingContent += delta.reasoning_content;
-                                    if (thinkingDiv) {
-                                        thinkingDiv.style.display = 'block';
-                                        thinkingDiv.innerText = thinkingContent;
-                                    }
-                                }
-                                if (delta.content) {
-                                    receivedAny = true;
-                                    rawFullContent += delta.content;
-                                    const displayContent = replaceBlocksToSummary(rawFullContent);
-                                    const preprocessedContent = extractAndPreserveMath(displayContent);
-                                    let html = marked.parse(preprocessedContent);
-                                    html = restoreAndRenderMath(html);
-                                    contentArea.innerHTML = html;
-                                    renderMathFormulas(contentArea);
-                                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                                }
-                            } catch (e) { }
-                        }
-                    }
-                }
-                if (!receivedAny && !rawFullContent.trim()) rawFullContent = '';
-                const displayContent = replaceBlocksToSummary(rawFullContent);
-                const preprocessedContent = extractAndPreserveMath(displayContent);
-                let html = marked.parse(preprocessedContent);
-                html = restoreAndRenderMath(html);
-                contentArea.innerHTML = html;
-                renderMathFormulas(contentArea);
-                if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                contentArea.querySelectorAll('pre code').forEach(el => {
-                    hljs.highlightElement(el);
-                    if (!el.parentElement.querySelector('.code-copy-btn') && !el.closest(
-                        '.canvas-replace-notice')) {
-                        const copyBtn = document.createElement('button');
-                        copyBtn.className = 'code-copy-btn';
-                        copyBtn.innerText = '复制代码';
-                        copyBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            copyToClipboard(el.innerText, copyBtn);
-                        };
-                        el.parentElement.appendChild(copyBtn);
-                    }
-                });
-                chat.messages.push({
-                    role: 'assistant',
-                    content: displayContent,
-                    model,
-                    reasoning: thinkingContent
-                });
-                chat.updatedAt = Date.now();
-                localStorage.setItem('ai_chats', JSON.stringify(chats));
-                renderChatHistory();
-                if (isCloudEnabled()) await syncData();
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`;
-                } else {
-                    if (!rawFullContent.trim() && !receivedAny) rawFullContent = '';
-                    const displayContent = replaceBlocksToSummary(rawFullContent);
-                    const preprocessedContent = extractAndPreserveMath(displayContent || '');
-                    let html = marked.parse(preprocessedContent);
-                    html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = html;
-                    renderMathFormulas(contentArea);
-                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                    chat.messages.push({
-                        role: 'assistant',
-                        content: displayContent,
-                        model,
-                        reasoning: thinkingContent
-                    });
-                    chat.updatedAt = Date.now();
-                    localStorage.setItem('ai_chats', JSON.stringify(chats));
-                    renderChatHistory();
-                    if (isCloudEnabled()) await syncData();
-                }
-            } finally {
-                abortController = null;
-                isGenerating = false;
-                document.getElementById('send-btn').classList.remove('hidden');
-                document.getElementById('stop-btn').classList.add('hidden');
-                setCanvasEditable(true);
-                lucide.createIcons();
-                document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper')
-                    .scrollHeight;
-            }
-        }
-
         function onCodeMirrorChange() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
             if (chat && chat.canvasEnabled && cmEditor) {
@@ -6777,9 +6847,12 @@
                         }
                     }
                 }
+                const endpoint = getRequestEndpoint();
+                const promptCacheKey = String(localStorage.getItem('prompt_cache_key') || '').trim();
+                const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
                 appendLog('debug', '开始请求 AI 接口');
-                appendLog('trace', `AI 请求 URL: ${getBaseURL()}/chat/completions`);
-                const requestBody = {
+                appendLog('trace', `AI 请求 URL: ${getBaseURL()}${endpoint}`);
+                const requestBody = buildRequestPayloadForEndpoint({
                     model,
                     temperature: currentTemp,
                     messages: [{
@@ -6789,10 +6862,17 @@
                     stream: true,
                     ...(maxTokensLimit > 0 ? {
                         max_tokens: maxTokensLimit
+                    } : {}),
+                    ...(promptCacheKey && endpoint !== '/responses' ? {
+                        prompt_cache_key: promptCacheKey
+                    } : {}),
+                    ...(cacheControl && endpoint !== '/responses' ? {
+                        cache_control: cacheControl
                     } : {})
-                };
+                }, endpoint);
+                lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
                 appendLog('trace', `请求体: ${JSON.stringify(requestBody)}`);
-                const response = await fetch(`${getBaseURL()}/chat/completions`, {
+                const response = await fetch(`${getBaseURL()}${endpoint}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -6802,14 +6882,23 @@
                     signal: abortController.signal
                 });
                 if (!response.ok) {
-                    appendLog('error', `AI 接口响应错误: ${response.status} ${response.statusText || ''}`);
-                    throw new Error(`API error: ${response.status}`);
+                    const errorText = await response.text().catch(() => '');
+                    let detailMessage = '';
+                    try {
+                        const parsed = JSON.parse(errorText);
+                        detailMessage = parsed?.error?.message || JSON.stringify(parsed);
+                    } catch (e) {
+                        detailMessage = errorText;
+                    }
+                    appendLog('error', `AI 接口响应错误: ${response.status} ${response.statusText || ''}${detailMessage ? ` - ${detailMessage}` : ''}`);
+                    throw new Error(`API error: ${response.status}${detailMessage ? ` - ${detailMessage}` : ''}`);
                 }
                 appendLog('trace', `AI 接口响应状态: ${response.status} ${response.statusText || ''}`);
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 const debugStream = developerModeEnabled && (logLevel === 'debug' || logLevel === 'trace');
                 const traceStream = developerModeEnabled && logLevel === 'trace';
+                let sseBuffer = '';
                 if (debugStream) {
                     appendLog('debug', '流式输出接收开始');
                     showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
@@ -6821,43 +6910,103 @@
                     } = await reader.read();
                     if (done) break;
                     streamBytesReceived += value ? value.length : 0;
-                    const chunk = decoder.decode(value);
+                    sseBuffer += decoder.decode(value, { stream: true });
                     if (debugStream) {
                         appendLog('debug', `收到流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
                         showVoiceNotification(`正在接收流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
                     }
                     if (traceStream) {
-                        appendLog('trace', `原始流内容: ${chunk.replace(/\n/g, '\\n')}`);
+                        appendLog('trace', `原始流内容: ${sseBuffer.replace(/\n/g, '\\n')}`);
                     }
-                    const lines = chunk.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
-                            if (data === '[DONE]') continue;
-                            try {
-                                const json = JSON.parse(data);
-                                const delta = json.choices[0].delta || {};
-                                if (delta.reasoning_content) {
-                                    thinkingContent += delta.reasoning_content;
-                                    if (thinkingDiv) {
-                                        thinkingDiv.style.display = 'block';
-                                        thinkingDiv.innerText = thinkingContent;
-                                    }
+                    const parts = sseBuffer.split(/\n\n/);
+                    sseBuffer = parts.pop() || '';
+                    for (const part of parts) {
+                        const dataLines = part.split('\n').filter(line => line.startsWith('data: ')).map(line => line.slice(6).trim());
+                        if (!dataLines.length) continue;
+                        const data = dataLines.join('\n');
+                        if (data === '[DONE]') continue;
+                        try {
+                            const json = JSON.parse(data);
+                            if (json?.type === 'response.error') {
+                                throw new Error(json?.error?.message || 'Responses API error');
+                            }
+                            const reasoningDelta = extractStreamingReasoningDelta(json);
+                            if (reasoningDelta) {
+                                thinkingContent += reasoningDelta;
+                                if (thinkingDiv) {
+                                    thinkingDiv.style.display = 'block';
+                                    thinkingDiv.innerText = thinkingContent;
                                 }
-                                if (delta.content) {
-                                    receivedAny = true;
-                                    rawFullContent += delta.content;
-                                    const displayContent = replaceBlocksToSummary(rawFullContent);
-                                    const preprocessedContent = extractAndPreserveMath(displayContent);
-                                    let html = marked.parse(preprocessedContent);
+                            }
+                            const contentDelta = extractStreamingTextDelta(json);
+                            if (contentDelta) {
+                                receivedAny = true;
+                                rawFullContent += contentDelta;
+                                let displayContent = replaceBlocksToSummary(rawFullContent);
+                                let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
+                                let preprocessedContent = extractAndPreserveMath(contentForRender);
+                                let html = marked.parse(preprocessedContent);
+                                html = restoreAndRenderMath(html);
+                                contentArea.innerHTML = html;
+                                if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                                    contentForRender = rawFullContent;
+                                    preprocessedContent = extractAndPreserveMath(contentForRender);
+                                    html = marked.parse(preprocessedContent);
                                     html = restoreAndRenderMath(html);
                                     contentArea.innerHTML = html;
-                                    renderMathFormulas(contentArea);
-                                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
                                 }
-                            } catch (e) {
-                                appendLog('debug', `解析流数据失败: ${e.message}`);
+                                renderMathFormulas(contentArea);
+                                if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
                             }
+                        } catch (e) {
+                            appendLog('debug', `解析流数据失败: ${e.message}`);
+                            throw e;
+                        }
+                    }
+                }
+                const finalBuffer = decoder.decode();
+                if (finalBuffer) {
+                    sseBuffer += finalBuffer;
+                }
+                if (sseBuffer.trim()) {
+                    const dataLines = sseBuffer.split('\n').filter(line => line.startsWith('data: ')).map(line => line.slice(6).trim());
+                    if (dataLines.length) {
+                        try {
+                            const json = JSON.parse(dataLines.join('\n'));
+                            if (json?.type === 'response.error') {
+                                throw new Error(json?.error?.message || 'Responses API error');
+                            }
+                            const reasoningDelta = extractStreamingReasoningDelta(json);
+                            if (reasoningDelta) {
+                                thinkingContent += reasoningDelta;
+                                if (thinkingDiv) {
+                                    thinkingDiv.style.display = 'block';
+                                    thinkingDiv.innerText = thinkingContent;
+                                }
+                            }
+                            const contentDelta = extractStreamingTextDelta(json);
+                            if (contentDelta) {
+                                receivedAny = true;
+                                rawFullContent += contentDelta;
+                                let displayContent = replaceBlocksToSummary(rawFullContent);
+                                let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
+                                let preprocessedContent = extractAndPreserveMath(contentForRender);
+                                let html = marked.parse(preprocessedContent);
+                                html = restoreAndRenderMath(html);
+                                contentArea.innerHTML = html;
+                                if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                                    contentForRender = rawFullContent;
+                                    preprocessedContent = extractAndPreserveMath(contentForRender);
+                                    html = marked.parse(preprocessedContent);
+                                    html = restoreAndRenderMath(html);
+                                    contentArea.innerHTML = html;
+                                }
+                                renderMathFormulas(contentArea);
+                                if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                            }
+                        } catch (e) {
+                            appendLog('debug', `解析尾部流数据失败: ${e.message}`);
+                            throw e;
                         }
                     }
                 }
@@ -6867,11 +7016,19 @@
                     showVoiceNotification(`流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
                 }
                 if (!receivedAny && !rawFullContent.trim()) rawFullContent = '';
-                const displayContent = replaceBlocksToSummary(rawFullContent);
-                const preprocessedContent = extractAndPreserveMath(displayContent);
+                let displayContent = replaceBlocksToSummary(rawFullContent);
+                let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
+                let preprocessedContent = extractAndPreserveMath(contentForRender);
                 let html = marked.parse(preprocessedContent);
                 html = restoreAndRenderMath(html);
                 contentArea.innerHTML = html;
+                if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                    contentForRender = rawFullContent;
+                    preprocessedContent = extractAndPreserveMath(contentForRender);
+                    html = marked.parse(preprocessedContent);
+                    html = restoreAndRenderMath(html);
+                    contentArea.innerHTML = html;
+                }
                 renderMathFormulas(contentArea);
                 if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
                 contentArea.querySelectorAll('pre code').forEach(el => {
@@ -6903,12 +7060,21 @@
                     contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`;
                 } else {
                     appendLog('debug', `AI 请求被中止`);
+                    showVoiceNotification('已停止', false, 1800, false);
                     if (!rawFullContent.trim() && !receivedAny) rawFullContent = '';
-                    const displayContent = replaceBlocksToSummary(rawFullContent);
-                    const preprocessedContent = extractAndPreserveMath(displayContent || '');
+                    let displayContent = replaceBlocksToSummary(rawFullContent);
+                    let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
+                    let preprocessedContent = extractAndPreserveMath(contentForRender || '');
                     let html = marked.parse(preprocessedContent);
                     html = restoreAndRenderMath(html);
                     contentArea.innerHTML = html;
+                    if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                        contentForRender = rawFullContent;
+                        preprocessedContent = extractAndPreserveMath(contentForRender || '');
+                        html = marked.parse(preprocessedContent);
+                        html = restoreAndRenderMath(html);
+                        contentArea.innerHTML = html;
+                    }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
                     chat.messages.push({
