@@ -9,7 +9,7 @@
 基于前端页面与 Electron 的 AI 对话桌面应用，覆盖文字聊天、Canvas 编码、语音聊天、附件解析、图像生成与 Windows 本地打包。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V5.6.0-blue)]()
+[![Version](https://img.shields.io/badge/version-V5.7.0-blue)]()
 
 </div>
 
@@ -30,6 +30,12 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V5.7.0 Alpha
+
+- 修复对/chat/completions接口的回复内容渲染逻辑问题。
+- 修复对/responses接口回复内容分类判定不精确的问题。
+- 用户选择/responses端口若遇到501错误将自动回退/chat/completions。
 
 ### V5.6.0 Alpha 2
 
@@ -55,12 +61,6 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 新增顶部“灵动岛”式回放条，支持暂停、停止、拖动整段回复进度和自动切换播放。
 - 偏好设置“其他”新增“清除语音记录”，会通过自定义警告弹窗删除所有非预制语音记录。
 
-### V5.3.0 Alpha
-
-- 语音聊天字幕字号和行距微调。
-- AI 字幕支持按句自动跟随滚动，用户手动滚动 5 秒后恢复自动模式。
-- AI 字幕改为每句完成后淡入，人类字幕取消淡入。
-- 偏好设置和压缩上下文确认弹窗新增淡入 / 淡出过渡。
 
 完整记录见 [UPDATE.md](UPDATE.md)。
 
@@ -126,8 +126,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI5.6.0-Portable.exe`
-- Setup：`AIUI5.6.0-Setup.exe`
+- Portable：`AIUI5.7.0-Portable.exe`
+- Setup：`AIUI5.7.0-Setup.exe`
 
 构建命令：
 
@@ -152,7 +152,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V5.6.0`
+- 当前版本：`V5.7.0`
 - 当前构建标识：`build20260803`
 
 ---

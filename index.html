@@ -2746,7 +2746,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V5.6.0 Alpha 2</span>
+                            <span id="app-version">V5.7.0 Alpha</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -3473,7 +3473,7 @@
             const startedAt = Date.now();
             const promptCacheKey = String(localStorage.getItem('prompt_cache_key') || '').trim();
             const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
-            const requestBody = buildRequestPayloadForEndpoint({
+            const basePayload = {
                 model,
                 temperature: 0.2,
                 messages: [{ role: 'system', content: prompt }, ...messages],
@@ -3484,22 +3484,15 @@
                 ...(cacheControl ? {
                     cache_control: cacheControl
                 } : {})
-            }, getRequestEndpoint());
+            };
+            const { response, endpoint, requestBody } = await fetchEndpointWithFallback(basePayload, getRequestEndpoint());
             lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
-            const response = await fetch(`${getBaseURL()}${getRequestEndpoint()}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getAPIKey()}`
-                },
-                body: JSON.stringify(requestBody)
-            });
             if (!response.ok) {
                 const detail = await response.text().catch(() => '');
                 throw new Error(`上下文压缩接口错误 ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`);
             }
             const data = await response.json();
-            const content = String(data?.choices?.[0]?.message?.content || '').trim();
+            const content = String(extractNonStreamingResponseText(data, endpoint) || '').trim();
             if (!content) throw new Error('上下文压缩助手未返回摘要');
             appendLog('debug', `上下文压缩请求完成：模型=${model}，输出字符数=${content.length}，耗时=${Date.now() - startedAt}ms`);
             if (developerModeEnabled) appendLog('trace', `上下文压缩摘要正文：\n${content}`);
@@ -3777,12 +3770,19 @@
             if (Array.isArray(contentValue)) {
                 return contentValue
                     .map(part => {
+                        if (typeof part === 'string') return part;
                         if (typeof part?.text === 'string') return part.text;
+                        if (typeof part?.output_text === 'string') return part.output_text;
                         if (part?.type === 'text' && typeof part?.text === 'string') return part.text;
                         return '';
                     })
                     .filter(Boolean)
                     .join('\n');
+            }
+            if (contentValue && typeof contentValue === 'object') {
+                if (typeof contentValue.text === 'string') return contentValue.text;
+                if (typeof contentValue.output_text === 'string') return contentValue.output_text;
+                if (typeof contentValue.content === 'string') return contentValue.content;
             }
             return String(contentValue || '');
         }
@@ -3861,53 +3861,161 @@
             return payload;
         }
 
-        function extractStreamingTextDelta(payload) {
-            if (!payload || typeof payload !== 'object') return '';
-            if (typeof payload?.delta === 'string') return payload.delta;
-            if (payload?.delta && typeof payload.delta === 'object') {
-                if (typeof payload.delta?.text === 'string') return payload.delta.text;
-                if (typeof payload.delta?.content === 'string') return payload.delta.content;
-                if (typeof payload.delta?.output_text === 'string') return payload.delta.output_text;
+        function extractResponsesOutputText(payload) {
+            const response = payload?.response && typeof payload.response === 'object' ? payload.response : payload;
+            if (!response || typeof response !== 'object') return '';
+            if (typeof response.output_text === 'string') return response.output_text;
+            if (!Array.isArray(response.output)) return '';
+            return response.output
+                .filter(item => item?.type === 'message' || item?.role === 'assistant')
+                .flatMap(item => Array.isArray(item?.content) ? item.content : [])
+                .filter(part => !part?.type || part.type === 'output_text' || part.type === 'text')
+                .map(part => extractResponsesTextContent(part))
+                .filter(Boolean)
+                .join('');
+        }
+
+        function extractResponsesReasoningText(payload) {
+            const response = payload?.response && typeof payload.response === 'object' ? payload.response : payload;
+            if (!response || typeof response !== 'object') return '';
+            if (typeof response.reasoning === 'string') return response.reasoning;
+            if (typeof response.reasoning_content === 'string') return response.reasoning_content;
+            if (response.reasoning && typeof response.reasoning === 'object') {
+                const summary = extractResponsesTextContent(response.reasoning.summary);
+                if (summary) return summary;
             }
-            if (typeof payload?.text === 'string') return payload.text;
-            if (typeof payload?.output_text === 'string') return payload.output_text;
-            if (payload?.type === 'response.output_text.delta' && typeof payload?.delta === 'string') return payload.delta;
-            if (payload?.type === 'response.output_text.delta' && payload?.delta && typeof payload.delta === 'object' && typeof payload.delta?.text === 'string') return payload.delta.text;
-            if (payload?.type === 'response.output_text.done' && typeof payload?.text === 'string') return payload.text;
-            if (payload?.type === 'response.output_text.done' && typeof payload?.output_text === 'string') return payload.output_text;
-            if (payload?.type === 'response.completed' && payload?.response?.output && Array.isArray(payload.response.output)) {
-                let collected = '';
-                payload.response.output.forEach(item => {
-                    if (!item || typeof item !== 'object') return;
-                    if (Array.isArray(item.content)) {
-                        item.content.forEach(part => {
-                            if (part && typeof part.text === 'string') collected += part.text;
-                            if (part && typeof part.output_text === 'string') collected += part.output_text;
-                        });
-                    }
-                });
-                return collected;
+            if (!Array.isArray(response.output)) return '';
+            return response.output
+                .filter(item => item?.type === 'reasoning')
+                .flatMap(item => [
+                    ...(Array.isArray(item?.summary) ? item.summary : []),
+                    ...(Array.isArray(item?.content) ? item.content : [])
+                ])
+                .map(part => extractResponsesTextContent(part))
+                .filter(Boolean)
+                .join('');
+        }
+
+        function extractChatCompletionUpdate(payload) {
+            const choice = Array.isArray(payload?.choices) ? payload.choices[0] : null;
+            if (!choice || typeof choice !== 'object') return {};
+            const delta = choice.delta && typeof choice.delta === 'object' ? choice.delta : {};
+            const message = choice.message && typeof choice.message === 'object' ? choice.message : {};
+            return {
+                contentDelta: extractResponsesTextContent(delta.content || choice.text),
+                reasoningDelta: typeof delta.reasoning_content === 'string'
+                    ? delta.reasoning_content
+                    : (typeof delta.reasoning === 'string' ? delta.reasoning : ''),
+                contentSnapshot: extractResponsesTextContent(message.content),
+                reasoningSnapshot: typeof message.reasoning_content === 'string'
+                    ? message.reasoning_content
+                    : (typeof message.reasoning === 'string' ? message.reasoning : '')
+            };
+        }
+
+        function extractStreamingUpdate(payload, endpoint) {
+            if (!payload || typeof payload !== 'object') return {};
+            if (endpoint === '/chat/completions' || Array.isArray(payload.choices)) {
+                return extractChatCompletionUpdate(payload);
+            }
+
+            const type = String(payload.type || '');
+            if (type === 'response.output_text.delta') {
+                return { contentDelta: extractResponsesTextContent(payload.delta) };
+            }
+            if (type === 'response.output_text.done') {
+                return { contentSnapshot: extractResponsesTextContent(payload.text || payload.output_text || payload.delta) };
+            }
+            if (type === 'response.reasoning_text.delta' || type === 'response.reasoning_summary_text.delta') {
+                return { reasoningDelta: extractResponsesTextContent(payload.delta) };
+            }
+            if (type === 'response.reasoning_text.done' || type === 'response.reasoning_summary_text.done') {
+                return { reasoningSnapshot: extractResponsesTextContent(payload.text || payload.delta) };
+            }
+            if (type === 'response.content_part.done' || type === 'response.output_item.done') {
+                const contentSnapshot = extractResponsesTextContent(payload.part?.type === 'output_text' ? payload.part : '')
+                    || extractResponsesOutputText({ output: payload.item ? [payload.item] : [] });
+                const reasoningSnapshot = extractResponsesReasoningText({ output: payload.item ? [payload.item] : [] });
+                return { contentSnapshot, reasoningSnapshot };
+            }
+            if (type === 'response.completed' || type === 'response.done') {
+                return {
+                    contentSnapshot: extractResponsesOutputText(payload),
+                    reasoningSnapshot: extractResponsesReasoningText(payload)
+                };
+            }
+            if (!type) {
+                return {
+                    contentSnapshot: extractResponsesOutputText(payload),
+                    reasoningSnapshot: extractResponsesReasoningText(payload)
+                };
+            }
+            return {};
+        }
+
+        function mergeStreamingText(current, delta = '', snapshot = '') {
+            let next = String(current || '');
+            if (delta) next += String(delta);
+            if (!snapshot) return next;
+            const complete = String(snapshot);
+            if (!next || complete.startsWith(next)) return complete;
+            if (next.startsWith(complete) || next.endsWith(complete)) return next;
+            return complete;
+        }
+
+        function parseSSEEventBlock(block) {
+            const lines = String(block || '').replace(/\r\n/g, '\n').split('\n');
+            const dataLines = [];
+            let eventType = '';
+            let eventId = '';
+            lines.forEach(line => {
+                if (line.startsWith('data:')) dataLines.push(line.slice(5).replace(/^ /, ''));
+                else if (line.startsWith('event:')) eventType = line.slice(6).trim();
+                else if (line.startsWith('id:')) eventId = line.slice(3).trim();
+            });
+            return { data: dataLines.join('\n').trim(), eventType, eventId };
+        }
+
+        function getStreamingErrorMessage(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            if (payload.type === 'response.error' || payload.type === 'response.failed' || payload.error) {
+                return payload?.error?.message || payload?.response?.error?.message || payload?.message || 'API stream error';
             }
             return '';
         }
 
-        function extractStreamingReasoningDelta(payload) {
-            if (!payload || typeof payload !== 'object') return '';
-            if (typeof payload?.delta === 'string') return payload.delta;
-            if (payload?.delta && typeof payload.delta === 'object') {
-                if (typeof payload.delta?.reasoning_content === 'string') return payload.delta.reasoning_content;
-                if (typeof payload.delta?.reasoning === 'string') return payload.delta.reasoning;
-                if (typeof payload.delta?.text === 'string') return payload.delta.text;
+        function extractNonStreamingResponseText(payload, endpoint) {
+            if (endpoint === '/chat/completions' || Array.isArray(payload?.choices)) {
+                const update = extractChatCompletionUpdate(payload);
+                return update.contentSnapshot || update.contentDelta || '';
             }
-            if (typeof payload?.reasoning === 'string') return payload.reasoning;
-            if (typeof payload?.reasoning_content === 'string') return payload.reasoning_content;
-            if (payload?.type === 'response.reasoning_text.delta' && typeof payload?.delta === 'string') return payload.delta;
-            if (payload?.type === 'response.reasoning_text.delta' && payload?.delta && typeof payload.delta === 'object') {
-                if (typeof payload.delta?.reasoning_content === 'string') return payload.delta.reasoning_content;
-                if (typeof payload.delta?.reasoning === 'string') return payload.delta.reasoning;
+            return extractResponsesOutputText(payload);
+        }
+
+        async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal) {
+            const send = async endpoint => {
+                const requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
+                const response = await fetch(`${getBaseURL()}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getAPIKey()}`
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal
+                });
+                return { response, endpoint, requestBody };
+            };
+
+            let result = await send(preferredEndpoint);
+            if (preferredEndpoint === '/responses' && result.response.status === 501) {
+                const detail = await result.response.text().catch(() => '');
+                appendLog('info', `Responses API 返回 501，自动回退到 /chat/completions${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+                showVoiceNotification('选定的模型不支持/responses接口，已自动回退/chat/completions', false,3000);
+                result = await send('/chat/completions');
+                result.fellBackFromResponses = true;
             }
-            if (payload?.type === 'response.completed' && typeof payload?.response?.reasoning === 'string') return payload.response.reasoning;
-            return '';
+            return result;
         }
 
         function buildPromptCacheDebugInfo(requestBody) {
@@ -6847,12 +6955,13 @@
                         }
                     }
                 }
-                const endpoint = getRequestEndpoint();
+                const preferredEndpoint = getRequestEndpoint();
+                let endpoint = preferredEndpoint;
                 const promptCacheKey = String(localStorage.getItem('prompt_cache_key') || '').trim();
                 const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
                 appendLog('debug', '开始请求 AI 接口');
                 appendLog('trace', `AI 请求 URL: ${getBaseURL()}${endpoint}`);
-                const requestBody = buildRequestPayloadForEndpoint({
+                const basePayload = {
                     model,
                     temperature: currentTemp,
                     messages: [{
@@ -6863,24 +6972,18 @@
                     ...(maxTokensLimit > 0 ? {
                         max_tokens: maxTokensLimit
                     } : {}),
-                    ...(promptCacheKey && endpoint !== '/responses' ? {
+                    ...(promptCacheKey ? {
                         prompt_cache_key: promptCacheKey
                     } : {}),
-                    ...(cacheControl && endpoint !== '/responses' ? {
+                    ...(cacheControl ? {
                         cache_control: cacheControl
                     } : {})
-                }, endpoint);
+                };
+                const requestResult = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal);
+                const { response, endpoint: resolvedEndpoint, requestBody } = requestResult;
+                endpoint = resolvedEndpoint;
                 lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
                 appendLog('trace', `请求体: ${JSON.stringify(requestBody)}`);
-                const response = await fetch(`${getBaseURL()}${endpoint}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${getAPIKey()}`
-                    },
-                    body: JSON.stringify(requestBody),
-                    signal: abortController.signal
-                });
                 if (!response.ok) {
                     const errorText = await response.text().catch(() => '');
                     let detailMessage = '';
@@ -6899,6 +7002,78 @@
                 const debugStream = developerModeEnabled && (logLevel === 'debug' || logLevel === 'trace');
                 const traceStream = developerModeEnabled && logLevel === 'trace';
                 let sseBuffer = '';
+                let sawSSEEvent = false;
+                const seenStreamEvents = new Set();
+                const renderLiveContent = () => {
+                    let displayContent = replaceBlocksToSummary(rawFullContent);
+                    let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
+                    let preprocessedContent = extractAndPreserveMath(contentForRender);
+                    let html = marked.parse(preprocessedContent);
+                    html = restoreAndRenderMath(html);
+                    contentArea.innerHTML = html;
+                    if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                        preprocessedContent = extractAndPreserveMath(rawFullContent);
+                        html = marked.parse(preprocessedContent);
+                        contentArea.innerHTML = restoreAndRenderMath(html);
+                    }
+                    renderMathFormulas(contentArea);
+                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                };
+                const applyStreamPayload = (payload, eventType = '', eventId = '') => {
+                    if (!payload || typeof payload !== 'object') return false;
+                    const normalizedPayload = !payload.type && eventType ? { ...payload, type: eventType } : payload;
+                    const streamError = getStreamingErrorMessage(normalizedPayload);
+                    if (streamError) throw new Error(streamError);
+                    const sequence = normalizedPayload.sequence_number;
+                    const eventKey = eventId || (sequence !== undefined && sequence !== null
+                        ? `${normalizedPayload.type || endpoint}:${sequence}`
+                        : '');
+                    if (eventKey && seenStreamEvents.has(eventKey)) return false;
+                    if (eventKey) seenStreamEvents.add(eventKey);
+
+                    const update = extractStreamingUpdate(normalizedPayload, endpoint);
+                    const nextThinking = mergeStreamingText(
+                        thinkingContent,
+                        update.reasoningDelta,
+                        update.reasoningSnapshot
+                    );
+                    const nextContent = mergeStreamingText(
+                        rawFullContent,
+                        update.contentDelta,
+                        update.contentSnapshot
+                    );
+                    const thinkingChanged = nextThinking !== thinkingContent;
+                    const contentChanged = nextContent !== rawFullContent;
+                    thinkingContent = nextThinking;
+                    rawFullContent = nextContent;
+                    if (thinkingChanged && thinkingDiv) {
+                        thinkingDiv.style.display = thinkingContent ? 'block' : 'none';
+                        thinkingDiv.innerText = thinkingContent;
+                    }
+                    if (contentChanged) {
+                        receivedAny = true;
+                        renderLiveContent();
+                    }
+                    return thinkingChanged || contentChanged;
+                };
+                const processSSEBlock = block => {
+                    const event = parseSSEEventBlock(block);
+                    if (!event.data) return false;
+                    sawSSEEvent = true;
+                    if (event.data === '[DONE]') return true;
+                    try {
+                        applyStreamPayload(JSON.parse(event.data), event.eventType, event.eventId);
+                    } catch (error) {
+                        if (error instanceof SyntaxError) {
+                            rawFullContent = mergeStreamingText(rawFullContent, event.data);
+                            receivedAny = true;
+                            renderLiveContent();
+                        } else {
+                            throw error;
+                        }
+                    }
+                    return true;
+                };
                 if (debugStream) {
                     appendLog('debug', '流式输出接收开始');
                     showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
@@ -6918,46 +7093,11 @@
                     if (traceStream) {
                         appendLog('trace', `原始流内容: ${sseBuffer.replace(/\n/g, '\\n')}`);
                     }
-                    const parts = sseBuffer.split(/\n\n/);
+                    const parts = sseBuffer.split(/\r?\n\r?\n/);
                     sseBuffer = parts.pop() || '';
                     for (const part of parts) {
-                        const dataLines = part.split('\n').filter(line => line.startsWith('data: ')).map(line => line.slice(6).trim());
-                        if (!dataLines.length) continue;
-                        const data = dataLines.join('\n');
-                        if (data === '[DONE]') continue;
                         try {
-                            const json = JSON.parse(data);
-                            if (json?.type === 'response.error') {
-                                throw new Error(json?.error?.message || 'Responses API error');
-                            }
-                            const reasoningDelta = extractStreamingReasoningDelta(json);
-                            if (reasoningDelta) {
-                                thinkingContent += reasoningDelta;
-                                if (thinkingDiv) {
-                                    thinkingDiv.style.display = 'block';
-                                    thinkingDiv.innerText = thinkingContent;
-                                }
-                            }
-                            const contentDelta = extractStreamingTextDelta(json);
-                            if (contentDelta) {
-                                receivedAny = true;
-                                rawFullContent += contentDelta;
-                                let displayContent = replaceBlocksToSummary(rawFullContent);
-                                let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
-                                let preprocessedContent = extractAndPreserveMath(contentForRender);
-                                let html = marked.parse(preprocessedContent);
-                                html = restoreAndRenderMath(html);
-                                contentArea.innerHTML = html;
-                                if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
-                                    contentForRender = rawFullContent;
-                                    preprocessedContent = extractAndPreserveMath(contentForRender);
-                                    html = marked.parse(preprocessedContent);
-                                    html = restoreAndRenderMath(html);
-                                    contentArea.innerHTML = html;
-                                }
-                                renderMathFormulas(contentArea);
-                                if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                            }
+                            processSSEBlock(part);
                         } catch (e) {
                             appendLog('debug', `解析流数据失败: ${e.message}`);
                             throw e;
@@ -6969,41 +7109,9 @@
                     sseBuffer += finalBuffer;
                 }
                 if (sseBuffer.trim()) {
-                    const dataLines = sseBuffer.split('\n').filter(line => line.startsWith('data: ')).map(line => line.slice(6).trim());
-                    if (dataLines.length) {
+                    if (/^(?:event:|data:|id:)/m.test(sseBuffer)) {
                         try {
-                            const json = JSON.parse(dataLines.join('\n'));
-                            if (json?.type === 'response.error') {
-                                throw new Error(json?.error?.message || 'Responses API error');
-                            }
-                            const reasoningDelta = extractStreamingReasoningDelta(json);
-                            if (reasoningDelta) {
-                                thinkingContent += reasoningDelta;
-                                if (thinkingDiv) {
-                                    thinkingDiv.style.display = 'block';
-                                    thinkingDiv.innerText = thinkingContent;
-                                }
-                            }
-                            const contentDelta = extractStreamingTextDelta(json);
-                            if (contentDelta) {
-                                receivedAny = true;
-                                rawFullContent += contentDelta;
-                                let displayContent = replaceBlocksToSummary(rawFullContent);
-                                let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
-                                let preprocessedContent = extractAndPreserveMath(contentForRender);
-                                let html = marked.parse(preprocessedContent);
-                                html = restoreAndRenderMath(html);
-                                contentArea.innerHTML = html;
-                                if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
-                                    contentForRender = rawFullContent;
-                                    preprocessedContent = extractAndPreserveMath(contentForRender);
-                                    html = marked.parse(preprocessedContent);
-                                    html = restoreAndRenderMath(html);
-                                    contentArea.innerHTML = html;
-                                }
-                                renderMathFormulas(contentArea);
-                                if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                            }
+                            processSSEBlock(sseBuffer);
                         } catch (e) {
                             appendLog('debug', `解析尾部流数据失败: ${e.message}`);
                             throw e;
@@ -7011,6 +7119,29 @@
                     }
                 }
                 appendLog('debug', '流式输出接收完毕');
+                if (sseBuffer.trim() && !sawSSEEvent && !/^(?:event:|data:|id:)/m.test(sseBuffer)) {
+                    const rawResponse = sseBuffer.trim();
+                    try {
+                        const payload = JSON.parse(rawResponse);
+                        const changed = applyStreamPayload(payload);
+                        if (!changed) {
+                            const fallbackText = extractNonStreamingResponseText(payload, endpoint);
+                            if (fallbackText) {
+                                rawFullContent = mergeStreamingText(rawFullContent, '', fallbackText);
+                                receivedAny = true;
+                                renderLiveContent();
+                            }
+                        }
+                    } catch (error) {
+                        if (error instanceof SyntaxError) {
+                            rawFullContent = mergeStreamingText(rawFullContent, '', rawResponse);
+                            receivedAny = true;
+                            renderLiveContent();
+                        } else {
+                            throw error;
+                        }
+                    }
+                }
                 hideVoiceNotification();
                 if (debugStream) {
                     showVoiceNotification(`流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
