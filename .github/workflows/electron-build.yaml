@@ -27,7 +27,16 @@ jobs:
         shell: bash
         run: |
           TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
-          npm version --no-git-tag-version "$TAG_VERSION"
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+
+          echo "Current version: $CURRENT_VERSION"
+          echo "Tag version: $TAG_VERSION"
+
+          if [ "$CURRENT_VERSION" != "$TAG_VERSION" ]; then
+            npm version --no-git-tag-version "$TAG_VERSION"
+          else
+            echo "Version already matches tag, skipping npm version"
+          fi
 
       - name: Install dependencies
         run: npm install
