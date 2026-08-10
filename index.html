@@ -2188,9 +2188,12 @@
                                 <button onclick="requestManualCompaction(); toggleAttachMenu();">
                                     <i data-lucide="file-scan" class="w-4 h-4"></i> 压缩上下文
                                 </button>
-                                <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
-                                    <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
-                                </button>
+                                 <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
+                                     <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
+                                 </button>
+                                 <button id="desktop-work-entry-btn" onclick="startDesktopWork(); toggleAttachMenu();">
+                                     <i data-lucide="monitor-up" class="w-4 h-4"></i> 桌面协作
+                                 </button>
                             </div>
                             <textarea id="user-input" rows="1"
                                 placeholder="给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文"
@@ -2275,8 +2278,9 @@
                         onclick="switchSettingsSection('ai-chat', this)">对话设置</button>
                     <button data-section="appearance" onclick="switchSettingsSection('appearance', this)">外观设置</button>
                     <button data-section="coding" onclick="switchSettingsSection('coding', this)">编码模式</button>
-                    <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
-                    <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
+                     <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
+                     <button data-section="desktop-work" onclick="switchSettingsSection('desktop-work', this)">桌面协作</button>
+                     <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
                     <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
                     <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">开发调试</button>
                     <button data-section="guide" onclick="switchSettingsSection('guide', this)">使用指导</button>
@@ -2567,6 +2571,28 @@
                         <p class="text-[11px] text-gray-500 mt-2">过期后可前往讯飞开放平台重新获取。</p>
                     </div>
                 </div>
+                <div id="section-desktop-work" class="settings-content-section space-y-5">
+                    <h3 class="text-base font-semibold text-gray-200 mb-3">桌面协作</h3>
+                    <div class="space-y-4">
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                            <label class="block text-sm font-medium mb-2 text-gray-300">传图快捷键</label>
+                            <input type="text" id="desktop-shortcut-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
+                                placeholder="Ctrl+A">
+                            <p class="text-[11px] text-gray-500 mt-2">仅在桌面协作期间注册为全局快捷键；格式遵循 Electron 快捷键写法。</p>
+                        </div>
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                            <label class="block text-sm font-medium mb-2 text-gray-300">传图精细度</label>
+                            <select id="desktop-image-quality-input"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors text-white">
+                                <option value="low">低（1280px / JPEG 72）</option>
+                                <option value="balanced">均衡（1920px / JPEG 85）</option>
+                                <option value="high">高（2560px / JPEG 92）</option>
+                            </select>
+                            <p class="text-[11px] text-gray-500 mt-2">截图只保留下一次语音输入附带的最后一张图片。</p>
+                        </div>
+                    </div>
+                </div>
                 <div id="section-other" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">其他</h3>
                     <div class="space-y-4">
@@ -2681,8 +2707,11 @@
 
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">语音聊天</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 首次使用前，在“设置 - 语音聊天”填写对话模型、Fish Audio API、音色 ID 与科大讯飞流式听写凭据。Fish Audio 固定使用 HTTP TTS，语音识别固定使用科大讯飞。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 可在语音聊天设置中生成 A/B 两组预制语音。音频文件由 Electron 主进程保存在用户数据目录，语音窗口通过 IPC 读取；关闭并重新打开 Setup 或 Portable 版本后仍可继续使用。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 可在语音聊天设置中生成 A/B/C 三组预制语音。桌面协作请求附带截图时，A 组播放后必定随机播放一条 C 组语音。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 从输入框左侧“+”菜单进入语音聊天。当前文字上下文会自动带入；结束通话后，本次完整的人类/AI轮次会自动拼接回当前对话，随后可继续文字聊天。</p>
+<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">桌面协作</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 从输入框左侧“+”菜单或托盘进入桌面协作。主窗口会自动最小化，透明字幕窗口停靠在当前显示器底部。</p>
+<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 按偏好设置中的全局传图快捷键截取鼠标所在显示器；连续截图只保留最后一张，并在下一次语音输入时发送。</p>
 <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 语音窗口仅显示当前 AI 回复和当前用户发言；深浅主题跟随主窗口。用户持续沉默时不会主动触发模型。</p>
 
 <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">画布编写</p>
@@ -2746,7 +2775,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V5.7.0 Alpha</span>
+                            <span id="app-version">V6.0.0 Canary</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -5292,6 +5321,7 @@
                 populateModelListEditor();
                 populateVoiceModel();
                 populateVoiceChatSettings();
+                populateDesktopWorkSettings();
                 populateOtherSettings();
                 populateAdvancedSettings();
                 updateSettingsPortraitMode();
@@ -5374,6 +5404,13 @@
             updateVoicePresetProbabilityLabel();
         }
 
+        function populateDesktopWorkSettings() {
+            const shortcut = document.getElementById('desktop-shortcut-input');
+            const quality = document.getElementById('desktop-image-quality-input');
+            if (shortcut) shortcut.value = localStorage.getItem('desktop_shortcut') || 'Ctrl+A';
+            if (quality) quality.value = localStorage.getItem('desktop_image_quality') || 'balanced';
+        }
+
         function updateVoicePresetProbabilityLabel() {
             const slider = document.getElementById('voice-preset-probability');
             const label = document.getElementById('voice-preset-probability-value');
@@ -5389,7 +5426,7 @@
             const originalText = button ? button.innerHTML : '';
             if (button) {
                 button.disabled = true;
-                button.textContent = '正在生成 6 条预制语音…';
+                button.textContent = '正在生成 9 条预制语音…';
             }
             try {
                 const result = await window.electronAPI.generateVoicePreset({
@@ -5397,7 +5434,7 @@
                     apiKey: document.getElementById('voice-fish-key-input').value.trim(),
                     voiceId: document.getElementById('voice-fish-id-input').value.trim()
                 });
-                showVoiceNotification(`预制语音包已生成，共 ${result.count || 6} 条`, false, 3000);
+                showVoiceNotification(`预制语音包已生成，共 ${result.count || 9} 条`, false, 3000);
             } catch (error) {
                 showVoiceNotification(error.message || '预制语音包生成失败', true, 5000);
             } finally {
@@ -5432,6 +5469,9 @@
             }
             if (sectionId === 'voice-chat') {
                 populateVoiceChatSettings();
+            }
+            if (sectionId === 'desktop-work') {
+                populateDesktopWorkSettings();
             }
             if (sectionId === 'other') {
                 populateOtherSettings();
@@ -5583,6 +5623,11 @@
             });
             const voicePresetProbability = document.getElementById('voice-preset-probability');
             if (voicePresetProbability) localStorage.setItem('voice_preset_probability', voicePresetProbability.value);
+            const desktopShortcutInput = document.getElementById('desktop-shortcut-input');
+            const desktopQualityInput = document.getElementById('desktop-image-quality-input');
+            const savedDesktopShortcut = String(desktopShortcutInput?.value || 'Ctrl+A').trim() || 'Ctrl+A';
+            localStorage.setItem('desktop_shortcut', savedDesktopShortcut);
+            localStorage.setItem('desktop_image_quality', desktopQualityInput?.value || 'balanced');
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
@@ -5602,6 +5647,7 @@
             applyLayoutMode(currentLayoutMode);
             toggleSettings();
             updateTokenEstimate();
+            if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
         }
 
         function updateBackgroundImage() {
@@ -5932,7 +5978,7 @@
             filterChats();
         }
 
-        function createNewChat() {
+        function createNewChat(options = {}) {
             const id = Date.now().toString();
             const newChat = {
                 id,
@@ -5941,7 +5987,8 @@
                 updatedAt: Date.now(),
                 canvasEnabled: false,
                 canvasCode: [''],
-                contextCompaction: { version: 1, summaries: [] }
+                contextCompaction: { version: 1, summaries: [] },
+                ...(options.ephemeralCollaboration ? { ephemeralCollaboration: true } : {})
             };
             chats.unshift(newChat);
             localStorage.setItem('ai_chats', JSON.stringify(chats));
@@ -5950,6 +5997,7 @@
             if (isCloudEnabled()) syncData();
             toggleSidebar(false);
             clearAttachments();
+            return id;
         }
 
         function switchChat(id) {
@@ -6124,21 +6172,24 @@
                 xfApiKey: localStorage.getItem('voice_xf_key') || DEFAULT_XF_API_KEY,
                 xfApiSecret: localStorage.getItem('voice_xf_secret') || DEFAULT_XF_API_SECRET,
                 presetBProbability: parseInt(localStorage.getItem('voice_preset_probability') || '50', 10) || 0,
+                requestEndpoint: getRequestEndpoint(),
+                desktopShortcut: localStorage.getItem('desktop_shortcut') || 'Ctrl+A',
+                desktopImageQuality: localStorage.getItem('desktop_image_quality') || 'balanced',
                 theme: localStorage.getItem('theme') || 'light',
                 backgroundImage: selectedBackgroundImage
             };
         }
 
-        async function startAudioChat() {
+        async function startConversationMode(mode, requestedChatId = activeChatId) {
             if (!window.electronAPI?.isElectron) {
-                showVoiceNotification('语音聊天只支持 Electron 桌面端', true);
+                showVoiceNotification('语音聊天和桌面协作只支持 Electron 桌面端', true);
                 return;
             }
             if (isGenerating) {
                 showVoiceNotification('请先停止当前文字回复，再开启语音聊天', true);
                 return;
             }
-            const chat = chats.find(item => item.id === activeChatId);
+            const chat = chats.find(item => item.id === requestedChatId);
             if (!chat) {
                 showVoiceNotification('当前对话不存在', true);
                 return;
@@ -6151,14 +6202,23 @@
                 }))
                 .filter(message => message.content.trim());
             try {
-                await window.electronAPI.openAudioChat({
+                const open = mode === 'desktop' ? window.electronAPI.openDesktopWork : window.electronAPI.openAudioChat;
+                await open({
                     targetChatId: chat.id,
                     context,
                     settings: getVoiceChatSettingsSnapshot()
                 });
             } catch (error) {
-                showVoiceNotification(error.message || '语音聊天窗口启动失败', true, 5000);
+                showVoiceNotification(error.message || (mode === 'desktop' ? '桌面协作窗口启动失败' : '语音聊天窗口启动失败'), true, 5000);
             }
+        }
+
+        async function startAudioChat() {
+            await startConversationMode('audio');
+        }
+
+        async function startDesktopWork() {
+            await startConversationMode('desktop');
         }
 
         function loadAppliedAudioSessions() {
@@ -6179,25 +6239,59 @@
 
             const chat = chats.find(item => item.id === payload.targetChatId);
             if (!chat) return;
-            const turns = (Array.isArray(payload.turns) ? payload.turns : [])
-                .filter(turn => turn && (turn.role === 'user' || turn.role === 'assistant'))
-                .map(turn => ({
+            const turns = [];
+            for (const turn of (Array.isArray(payload.turns) ? payload.turns : [])) {
+                if (!turn || (turn.role !== 'user' && turn.role !== 'assistant')) continue;
+                const nextTurn = {
                     role: turn.role,
                     content: String(turn.content || ''),
                     ...(turn.role === 'assistant' ? {
                         model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
                         voiceRecordId: String(turn.voiceRecordId || '').trim()
                     } : {})
-                }))
-                .filter(turn => turn.content.trim());
-            if (!turns.length) return;
+                };
+                if (turn.role === 'user' && Array.isArray(turn.attachments)) {
+                    nextTurn.attachments = [];
+                    for (const attachment of turn.attachments) {
+                        if (!attachment?.isImage || typeof attachment.fullDataUrl !== 'string') continue;
+                        const refId = await ImageStore.storeImage(attachment.fullDataUrl);
+                        nextTurn.attachments.push({
+                            name: attachment.name || 'desktop-screenshot.jpg',
+                            type: attachment.type || 'image/jpeg',
+                            data: '',
+                            fullDataUrl: `img:${refId}`,
+                            size: Number(attachment.size) || 0,
+                            originalSize: Number(attachment.originalSize) || Number(attachment.size) || 0,
+                            isImage: true,
+                            isText: false
+                        });
+                    }
+                    if (!nextTurn.attachments.length) delete nextTurn.attachments;
+                }
+                if (nextTurn.content.trim() || nextTurn.attachments?.length) turns.push(nextTurn);
+            }
+            if (!turns.length) {
+                if (chat.ephemeralCollaboration) {
+                    chats = chats.filter(item => item.id !== chat.id);
+                    localStorage.setItem('ai_chats', JSON.stringify(chats));
+                    renderChatHistory();
+                    if (activeChatId === chat.id) {
+                        const next = chats.find(item => Array.isArray(item.messages) && item.messages.length) || chats[0];
+                        if (next) switchChat(next.id);
+                        else createNewChat();
+                    }
+                }
+                return;
+            }
 
             const wasEmpty = !chat.messages || chat.messages.length === 0;
             if (!Array.isArray(chat.messages)) chat.messages = [];
             chat.messages.push(...turns);
+            delete chat.ephemeralCollaboration;
             if (wasEmpty) {
                 const firstUser = turns.find(turn => turn.role === 'user');
-                chat.title = firstUser ? firstUser.content.trim().slice(0, 20) || '语音对话' : '语音对话';
+                const modeTitle = payload.mode === 'desktop' ? '桌面协作' : '语音对话';
+                chat.title = firstUser ? firstUser.content.trim().slice(0, 20) || modeTitle : modeTitle;
             }
             chat.updatedAt = Date.now();
             localStorage.setItem('ai_chats', JSON.stringify(chats));
@@ -6206,13 +6300,40 @@
                 document.getElementById('active-chat-title').innerText = chat.title;
                 await renderMessagesWithResolvedRefs(chat.messages);
             }
-            showVoiceNotification('语音通话记录已保存到当前对话', false, 3000);
+            showVoiceNotification(payload.mode === 'desktop' ? '桌面协作记录已保存到当前对话' : '语音通话记录已保存到当前对话', false, 3000);
             if (isCloudEnabled()) syncData().catch(error => console.error('语音记录云同步失败', error));
         }
 
         if (window.electronAPI?.isElectron) {
             window.electronAPI.onAudioChatCompleted(payload => {
                 applyCompletedAudioChat(payload).catch(error => console.error('语音记录回传失败', error));
+            });
+            window.electronAPI.onTrayAction(async command => {
+                if (!command) return;
+                if (command.action === 'clear-logs') {
+                    clearLogs(true);
+                    return;
+                }
+                if (command.action === 'export-logs') {
+                    exportLogs();
+                    return;
+                }
+                if (command.action === 'new-audio-chat' || command.action === 'new-desktop-work') {
+                    const id = createNewChat({ ephemeralCollaboration: true });
+                    await startConversationMode(command.action === 'new-desktop-work' ? 'desktop' : 'audio', id);
+                    return;
+                }
+                if (command.action === 'recent-audio-chat' || command.action === 'recent-desktop-work') {
+                    const recent = chats
+                        .filter(chat => Array.isArray(chat.messages) && chat.messages.some(message => message && (message.role === 'user' || message.role === 'assistant')))
+                        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+                    if (!recent) {
+                        showVoiceNotification('没有可用的最近会话', true, 3000);
+                        return;
+                    }
+                    switchChat(recent.id);
+                    await startConversationMode(command.action === 'recent-desktop-work' ? 'desktop' : 'audio', recent.id);
+                }
             });
         }
 
@@ -6744,6 +6865,8 @@
             updateCanvasPanelForChat(currentChat);
             populateVoiceModel();
             updateAttachMenuButtons();
+            if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
+            if (window.electronAPI?.signalRendererReady) window.electronAPI.signalRendererReady();
         };
 
         function updateTempUI() {
@@ -6830,10 +6953,10 @@
             URL.revokeObjectURL(url);
         }
 
-        function clearLogs() {
+        function clearLogs(silent = false) {
             logRecords = [];
             saveLogRecords();
-            alert('日志已清除。');
+            if (!silent) alert('日志已清除。');
         }
 
         function onMathRenderToggleChange() {
@@ -6852,6 +6975,7 @@
             localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
             populateAdvancedSettings();
             updateLogActionVisibility();
+            if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
         }
 
         function onLogLevelChange(el) {

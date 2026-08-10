@@ -4,8 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        if (new URLSearchParams(window.location.search).get('mode') === 'desktop') {
+            document.documentElement.classList.add('desktop-work');
+        }
+    </script>
     <title>AIUI 语音聊天</title>
     <script src="node_modules/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="voicechat-api.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -430,6 +436,100 @@
         .toast {
             display: none !important;
         }
+
+        html.desktop-work,
+        html.desktop-work body {
+            color: #fff;
+            background: transparent !important;
+        }
+
+        html.desktop-work .shell {
+            padding: 10px 16px;
+            grid-template-columns: minmax(0, 1fr) 150px;
+            grid-template-rows: minmax(0, 1fr) 1px minmax(0, 1fr);
+            column-gap: 18px;
+            background: transparent !important;
+        }
+
+        html.desktop-work .speech-half {
+            grid-column: 1;
+            min-height: 0;
+            padding: 0 18px;
+            justify-content: flex-start;
+        }
+
+        html.desktop-work .speech-half:first-of-type {
+            grid-row: 1;
+        }
+
+        html.desktop-work .speech-half:last-of-type {
+            grid-row: 3;
+        }
+
+        html.desktop-work .speech-half .transcript,
+        html.desktop-work .speech-half .transcript.placeholder {
+            padding: 0;
+            display: flex;
+            align-items: center;
+            color: #fff;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1.25;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 8px rgba(0, 0, 0, 0.95);
+        }
+
+        html.desktop-work .transcript-content,
+        html.desktop-work .transcript-content.plain {
+            min-height: 0;
+            display: block;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        html.desktop-work .transcript-sentence {
+            display: inline;
+            padding: 0;
+        }
+
+        html.desktop-work .center-divider {
+            grid-column: 1;
+            grid-row: 2;
+            width: 100%;
+            margin: 0;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 1px 3px #000;
+        }
+
+        html.desktop-work .end-button {
+            position: static;
+            grid-column: 2;
+            grid-row: 1 / 4;
+            align-self: center;
+            justify-self: stretch;
+            width: 150px;
+            min-width: 0;
+            min-height: 46px;
+            padding: 0 18px;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            background: rgba(185, 28, 28, 0.94);
+            color: #fff;
+            transform: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+            text-shadow: 0 1px 2px #000, 0 0 4px #000;
+        }
+
+        html.desktop-work .end-button:hover,
+        html.desktop-work .end-button:disabled {
+            color: #fff;
+            background: rgba(220, 38, 38, 0.98);
+            transform: none;
+        }
     </style>
 </head>
 
@@ -456,6 +556,7 @@
 
     <script>
         const bridge = window.electronAPI;
+        const desktopMode = document.documentElement.classList.contains('desktop-work');
         const ortRuntime = window.ort;
         const VAD_MODEL_URL = './silero_vad.onnx';
         const ORT_WASM_PATH = new URL('./node_modules/onnxruntime-web/dist/', window.location.href).href;
@@ -970,6 +1071,7 @@
                 this.preset = null;
                 this.presetAudio = null;
                 this.presetTimer = null;
+                this.presetSequencePromise = null;
                 this.frameQueue = [];
                 this.draining = false;
                 this.mode = 'initializing';
@@ -1021,6 +1123,8 @@
                 this.currentVoiceSegments = [];
                 this.currentVoiceSegmentPromises = [];
                 this.currentVoiceRecordStored = false;
+                this.pendingScreenshot = null;
+                this.desktopInteractive = false;
 
                 this.playback.onItemStart = item => {
                     this.stopPresetAudio();
@@ -1034,9 +1138,15 @@
 
             async init() {
                 if (!bridge?.isElectron || !ortRuntime) throw new Error('语音聊天运行环境不完整');
-                this.session = await bridge.getAudioChatSession();
+                this.session = desktopMode
+                    ? await bridge.getDesktopWorkSession()
+                    : await bridge.getAudioChatSession();
                 this.settings = this.session.settings || {};
                 this.context = Array.isArray(this.session.context) ? this.session.context : [];
+                if (desktopMode) {
+                    document.title = 'AIUI 桌面协作';
+                    this.endButton.textContent = '结束对话';
+                }
                 this.applyAppearance();
                 this.bindEvents();
                 this.setStatus('initializing', '正在加载 VAD…');
@@ -1046,7 +1156,7 @@
                 ortRuntime.env.wasm.proxy = false;
                 await this.vad.init(VAD_MODEL_URL);
 
-                this.preset = await bridge.getVoicePreset({
+                this.preset = await (desktopMode ? bridge.getDesktopVoicePreset : bridge.getVoicePreset)({
                     apiBase: this.settings.fishApiBase,
                     voiceId: this.settings.fishVoiceId
                 });
@@ -1057,7 +1167,7 @@
             }
 
             applyAppearance() {
-                document.body.classList.toggle('theme-light', this.settings.theme === 'light');
+                document.body.classList.toggle('theme-light', !desktopMode && this.settings.theme === 'light');
             }
 
             bindEvents() {
@@ -1077,6 +1187,28 @@
                     this.lastRecognizedText = text || this.lastRecognizedText;
                 });
                 bridge.onXunfeiError(message => this.showToast(message, true));
+                if (desktopMode) {
+                    bridge.onDesktopScreenshotCaptured(payload => {
+                        if (payload?.dataUrl) this.pendingScreenshot = payload.dataUrl;
+                    });
+                    bridge.onDesktopScreenshotError(message => this.showToast(message || '截图失败', true));
+                    const updateInteractive = event => {
+                        const rect = this.endButton.getBoundingClientRect();
+                        const margin = 14;
+                        const inside = event.clientX >= rect.left - margin
+                            && event.clientX <= rect.right + margin
+                            && event.clientY >= rect.top - margin
+                            && event.clientY <= rect.bottom + margin;
+                        if (inside === this.desktopInteractive) return;
+                        this.desktopInteractive = inside;
+                        bridge.setDesktopWorkInteractive(inside).catch(() => {});
+                    };
+                    document.addEventListener('mousemove', updateInteractive, { passive: true });
+                    document.addEventListener('mouseleave', () => {
+                        this.desktopInteractive = false;
+                        bridge.setDesktopWorkInteractive(false).catch(() => {});
+                    }, { passive: true });
+                }
                 window.addEventListener('beforeunload', () => {
                     bridge.checkpointAudioChat(this.turns).catch(() => {});
                 });
@@ -1331,19 +1463,41 @@
                     return;
                 }
                 this.setUserText(text, false);
-                this.turns.push({ role: 'user', content: text });
+                const screenshot = desktopMode ? this.pendingScreenshot : null;
+                const userTurn = { role: 'user', content: text };
+                if (screenshot) {
+                    const estimatedSize = Math.max(0, Math.round((screenshot.length - screenshot.indexOf(',') - 1) * 0.75));
+                    userTurn.attachments = [{
+                        name: `desktop-screenshot-${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        size: estimatedSize,
+                        originalSize: estimatedSize,
+                        isImage: true,
+                        isText: false,
+                        fullDataUrl: screenshot
+                    }];
+                    this.pendingScreenshot = null;
+                }
+                this.turns.push(userTurn);
                 await this.checkpoint();
-                if (shouldRespond && !this.ending) await this.respond(text);
+                if (shouldRespond && !this.ending) await this.respond(text, Boolean(screenshot));
             }
 
             voiceSystemPrompt() {
                 const base = String(this.settings.systemPrompt || '').trim();
-                const voiceRules = `你正在进行实时语音对话。
+                const collaborationPrompt = `用户正在请求你的协作。当用户按下${this.settings.desktopShortcut || 'Control+A'}后你可以查看用户当前的电脑图片。`;
+                const voiceRules = desktopMode ? `你正在进行实时桌面协作语音对话。
+回复要自然、口语化、简洁。
+每句单独一行。
+第一句尽量不超过14个汉字。
+每一句少于60个汉字。
+不要输出任何方括号标签、Markdown、LaTeX、代码块或列表符号。` : `你正在进行实时语音对话。
 回复要自然、口语化、简洁。
 每句单独一行。
 第一句尽量不超过7个汉字。
 每一句少于30个汉字。
 不要输出任何方括号标签、Markdown、LaTeX、代码块或列表符号。`;
+                if (desktopMode) return [collaborationPrompt, base, voiceRules].filter(Boolean).join('\n\n');
                 return base ? `${base}\n\n${voiceRules}` : voiceRules;
             }
 
@@ -1353,7 +1507,15 @@
                     ...this.context,
                     ...this.turns.map(turn => ({
                         role: turn.role,
-                        content: turn.content
+                        content: turn.role === 'user' && Array.isArray(turn.attachments) && turn.attachments.length
+                            ? [
+                                ...(String(turn.content || '').trim() ? [{ type: 'text', text: turn.content }] : []),
+                                ...turn.attachments.filter(item => item?.isImage && item?.fullDataUrl).map(item => ({
+                                    type: 'image_url',
+                                    image_url: { url: item.fullDataUrl }
+                                }))
+                            ]
+                            : turn.content
                     }))
                 ];
             }
@@ -1364,7 +1526,7 @@
                 if (newline >= 0 && punctuation >= 0) return Math.min(newline, punctuation) + 1;
                 if (newline >= 0) return newline + 1;
                 if (punctuation >= 0) return punctuation + 1;
-                if (buffer.length >= 42) return 30;
+                if (buffer.length >= (desktopMode ? 84 : 42)) return desktopMode ? 60 : 30;
                 return -1;
             }
 
@@ -1409,10 +1571,13 @@
                     }))
                     .catch(() => null);
                 this.currentVoiceSegmentPromises.push(segmentPromise);
-                this.playback.enqueue({ text: clean, audioPromise });
+                const playbackAudioPromise = this.presetSequencePromise
+                    ? this.presetSequencePromise.then(() => audioPromise)
+                    : audioPromise;
+                this.playback.enqueue({ text: clean, audioPromise: playbackAudioPromise });
             }
 
-            async respond() {
+            async respond(_text, hasScreenshot = false) {
                 this.mode = 'responding';
                 this.responseFinished = false;
                 this.currentAssistantText = '';
@@ -1425,45 +1590,33 @@
                 this.setStatus('responding', 'AI 正在思考…');
                 this.responseAbortController = new AbortController();
                 const serial = ++this.responseSerial;
-                this.playPresetVoice().catch(() => {});
+                this.presetSequencePromise = this.playPresetVoice(hasScreenshot)
+                    .catch(() => {})
+                    .finally(() => {
+                        this.presetSequencePromise = null;
+                    });
                 let rawText = '';
                 let speechBuffer = '';
-                let sseBuffer = '';
 
                 try {
-                    const response = await fetch(`${String(this.settings.baseUrl || '').replace(/\/$/, '')}/chat/completions`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${this.settings.apiKey || ''}`
-                        },
-                        body: JSON.stringify({
+                    await window.VoiceChatAPI.streamText({
+                        baseUrl: this.settings.baseUrl,
+                        apiKey: this.settings.apiKey,
+                        endpoint: this.settings.requestEndpoint,
+                        payload: {
                             model: this.settings.model,
                             messages: this.apiMessages(),
                             stream: true,
                             max_tokens: 300,
                             temperature: 0.8
-                        }),
-                        signal: this.responseAbortController.signal
-                    });
-                    if (!response.ok) throw new Error(`LLM API 错误 (${response.status})`);
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    while (serial === this.responseSerial) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        sseBuffer += decoder.decode(value, { stream: true });
-                        const lines = sseBuffer.split('\n');
-                        sseBuffer = lines.pop() || '';
-                        for (const line of lines) {
-                            const trimmed = line.trim();
-                            if (!trimmed.startsWith('data: ')) continue;
-                            const data = trimmed.slice(6);
-                            if (!data || data === '[DONE]') continue;
-                            let delta = '';
-                            try { delta = JSON.parse(data).choices?.[0]?.delta?.content || ''; } catch {}
-                            if (!delta) continue;
-                            rawText += delta;
+                        },
+                        signal: this.responseAbortController.signal,
+                        onFallback: () => this.showToast('Responses 不受支持，已回退 Chat Completions'),
+                        onText: nextText => {
+                            if (serial !== this.responseSerial) return;
+                            const next = String(nextText || '');
+                            const delta = next.startsWith(rawText) ? next.slice(rawText.length) : next;
+                            rawText = next;
                             speechBuffer += delta;
                             const display = cleanVoiceText(rawText);
                             this.currentAssistantText = display;
@@ -1475,7 +1628,7 @@
                                 boundary = this.findSentenceBoundary(speechBuffer);
                             }
                         }
-                    }
+                    });
                     if (speechBuffer.trim()) this.enqueueSpeech(speechBuffer);
                 } catch (error) {
                     if (error.name !== 'AbortError') {
@@ -1516,7 +1669,7 @@
                 this.responseFinished = true;
             }
 
-            async playPresetVoice() {
+            async playPresetVoice(hasScreenshot = false) {
                 if (!this.preset || !Array.isArray(this.preset.groupA) || !this.preset.groupA.length) return;
                 const play = base64 => new Promise(resolve => {
                     const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
@@ -1533,6 +1686,18 @@
                     this.presetTimer = setTimeout(resolve, 700);
                 });
                 if (!this.presetAudio) return;
+                if (hasScreenshot) {
+                    const groupCTexts = ['让我看一下啊……', '稍等，我看看……', '欸？我看到了……'];
+                    const cAudio = Array.isArray(this.preset.groupC) && this.preset.groupC.length
+                        ? this.preset.groupC[Math.floor(Math.random() * this.preset.groupC.length)]
+                        : await requestFishSpeechDirect(groupCTexts[Math.floor(Math.random() * groupCTexts.length)], this.settings);
+                    await play(cAudio);
+                    if (!this.presetAudio) return;
+                    await new Promise(resolve => {
+                        this.presetTimer = setTimeout(resolve, 450);
+                    });
+                    if (!this.presetAudio) return;
+                }
                 const probability = Math.max(0, Math.min(100, Number(this.settings.presetBProbability) || 0)) / 100;
                 if (Math.random() < probability && Array.isArray(this.preset.groupB) && this.preset.groupB.length) {
                     await play(this.preset.groupB[Math.floor(Math.random() * this.preset.groupB.length)]);
@@ -1573,11 +1738,12 @@
                     await bridge.abortXunfei();
                     await this.recorder.stop();
                     await this.checkpoint();
-                    await bridge.completeAudioChat(this.turns);
+                    if (desktopMode) await bridge.completeDesktopWork(this.turns);
+                    else await bridge.completeAudioChat(this.turns);
                 } catch (error) {
                     this.ending = false;
                     this.endButton.disabled = false;
-                    this.endButton.textContent = '结束语音通话';
+                    this.endButton.textContent = desktopMode ? '结束对话' : '结束语音通话';
                     this.showToast(error.message || '通话记录保存失败', true);
                     this.returnToListening();
                 }

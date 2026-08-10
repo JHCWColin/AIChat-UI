@@ -9,7 +9,7 @@
 基于前端页面与 Electron 的 AI 对话桌面应用，覆盖文字聊天、Canvas 编码、语音聊天、附件解析、图像生成与 Windows 本地打包。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V5.7.0-blue)]()
+[![Version](https://img.shields.io/badge/version-V6.0.0_Canary-blue)]()
 
 </div>
 
@@ -22,6 +22,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - `/canvas` 编码模式：在对话旁直接生成和编辑代码画布。
 - 多模型聊天：可配置 API Key、Base URL、模型列表和默认模型。
 - 语音聊天模式：使用 Silero VAD、讯飞流式听写和 Fish Audio HTTP TTS。
+- 桌面协作模式：透明置顶字幕、点击穿透、全局快捷键截图与语音上下文协作。
+- 常驻系统托盘：支持新建或恢复最近会话，并可直接启动语音聊天或桌面协作。
 - 语音回放：语音聊天模式生成的 AI 语音可保存并在主对话中回放。
 - 附件解析：支持图片、`.docx`、`.pptx`、`.xlsx`、`.txt`、`.md` 等文件。
 - 图像生成增强：支持在提示词中写入 `16:9`、`4:3`、`1:1` 等宽高比关键词。
@@ -30,6 +32,14 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V6.0.0 Canary
+
+- 新增桌面协作独立窗口，主窗口自动最小化，透明字幕停靠当前显示器底部。
+- 新增可配置全局传图快捷键与截图精细度；截图在下一次语音输入时随消息发送。
+- 语音聊天与桌面协作统一跟随主界面 API endpoint，支持 Responses 501 自动回退。
+- 新增常驻托盘菜单、最近会话启动、开发者日志操作和关闭主窗口后继续驻留。
+- 预制语音新增 C 组，截图请求会在 A 组后必定播放一条 C 组语音。
 
 ### V5.7.0 Alpha
 
@@ -87,20 +97,31 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 可在偏好设置中一键清除历史语音记录，不影响预制语音与后续新记录。
 - 语音聊天可以从文字对话中途开始也可以之后转成文本继续对话。
 
+### 3. 桌面协作模式
+
+- 透明、无边框、始终置顶的横向字幕窗口默认停靠当前显示器底部。
+- AI 与用户语音内容各占一行，白色字幕使用黑色文字阴影保证可读性。
+- 除“结束对话”按钮区域外，窗口允许鼠标操作穿透到下层桌面。
+- 全局传图快捷键默认是 `Ctrl+A`，截图精细度默认使用 1920px / JPEG 85。
+- 多次截图只保留最后一张，并在下一次语音输入时作为用户消息附件发送。
+- 结束协作后，文字、AI 语音记录和截图会写回对应主会话。
+
 ![audiotext](screenshot/audiochat%20can%20be%20saved%20to%20textchat.png)
 
-### 3. 多模型与 API 配置
+### 4. 多模型与 API 配置
 
 - 支持自定义 Base URL、API Key、模型列表和默认模型。
 - 模型配置保存在本地，适合长期个人环境使用。
+- 主界面、语音聊天和桌面协作均支持 `/responses` 与 `/chat/completions`。
+- `/responses` 返回 501 时会自动使用 `/chat/completions` 重试。
 
-### 4. 图像与附件工作流
+### 5. 图像与附件工作流
 
 - 支持图片粘贴、图片上传和常见 Office 文档解析。
 - 图像请求支持提示词中的宽高比关键词。
 - 附件内容会在提取后注入当前对话上下文。
 
-### 5. 上下文压缩
+### 6. 上下文压缩
 
 - 可在长对话中自动或手动压缩上下文。
 - 摘要用于降低发送给模型的上下文长度，不覆盖原始聊天记录。
@@ -126,8 +147,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI5.7.0-Portable.exe`
-- Setup：`AIUI5.7.0-Setup.exe`
+- Portable：`AIUI6.0.0Canary-Portable.exe`
+- Setup：`AIUI6.0.0Canary-Setup.exe`
 
 构建命令：
 
@@ -143,6 +164,8 @@ npm run build
 
 - `index.html`：主对话界面与前端逻辑
 - `audiochat.html`：语音聊天界面
+- `desktopwork.html`：桌面协作窗口入口
+- `voicechat-api.js`：独立语音/协作窗口共用 API 适配层
 - `main.js`：Electron 主进程
 - `preload.js`：Electron 预加载桥接
 - `package.json`：版本、脚本与构建配置
@@ -152,8 +175,8 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V5.7.0`
-- 当前构建标识：`build20260803`
+- 当前版本：`V6.0.0 Canary`
+- 当前构建标识：`build20260810`
 
 ---
 

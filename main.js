@@ -1,4 +1,15 @@
-const { app, BrowserWindow, ipcMain, session } = require("electron");
+const {
+    app,
+    BrowserWindow,
+    ipcMain,
+    session,
+    Tray,
+    Menu,
+    globalShortcut,
+    desktopCapturer,
+    screen,
+    nativeImage
+} = require("electron");
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
@@ -6,12 +17,20 @@ const WebSocket = require("ws");
 
 const PRESET_TEXTS_A = ["嗯……", "哦？", "欸？", "哦！"];
 const PRESET_TEXTS_B = ["我想想……", "等一下啊……"];
+const PRESET_TEXTS_C = ["让我看一下啊……", "稍等，我看看……", "欸？我看到了……"];
 
 let mainWindow = null;
 let audioWindow = null;
 let audioSession = null;
 let audioCompletionSent = false;
 let xunfeiSession = null;
+let tray = null;
+let isQuitting = false;
+let developerModeEnabled = false;
+let mainRendererReady = false;
+let pendingMainCommands = [];
+let desktopShortcut = "";
+let desktopMouseInteractive = false;
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -21,10 +40,20 @@ function createWindow(htmlFile = "index.html", options = {}) {
         height: options.height || 800,
         minWidth: options.minWidth,
         minHeight: options.minHeight,
+        maxWidth: options.maxWidth,
+        maxHeight: options.maxHeight,
         parent: options.parent,
         modal: false,
         show: options.show !== false,
         backgroundColor: options.backgroundColor || "#212121",
+        frame: options.frame !== false,
+        transparent: options.transparent === true,
+        alwaysOnTop: options.alwaysOnTop === true,
+        skipTaskbar: options.skipTaskbar === true,
+        resizable: options.resizable !== false,
+        focusable: options.focusable !== false,
+        x: options.x,
+        y: options.y,
         icon: path.join(__dirname, "favicon.ico"),
         autoHideMenuBar: true,
         webPreferences: {
@@ -55,6 +84,20 @@ function sanitizeTurns(turns) {
             if (item.role === "assistant" && typeof item.voiceRecordId === "string" && item.voiceRecordId.trim()) {
                 clean.voiceRecordId = item.voiceRecordId.trim();
             }
+            if (item.role === "user" && Array.isArray(item.attachments)) {
+                clean.attachments = item.attachments
+                    .filter((attachment) => attachment && attachment.isImage && typeof attachment.fullDataUrl === "string")
+                    .map((attachment) => ({
+                        name: String(attachment.name || "desktop-screenshot.jpg").slice(0, 200),
+                        type: String(attachment.type || "image/jpeg").slice(0, 100),
+                        size: Number(attachment.size) || 0,
+                        originalSize: Number(attachment.originalSize) || Number(attachment.size) || 0,
+                        isImage: true,
+                        isText: false,
+                        fullDataUrl: attachment.fullDataUrl.slice(0, 30 * 1024 * 1024)
+                    }))
+                    .slice(-1);
+            }
             return clean;
         })
         .filter((item) => item.content.trim().length > 0)
@@ -79,6 +122,51 @@ function isAudioSender(event) {
     return Boolean(audioWindow && !audioWindow.isDestroyed() && event.sender.id === audioWindow.webContents.id);
 }
 
+function hasConversationWindow() {
+    return Boolean(audioWindow && !audioWindow.isDestroyed());
+}
+
+function sendMainCommand(action, payload = {}) {
+    const command = { action, ...payload };
+    if (!mainWindow || mainWindow.isDestroyed()) createMainWindow(false);
+    if (mainWindow && !mainWindow.isDestroyed() && mainRendererReady) {
+        mainWindow.webContents.send("tray:action", command);
+    } else {
+        pendingMainCommands.push(command);
+    }
+}
+
+function flushMainCommands() {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainRendererReady) return;
+    const commands = pendingMainCommands.splice(0);
+    commands.forEach((command) => mainWindow.webContents.send("tray:action", command));
+}
+
+function showMainWindow() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        createMainWindow();
+        return;
+    }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+function createMainWindow(show = true) {
+    mainRendererReady = false;
+    mainWindow = createWindow("index.html", { show });
+    mainWindow.on("close", (event) => {
+        if (isQuitting) return;
+        event.preventDefault();
+        mainWindow.hide();
+    });
+    mainWindow.on("closed", () => {
+        mainWindow = null;
+        mainRendererReady = false;
+    });
+    return mainWindow;
+}
+
 function emitAudioCompletion(reason, turnsOverride) {
     if (!audioSession || audioCompletionSent) return;
     audioCompletionSent = true;
@@ -86,6 +174,7 @@ function emitAudioCompletion(reason, turnsOverride) {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("audio-chat:completed", {
             sessionId: audioSession.sessionId,
+            mode: audioSession.mode || "audio",
             targetChatId: audioSession.targetChatId,
             reason,
             turns
@@ -164,7 +253,7 @@ async function generateVoicePreset(config) {
 
     const dir = path.join(app.getPath("userData"), "voice-presets", presetDirectoryKey(apiBase, voiceId));
     await fs.mkdir(dir, { recursive: true });
-    const manifest = { apiBase, voiceId, groupA: [], groupB: [], updatedAt: Date.now() };
+    const manifest = { apiBase, voiceId, groupA: [], groupB: [], groupC: [], updatedAt: Date.now() };
 
     for (let index = 0; index < PRESET_TEXTS_A.length; index += 1) {
         const filename = `a-${index}.mp3`;
@@ -176,8 +265,13 @@ async function generateVoicePreset(config) {
         await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_B[index], { apiBase, apiKey, voiceId }));
         manifest.groupB.push(filename);
     }
+    for (let index = 0; index < PRESET_TEXTS_C.length; index += 1) {
+        const filename = `c-${index}.mp3`;
+        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_C[index], { apiBase, apiKey, voiceId }));
+        manifest.groupC.push(filename);
+    }
     await fs.writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
-    return { ok: true, count: manifest.groupA.length + manifest.groupB.length };
+    return { ok: true, count: manifest.groupA.length + manifest.groupB.length + manifest.groupC.length };
 }
 
 async function readVoicePreset(config) {
@@ -191,7 +285,8 @@ async function readVoicePreset(config) {
             (await fs.readFile(path.join(dir, filename))).toString("base64")));
         return {
             groupA: await loadGroup(manifest.groupA),
-            groupB: await loadGroup(manifest.groupB)
+            groupB: await loadGroup(manifest.groupB),
+            groupC: await loadGroup(manifest.groupC)
         };
     } catch {
         return null;
@@ -363,48 +458,171 @@ class XunfeiSession {
     }
 }
 
-ipcMain.handle("audio-chat:open", async (event, payload) => {
-    if (!isMainSender(event)) throw new Error("非法的语音窗口请求");
+function clearDesktopShortcut() {
+    if (desktopShortcut) {
+        globalShortcut.unregister(desktopShortcut);
+        desktopShortcut = "";
+    }
+}
+
+function screenshotQualitySettings(value) {
+    const quality = String(value || "balanced").toLowerCase();
+    if (quality === "low") return { maxEdge: 1280, jpegQuality: 72 };
+    if (quality === "high") return { maxEdge: 2560, jpegQuality: 92 };
+    return { maxEdge: 1920, jpegQuality: 85 };
+}
+
+async function captureCurrentDisplayScreenshot() {
+    if (!audioSession || audioSession.mode !== "desktop") return;
+    const captureWindow = audioWindow && !audioWindow.isDestroyed() ? audioWindow : null;
+    if (captureWindow) {
+        captureWindow.setOpacity(0);
+        await new Promise(resolve => setTimeout(resolve, 70));
+    }
+    try {
+    const point = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(point);
+    const scale = Number(display.scaleFactor) || 1;
+    const width = Math.max(1, Math.round(display.bounds.width * scale));
+    const height = Math.max(1, Math.round(display.bounds.height * scale));
+    const sources = await desktopCapturer.getSources({
+        types: ["screen"],
+        thumbnailSize: { width, height },
+        fetchWindowIcons: false
+    });
+    const displayIndex = screen.getAllDisplays().findIndex(item => item.id === display.id);
+    const source = sources.find(item => String(item.display_id) === String(display.id))
+        || (displayIndex >= 0 ? sources[displayIndex] : null)
+        || sources[0];
+    if (!source || source.thumbnail.isEmpty()) throw new Error("无法获取当前显示器截图");
+    const settings = screenshotQualitySettings(audioSession.settings.desktopImageQuality);
+    const imageSize = source.thumbnail.getSize();
+    const maxEdge = Math.max(imageSize.width, imageSize.height);
+    const resized = maxEdge > settings.maxEdge
+        ? source.thumbnail.resize({
+            width: Math.round(imageSize.width * settings.maxEdge / maxEdge),
+            height: Math.round(imageSize.height * settings.maxEdge / maxEdge),
+            quality: "best"
+        })
+        : source.thumbnail;
+    const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(settings.jpegQuality).toString("base64")}`;
+    audioSession.pendingScreenshot = dataUrl;
     if (audioWindow && !audioWindow.isDestroyed()) {
+        audioWindow.webContents.send("desktop-work:screenshot-captured", {
+            dataUrl,
+            displayId: String(display.id),
+            quality: audioSession.settings.desktopImageQuality || "balanced"
+        });
+    }
+    } finally {
+        if (captureWindow && !captureWindow.isDestroyed()) captureWindow.setOpacity(1);
+    }
+}
+
+function registerDesktopShortcut(settings) {
+    clearDesktopShortcut();
+    const accelerator = String(settings.desktopShortcut || "Control+A").trim() || "Control+A";
+    if (!globalShortcut.register(accelerator, () => {
+        captureCurrentDisplayScreenshot().catch(error => {
+            if (audioWindow && !audioWindow.isDestroyed()) audioWindow.webContents.send("desktop-work:screenshot-error", error.message);
+        });
+    })) {
+        throw new Error(`无法注册传图快捷键：${accelerator}`);
+    }
+    desktopShortcut = accelerator;
+    return accelerator;
+}
+
+async function openCollaborationWindow(event, payload, mode) {
+    if (!isMainSender(event)) throw new Error("非法的协作窗口请求");
+    if (hasConversationWindow()) {
         audioWindow.focus();
         return { ok: true, sessionId: audioSession && audioSession.sessionId, reused: true };
     }
 
     audioCompletionSent = false;
+    const settings = sanitizeSettings(payload && payload.settings);
     audioSession = {
         sessionId: crypto.randomUUID(),
+        mode,
         targetChatId: String(payload && payload.targetChatId || ""),
         context: sanitizeTurns(payload && payload.context),
-        settings: sanitizeSettings(payload && payload.settings),
-        pendingTurns: []
+        settings,
+        pendingTurns: [],
+        pendingScreenshot: null
     };
 
-    audioWindow = createWindow("audiochat.html", {
-        width: 600,
-        height: 600,
-        minWidth: 520,
-        minHeight: 520,
-        parent: mainWindow,
-        show: false,
-        backgroundColor: "#171717",
-        webSecurity: false,
-        allowRunningInsecureContent: true
-    });
+    if (mode === "desktop") {
+        registerDesktopShortcut(settings);
+        const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+        const width = Math.max(720, Math.round(display.workArea.width * 0.8));
+        const height = 156;
+        const x = Math.round(display.workArea.x + (display.workArea.width - width) / 2);
+        const y = Math.round(display.workArea.y + display.workArea.height - height - 12);
+        audioWindow = createWindow("desktopwork.html", {
+            width,
+            height,
+            minWidth: 640,
+            minHeight: height,
+            maxHeight: height,
+            x,
+            y,
+            show: false,
+            frame: false,
+            transparent: true,
+            alwaysOnTop: true,
+            skipTaskbar: true,
+            resizable: false,
+            backgroundColor: "#00000000",
+            webSecurity: false,
+            allowRunningInsecureContent: true
+        });
+        audioWindow.setAlwaysOnTop(true, "floating");
+        audioWindow.setIgnoreMouseEvents(true, { forward: true });
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+    } else {
+        audioWindow = createWindow("audiochat.html", {
+            width: 600,
+            height: 600,
+            minWidth: 520,
+            minHeight: 520,
+            parent: mainWindow,
+            show: false,
+            backgroundColor: "#171717",
+            webSecurity: false,
+            allowRunningInsecureContent: true
+        });
+    }
     audioWindow.once("ready-to-show", () => audioWindow && audioWindow.show());
     audioWindow.on("close", () => {
         emitAudioCompletion("window-close");
         closeAudioResources();
+        clearDesktopShortcut();
+        if (audioSession && audioSession.mode === "desktop" && mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+        }
     });
     audioWindow.on("closed", () => {
         audioWindow = null;
         audioSession = null;
         audioCompletionSent = false;
+        desktopMouseInteractive = false;
+        refreshTrayMenu();
     });
-    return { ok: true, sessionId: audioSession.sessionId, reused: false };
-});
+    refreshTrayMenu();
+    return { ok: true, sessionId: audioSession.sessionId, reused: false, shortcut: desktopShortcut };
+}
+
+ipcMain.handle("audio-chat:open", async (event, payload) => openCollaborationWindow(event, payload, "audio"));
+ipcMain.handle("desktop-work:open", async (event, payload) => openCollaborationWindow(event, payload, "desktop"));
 
 ipcMain.handle("audio-chat:get-session", async (event) => {
     if (!isAudioSender(event) || !audioSession) throw new Error("语音会话不存在");
+    return audioSession;
+});
+ipcMain.handle("desktop-work:get-session", async (event) => {
+    if (!isAudioSender(event) || !audioSession || audioSession.mode !== "desktop") throw new Error("桌面协作会话不存在");
     return audioSession;
 });
 
@@ -424,6 +642,22 @@ ipcMain.handle("audio-chat:complete", async (event, turns) => {
     }, 120);
     return { ok: true };
 });
+ipcMain.handle("desktop-work:complete", async (event, turns) => {
+    if (!isAudioSender(event) || !audioSession || audioSession.mode !== "desktop") return { ok: false };
+    audioSession.pendingTurns = sanitizeTurns(turns);
+    emitAudioCompletion("ended", audioSession.pendingTurns);
+    closeAudioResources();
+    clearDesktopShortcut();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+    }
+    setTimeout(() => {
+        if (audioWindow && !audioWindow.isDestroyed()) audioWindow.close();
+    }, 120);
+    return { ok: true };
+});
 
 ipcMain.handle("audio-chat:generate-preset", async (event, config) => {
     if (!isMainSender(event)) throw new Error("非法的预制语音请求");
@@ -431,6 +665,10 @@ ipcMain.handle("audio-chat:generate-preset", async (event, config) => {
 });
 
 ipcMain.handle("audio-chat:get-preset", async (event, config) => {
+    if (!isAudioSender(event)) return null;
+    return readVoicePreset(config || {});
+});
+ipcMain.handle("desktop-work:get-preset", async (event, config) => {
     if (!isAudioSender(event)) return null;
     return readVoicePreset(config || {});
 });
@@ -445,6 +683,26 @@ ipcMain.handle("audio-chat:tts", async (event, request) => {
         voiceId: source.voiceId
     });
     return audio.toString("base64");
+});
+ipcMain.handle("desktop-work:tts", async (event, request) => {
+    if (!isAudioSender(event)) throw new Error("非法的 Fish Audio 请求");
+    const source = request && typeof request === "object" ? request : {};
+    const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), {
+        apiBase: source.apiBase,
+        apiKey: source.apiKey,
+        voiceId: source.voiceId
+    });
+    return audio.toString("base64");
+});
+
+ipcMain.handle("desktop-work:set-interactive", async (event, value) => {
+    if (!isAudioSender(event) || !audioSession || audioSession.mode !== "desktop" || !audioWindow) return { ok: false };
+    const next = Boolean(value);
+    if (desktopMouseInteractive !== next) {
+        desktopMouseInteractive = next;
+        audioWindow.setIgnoreMouseEvents(!next, { forward: true });
+    }
+    return { ok: true, interactive: next };
 });
 
 ipcMain.handle("xunfei:start", async (event, credentials) => {
@@ -475,18 +733,67 @@ ipcMain.handle("xunfei:abort", async (event) => {
     return { ok: true };
 });
 
+ipcMain.on("renderer:ready", (event) => {
+    if (!isMainSender(event)) return;
+    mainRendererReady = true;
+    flushMainCommands();
+});
+
+ipcMain.on("app-state:update", (event, state) => {
+    if (!isMainSender(event)) return;
+    developerModeEnabled = Boolean(state && state.developerMode);
+    refreshTrayMenu();
+});
+
+function trayTemplate() {
+    const collaborationDisabled = hasConversationWindow();
+    return [
+        { label: "打开主页面", click: showMainWindow },
+        { label: "开启新语音聊天", enabled: !collaborationDisabled, click: () => sendMainCommand("new-audio-chat") },
+        { label: "开启新桌面协作", enabled: !collaborationDisabled, click: () => sendMainCommand("new-desktop-work") },
+        { label: "从最近会话开启语音聊天", enabled: !collaborationDisabled, click: () => sendMainCommand("recent-audio-chat") },
+        { label: "从最近会话开启桌面协作", enabled: !collaborationDisabled, click: () => sendMainCommand("recent-desktop-work") },
+        ...(developerModeEnabled ? [
+            { type: "separator" },
+            { label: "清除日志", click: () => sendMainCommand("clear-logs") },
+            { label: "导出日志", click: () => sendMainCommand("export-logs") }
+        ] : []),
+        { type: "separator" },
+        {
+            label: "退出AIUI",
+            click: () => {
+                isQuitting = true;
+                app.quit();
+            }
+        }
+    ];
+}
+
+function refreshTrayMenu() {
+    if (!tray || tray.isDestroyed()) return;
+    tray.setContextMenu(Menu.buildFromTemplate(trayTemplate()));
+}
+
+function createTray() {
+    const icon = nativeImage.createFromPath(path.join(__dirname, "favicon.ico"));
+    tray = new Tray(icon);
+    tray.setToolTip("AIUI");
+    refreshTrayMenu();
+    tray.on("click", () => tray.popUpContextMenu());
+}
+
 app.whenReady().then(() => {
-    mainWindow = createWindow();
-    mainWindow.on("closed", () => { mainWindow = null; });
+    createMainWindow();
+    createTray();
 
     app.on("activate", () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            mainWindow = createWindow();
-            mainWindow.on("closed", () => { mainWindow = null; });
-        }
+        showMainWindow();
     });
 });
 
-app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit();
+app.on("before-quit", () => {
+    isQuitting = true;
+    clearDesktopShortcut();
 });
+
+app.on("window-all-closed", () => {});
