@@ -482,22 +482,13 @@
             text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 8px rgba(0, 0, 0, 0.95);
         }
 
-        html.desktop-work .transcript-content.desktop-marquee {
-            width: max-content;
-            min-width: 100%;
-            animation: desktop-marquee var(--desktop-marquee-duration, 10s) linear infinite alternate;
-        }
-
-        @keyframes desktop-marquee {
-            from { transform: translateX(0); }
-            to { transform: translateX(calc(-1 * var(--desktop-marquee-distance, 0px))); }
-        }
-
         html.desktop-work .transcript-content,
         html.desktop-work .transcript-content.plain {
+            width: max-content;
+            min-width: 100%;
             min-height: 0;
             display: block;
-            overflow: hidden;
+            overflow: visible;
             white-space: nowrap;
             text-overflow: clip;
         }
@@ -1137,10 +1128,15 @@
                 this.pendingScreenshot = null;
                 this.desktopInteractive = false;
                 this.desktopPlaybackCooldownUntil = 0;
+                this.desktopAIActiveTextEnd = 0;
+                this.desktopAIQueuedTextEnd = 0;
+                this.desktopAIScrollFrame = 0;
+                this.desktopAIQueuedScrollBehavior = 'auto';
+                this.desktopUserScrollFrame = 0;
 
                 this.playback.onItemStart = item => {
                     this.stopPresetAudio();
-                    this.setAIActiveSentence(item?.text || '');
+                    this.setAIActiveSentence(item?.text || '', item?.displayEnd || 0);
                     this.setStatus('speaking', 'AI 正在说话…');
                 };
                 this.playback.onAllComplete = () => {
@@ -1238,7 +1234,8 @@
                 if (desktopMode) {
                     this.aiContentElement.className = 'transcript-content plain';
                     this.aiContentElement.textContent = value.replace(/\s+/g, ' ');
-                    this.updateDesktopMarquee(this.aiContentElement);
+                    if (!value) this.aiElement.scrollLeft = 0;
+                    this.queueDesktopAISubtitleScroll('auto');
                     return;
                 }
                 if (placeholder || !value) {
@@ -1289,23 +1286,48 @@
                 this.userContentElement.textContent = desktopMode ? String(text || '').replace(/\s+/g, ' ') : text;
                 this.userContentElement.className = 'transcript-content plain';
                 this.userElement.classList.toggle('placeholder', placeholder);
-                if (desktopMode) this.updateDesktopMarquee(this.userContentElement);
+                if (desktopMode) this.queueDesktopUserSubtitleScroll();
                 this.userElement.scrollTop = this.userElement.scrollHeight;
             }
 
-            updateDesktopMarquee(element) {
-                if (!desktopMode || !element) return;
-                element.classList.remove('desktop-marquee');
-                element.style.removeProperty('--desktop-marquee-distance');
-                element.style.removeProperty('--desktop-marquee-duration');
-                requestAnimationFrame(() => {
-                    const parentWidth = element.parentElement?.clientWidth || 0;
-                    const distance = Math.max(0, element.scrollWidth - parentWidth);
-                    if (distance <= 0) return;
-                    element.style.setProperty('--desktop-marquee-distance', `${distance}px`);
-                    element.style.setProperty('--desktop-marquee-duration', `${Math.max(8, distance / 55 + 4)}s`);
-                    element.classList.add('desktop-marquee');
+            queueDesktopUserSubtitleScroll() {
+                if (!desktopMode || this.desktopUserScrollFrame) return;
+                this.desktopUserScrollFrame = requestAnimationFrame(() => {
+                    this.desktopUserScrollFrame = 0;
+                    this.userElement.scrollLeft = Math.max(0, this.userElement.scrollWidth - this.userElement.clientWidth);
                 });
+            }
+
+            queueDesktopAISubtitleScroll(behavior = 'auto') {
+                if (!desktopMode || !this.desktopAIActiveTextEnd) return;
+                if (behavior === 'smooth') this.desktopAIQueuedScrollBehavior = 'smooth';
+                if (this.desktopAIScrollFrame) return;
+                this.desktopAIScrollFrame = requestAnimationFrame(() => {
+                    this.desktopAIScrollFrame = 0;
+                    const queuedBehavior = this.desktopAIQueuedScrollBehavior;
+                    this.desktopAIQueuedScrollBehavior = 'auto';
+                    this.scrollDesktopAISubtitleToActiveSentence(queuedBehavior);
+                });
+            }
+
+            scrollDesktopAISubtitleToActiveSentence(behavior = 'auto') {
+                const textNode = this.aiContentElement.firstChild;
+                if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
+                const endOffset = Math.min(this.desktopAIActiveTextEnd, textNode.textContent.length);
+                if (endOffset <= 0) return;
+
+                const range = document.createRange();
+                range.setStart(textNode, 0);
+                range.setEnd(textNode, endOffset);
+                const targetRight = range.getBoundingClientRect().right;
+                const containerRight = this.aiElement.getBoundingClientRect().right;
+                const overflow = targetRight - containerRight;
+                range.detach();
+                if (overflow <= 0.5) return;
+
+                const maxScrollLeft = Math.max(0, this.aiElement.scrollWidth - this.aiElement.clientWidth);
+                const nextScrollLeft = Math.min(maxScrollLeft, this.aiElement.scrollLeft + overflow + 2);
+                this.aiElement.scrollTo({ left: nextScrollLeft, behavior });
             }
 
             deferAIAutoScroll() {
@@ -1317,7 +1339,19 @@
                 }, 5000);
             }
 
-            setAIActiveSentence(text) {
+            setAIActiveSentence(text, displayEnd = 0) {
+                if (desktopMode) {
+                    const value = String(this.currentAssistantText || '').replace(/\s+/g, ' ');
+                    const clean = String(text || '').replace(/\s+/g, ' ');
+                    let activeEnd = Number(displayEnd) || 0;
+                    if (!activeEnd && clean) {
+                        const start = value.indexOf(clean, Math.max(0, this.desktopAIActiveTextEnd - clean.length));
+                        if (start >= 0) activeEnd = start + clean.length;
+                    }
+                    this.desktopAIActiveTextEnd = Math.min(value.length, activeEnd);
+                    this.queueDesktopAISubtitleScroll('smooth');
+                    return;
+                }
                 this.aiActiveSentenceText = normalizeSentenceKey(text);
                 if (this.currentAssistantText) this.setAIText(this.currentAssistantText, false);
                 this.queueAITranscriptScroll('smooth');
@@ -1604,6 +1638,17 @@
                 const clean = cleanVoiceText(text);
                 if (!clean) return;
                 const index = this.currentVoiceSegmentPromises.length;
+                let displayEnd = 0;
+                if (desktopMode) {
+                    const display = String(this.currentAssistantText || '').replace(/\s+/g, ' ');
+                    const segment = clean.replace(/\s+/g, ' ');
+                    const searchStart = Math.min(this.desktopAIQueuedTextEnd, display.length);
+                    const displayStart = display.indexOf(segment, searchStart);
+                    displayEnd = displayStart >= 0
+                        ? displayStart + segment.length
+                        : Math.min(display.length, searchStart + segment.length);
+                    this.desktopAIQueuedTextEnd = Math.max(searchStart, displayEnd);
+                }
                 console.info(`[AudioChat][TTS] enqueue sentence=${index + 1} chars=${clean.length} voiceId=${this.settings.fishVoiceId || '(empty)'}`);
                 const audioPromise = requestFishSpeechDirect(clean, this.settings);
                 audioPromise
@@ -1620,7 +1665,7 @@
                 const playbackAudioPromise = this.presetSequencePromise
                     ? this.presetSequencePromise.then(() => audioPromise)
                     : audioPromise;
-                this.playback.enqueue({ text: clean, audioPromise: playbackAudioPromise });
+                this.playback.enqueue({ text: clean, displayEnd, audioPromise: playbackAudioPromise });
             }
 
             async respond(_text, hasScreenshot = false) {
@@ -1631,6 +1676,10 @@
                 this.aiActiveSentenceText = '';
                 this.aiLastMatchedSentenceIndex = -1;
                 this.aiCompletedSentenceCount = 0;
+                this.desktopAIActiveTextEnd = 0;
+                this.desktopAIQueuedTextEnd = 0;
+                this.desktopAIQueuedScrollBehavior = 'auto';
+                this.aiElement.scrollLeft = 0;
                 this.resetCurrentVoiceRecord();
                 this.setAIText('');
                 this.setStatus('responding', 'AI 正在思考…');

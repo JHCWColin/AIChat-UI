@@ -9,7 +9,7 @@
 基于前端页面与 Electron 的 AI 对话桌面应用，覆盖文字聊天、Canvas 编码、语音聊天、附件解析、图像生成与 Windows 本地打包。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V6.0.0_Canary_2-blue)]()
+[![Version](https://img.shields.io/badge/version-V6.0.0_Canary_3-blue)]()
 
 </div>
 
@@ -32,6 +32,12 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V6.0.0 Canary 3
+
+- 修复桌面协作字幕向左移动后右侧文字仍被截断的问题，改用真实横向滚动并随流式文本实时刷新位置。
+- AI 字幕只在开始朗读无法完整显示的当前语句时滚动，已完整显示的前置语句保持静止。
+- 用户语音识别字幕持续跟随最新部分识别文字。
 
 ### V6.0.0 Canary 2
 
@@ -153,8 +159,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI6.0.0Canary2-Portable.exe`
-- Setup：`AIUI6.0.0Canary2-Setup.exe`
+- Portable：`AIUI6.0.0Canary3-Portable.exe`
+- Setup：`AIUI6.0.0Canary3-Setup.exe`
 
 构建命令：
 
@@ -181,8 +187,8 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V6.0.0 Canary 2`
-- 当前构建标识：`build20260810`
+- 当前版本：`V6.0.0 Canary 3`
+- 当前构建标识：`build20260811`
 
 ---
 
