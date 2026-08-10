@@ -1823,8 +1823,8 @@
                 const previousMode = this.mode;
                 this.ending = true;
                 this.endButton.disabled = true;
-                this.endButton.textContent = '正在保存通话记录…';
-                this.setStatus('responding', '正在结束通话…');
+                this.endButton.textContent = '保存通话记录…';
+                this.setStatus('responding', '结束通话…');
                 try {
                     if (this.recognitionPromise) await this.recognitionPromise;
                     if (previousMode === 'recording') {
