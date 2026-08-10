@@ -1238,6 +1238,22 @@
             justify-content: center;
             cursor: pointer;
             backdrop-filter: blur(4px);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.24s ease, visibility 0.24s ease;
+        }
+
+        .image-lightbox.flex {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .image-lightbox.is-closing {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
 
         .image-lightbox img {
@@ -1245,6 +1261,14 @@
             max-height: 90vh;
             border-radius: 1rem;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transform: scale(0.96);
+            transition: opacity 0.24s ease, transform 0.24s ease;
+        }
+
+        .image-lightbox.flex img {
+            opacity: 1;
+            transform: scale(1);
         }
 
         #attach-btn {
@@ -2591,6 +2615,16 @@
                             </select>
                             <p class="text-[11px] text-gray-500 mt-2">截图只保留下一次语音输入附带的最后一张图片。</p>
                         </div>
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300" for="desktop-skip-b-preset-input">跳过B组语音</label>
+                                <p class="text-[11px] text-gray-500 mt-2">开启后桌面协作预制语音只播放 A 组和 C 组。</p>
+                            </div>
+                            <label class="cloud-toggle shrink-0">
+                                <input type="checkbox" id="desktop-skip-b-preset-input">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div id="section-other" class="settings-content-section space-y-5">
@@ -2775,7 +2809,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V6.0.0 Canary</span>
+                            <span id="app-version">V6.0.0 Canary 2</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -4893,17 +4927,31 @@
         function viewAttachmentImage(index) {
             const att = currentAttachments[index];
             if (!att || !att.isImage || !att.fullDataUrl) return;
+            showLightbox(att.fullDataUrl);
+        }
+
+        function showLightbox(src) {
             const lightbox = document.getElementById('image-lightbox');
             const img = document.getElementById('lightbox-img');
-            img.src = att.fullDataUrl;
-            lightbox.classList.remove('hidden');
+            if (!lightbox || !img) return;
+            clearTimeout(lightbox._closeTimer);
+            img.src = src || '';
+            lightbox.classList.remove('hidden', 'is-closing');
             lightbox.classList.add('flex');
         }
 
         function closeLightbox() {
             const lightbox = document.getElementById('image-lightbox');
-            lightbox.classList.add('hidden');
+            const img = document.getElementById('lightbox-img');
+            if (!lightbox || lightbox.classList.contains('hidden')) return;
             lightbox.classList.remove('flex');
+            lightbox.classList.add('is-closing');
+            clearTimeout(lightbox._closeTimer);
+            lightbox._closeTimer = setTimeout(() => {
+                lightbox.classList.add('hidden');
+                lightbox.classList.remove('is-closing');
+                if (img) img.src = '';
+            }, 240);
         }
 
         function updateAttachButtonState() {
@@ -5044,11 +5092,7 @@
                         thumb.className = 'msg-attachment-thumb';
                         thumb.title = att.name + ' (点击查看大图)';
                         thumb.onclick = () => {
-                            const lb = document.getElementById('image-lightbox');
-                            const lbImg = document.getElementById('lightbox-img');
-                            lbImg.src = att.fullDataUrl;
-                            lb.classList.remove('hidden');
-                            lb.classList.add('flex');
+                            showLightbox(att.fullDataUrl);
                         };
                         attContainer.appendChild(thumb);
                     } else {
@@ -5071,11 +5115,7 @@
                     img.src = imgData;
                     img.className = 'w-48 h-48 object-cover rounded-lg cursor-pointer border border-white/20';
                     img.onclick = () => {
-                        const lb = document.getElementById('image-lightbox');
-                        const lbImg = document.getElementById('lightbox-img');
-                        lbImg.src = imgData;
-                        lb.classList.remove('hidden');
-                        lb.classList.add('flex');
+                        showLightbox(imgData);
                     };
                     imgDiv.appendChild(img);
                 });
@@ -5407,8 +5447,10 @@
         function populateDesktopWorkSettings() {
             const shortcut = document.getElementById('desktop-shortcut-input');
             const quality = document.getElementById('desktop-image-quality-input');
+            const skipB = document.getElementById('desktop-skip-b-preset-input');
             if (shortcut) shortcut.value = localStorage.getItem('desktop_shortcut') || 'Ctrl+A';
             if (quality) quality.value = localStorage.getItem('desktop_image_quality') || 'balanced';
+            if (skipB) skipB.checked = localStorage.getItem('desktop_skip_b_preset') === 'true';
         }
 
         function updateVoicePresetProbabilityLabel() {
@@ -5625,9 +5667,11 @@
             if (voicePresetProbability) localStorage.setItem('voice_preset_probability', voicePresetProbability.value);
             const desktopShortcutInput = document.getElementById('desktop-shortcut-input');
             const desktopQualityInput = document.getElementById('desktop-image-quality-input');
+            const desktopSkipBInput = document.getElementById('desktop-skip-b-preset-input');
             const savedDesktopShortcut = String(desktopShortcutInput?.value || 'Ctrl+A').trim() || 'Ctrl+A';
             localStorage.setItem('desktop_shortcut', savedDesktopShortcut);
             localStorage.setItem('desktop_image_quality', desktopQualityInput?.value || 'balanced');
+            localStorage.setItem('desktop_skip_b_preset', desktopSkipBInput?.checked ? 'true' : 'false');
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
@@ -6175,6 +6219,7 @@
                 requestEndpoint: getRequestEndpoint(),
                 desktopShortcut: localStorage.getItem('desktop_shortcut') || 'Ctrl+A',
                 desktopImageQuality: localStorage.getItem('desktop_image_quality') || 'balanced',
+                desktopSkipB: localStorage.getItem('desktop_skip_b_preset') === 'true',
                 theme: localStorage.getItem('theme') || 'light',
                 backgroundImage: selectedBackgroundImage
             };
@@ -6417,7 +6462,7 @@
             container.innerHTML = currentAttachments.map((att, idx) => `
           <div class="relative inline-flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20 gap-1" style="max-width:100px;">
             <button class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs cursor-pointer" onclick="removeAttachment(${idx})">×</button>
-            <img src="${att.dataUrl}" class="attachment-thumb" onclick="viewAttachmentImage('${att.dataUrl}')" title="${att.name}">
+            <img src="${att.dataUrl}" class="attachment-thumb" onclick="showLightbox('${att.dataUrl}')" title="${att.name}">
             <span class="text-xs text-gray-300 truncate w-full text-center">${att.name}</span>
           </div>
         `).join('');

@@ -478,8 +478,19 @@
             text-align: left;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
+            text-overflow: clip;
             text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 8px rgba(0, 0, 0, 0.95);
+        }
+
+        html.desktop-work .transcript-content.desktop-marquee {
+            width: max-content;
+            min-width: 100%;
+            animation: desktop-marquee var(--desktop-marquee-duration, 10s) linear infinite alternate;
+        }
+
+        @keyframes desktop-marquee {
+            from { transform: translateX(0); }
+            to { transform: translateX(calc(-1 * var(--desktop-marquee-distance, 0px))); }
         }
 
         html.desktop-work .transcript-content,
@@ -488,7 +499,7 @@
             display: block;
             overflow: hidden;
             white-space: nowrap;
-            text-overflow: ellipsis;
+            text-overflow: clip;
         }
 
         html.desktop-work .transcript-sentence {
@@ -1125,6 +1136,7 @@
                 this.currentVoiceRecordStored = false;
                 this.pendingScreenshot = null;
                 this.desktopInteractive = false;
+                this.desktopPlaybackCooldownUntil = 0;
 
                 this.playback.onItemStart = item => {
                     this.stopPresetAudio();
@@ -1132,6 +1144,7 @@
                     this.setStatus('speaking', 'AI 正在说话…');
                 };
                 this.playback.onAllComplete = () => {
+                    if (desktopMode) this.desktopPlaybackCooldownUntil = Date.now() + 900;
                     if (this.responseFinished && !this.ending) this.returnToListening();
                 };
             }
@@ -1222,6 +1235,12 @@
             setAIText(text, placeholder = false) {
                 this.aiElement.classList.toggle('placeholder', placeholder);
                 const value = String(text || '');
+                if (desktopMode) {
+                    this.aiContentElement.className = 'transcript-content plain';
+                    this.aiContentElement.textContent = value.replace(/\s+/g, ' ');
+                    this.updateDesktopMarquee(this.aiContentElement);
+                    return;
+                }
                 if (placeholder || !value) {
                     this.aiContentElement.className = 'transcript-content plain';
                     this.aiContentElement.textContent = value;
@@ -1267,10 +1286,26 @@
             }
 
             setUserText(text, placeholder = false) {
-                this.userContentElement.textContent = text;
+                this.userContentElement.textContent = desktopMode ? String(text || '').replace(/\s+/g, ' ') : text;
                 this.userContentElement.className = 'transcript-content plain';
                 this.userElement.classList.toggle('placeholder', placeholder);
+                if (desktopMode) this.updateDesktopMarquee(this.userContentElement);
                 this.userElement.scrollTop = this.userElement.scrollHeight;
+            }
+
+            updateDesktopMarquee(element) {
+                if (!desktopMode || !element) return;
+                element.classList.remove('desktop-marquee');
+                element.style.removeProperty('--desktop-marquee-distance');
+                element.style.removeProperty('--desktop-marquee-duration');
+                requestAnimationFrame(() => {
+                    const parentWidth = element.parentElement?.clientWidth || 0;
+                    const distance = Math.max(0, element.scrollWidth - parentWidth);
+                    if (distance <= 0) return;
+                    element.style.setProperty('--desktop-marquee-distance', `${distance}px`);
+                    element.style.setProperty('--desktop-marquee-duration', `${Math.max(8, distance / 55 + 4)}s`);
+                    element.classList.add('desktop-marquee');
+                });
             }
 
             deferAIAutoScroll() {
@@ -1397,6 +1432,17 @@
                 }
 
                 if (this.mode === 'recognizing' || this.mode === 'initializing' || this.mode === 'ending') return;
+                if (desktopMode && (
+                    this.mode === 'responding'
+                    || this.playback.isActive()
+                    || Boolean(this.presetAudio)
+                    || Date.now() < this.desktopPlaybackCooldownUntil
+                )) {
+                    this.preRoll = [];
+                    this.startCount = 0;
+                    this.idleFrames = 0;
+                    return;
+                }
                 this.preRoll.push(frame);
                 if (this.preRoll.length > this.preRollFrames) this.preRoll.shift();
 
@@ -1699,7 +1745,10 @@
                     if (!this.presetAudio) return;
                 }
                 const probability = Math.max(0, Math.min(100, Number(this.settings.presetBProbability) || 0)) / 100;
-                if (Math.random() < probability && Array.isArray(this.preset.groupB) && this.preset.groupB.length) {
+                if ((!desktopMode || !this.settings.desktopSkipB)
+                    && Math.random() < probability
+                    && Array.isArray(this.preset.groupB)
+                    && this.preset.groupB.length) {
                     await play(this.preset.groupB[Math.floor(Math.random() * this.preset.groupB.length)]);
                 }
                 this.presetAudio = null;
