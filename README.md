@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V6.0.0_Canary_3-blue)]()
+[![Version](https://img.shields.io/badge/version-V6.0.0_Release-blue)]()
 
 </div>
 
@@ -18,6 +18,8 @@
 ## 项目概览
 
 AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI 工作台。当前版本重点覆盖以下能力：
+
+![func-overview](screenshot/func-overview.png)
 
 - `/canvas` 编码模式：在对话旁直接生成和编辑代码画布。
 - 桌面协作模式：透明置顶字幕、点击穿透、全局快捷键截图与语音上下文协作。
@@ -78,7 +80,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 2. 语音聊天模式
 
-![audiochat](screenshot/audiochat.png)
+![audio-chat](screenshot/audiochat.png)
+![audio-text](screenshot/audiochat%20can%20be%20saved%20to%20textchat.png)
 
 - 独立 `audiochat.html` 页面，采用上下双分区字幕布局。
 - 上半区显示 AI 字幕，下半区显示用户识别文本。
@@ -87,9 +90,9 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 可在偏好设置中一键清除历史语音记录，不影响预制语音与后续新记录。
 - 语音聊天可以从文字对话中途开始也可以之后转成文本继续对话。
 
-![audiotext](screenshot/audiochat%20can%20be%20saved%20to%20textchat.png)
-
 ### 3. 桌面协作模式
+
+![desktop-work](screenshot/desktop%20work.png)
 
 - 透明、无边框、始终置顶的横向字幕窗口默认停靠当前显示器底部。
 - AI 与用户语音内容各占一行，白色字幕使用黑色文字阴影保证可读性。
@@ -98,9 +101,9 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 多次截图只保留最后一张，并在下一次语音输入时作为用户消息附件发送。
 - 结束协作后，文字、AI 语音记录和截图会写回对应主会话。
 
-![audiotext](screenshot/desktop%20work.png)
-
 ### 4. 多模型与 API 配置
+
+![nulti-model-endpoint](screenshot/multi-model-and-endpoint.png)
 
 - 支持自定义 Base URL、API Key、模型列表和默认模型。
 - 模型配置保存在本地，适合长期个人环境使用。
@@ -135,12 +138,12 @@ npm start
 
 ---
 
-## Windows 构建
+## 以 Windows 为例的桌面应用构建
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI6.0.0Canary3-Portable.exe`
-- Setup：`AIUI6.0.0Canary3-Setup.exe`
+- Portable：`AIUI6.0.0Release-Portable.exe`
+- Setup：`AIUI6.0.0Release-Setup.exe`
 
 构建命令：
 
@@ -167,7 +170,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V6.0.0 Canary 3`
+- 当前版本：`V6.0.0 Release`
 - 当前构建标识：`build20260811`
 
 ---
