@@ -2015,7 +2015,40 @@
         body.theme-light #voice-btn.recording {
             background: rgba(220, 38, 38, 0.8);
         }
-        
+
+        body.theme-pure-white {
+            background: #ffffff;
+            color: #111111;
+        }
+
+        body.theme-pure-black {
+            background: #000000;
+            color: #f0f0f0;
+        }
+
+        body.theme-pure-white,
+        body.theme-pure-black {
+            filter: grayscale(1);
+        }
+
+        body.theme-pure-white .temp-btn.active,
+        body.theme-pure-white .font-btn.active,
+        body.theme-pure-white .theme-btn.active,
+        body.theme-pure-white .code-size-btn.active,
+        body.theme-pure-white .layout-btn.active,
+        body.theme-pure-black .temp-btn.active,
+        body.theme-pure-black .font-btn.active,
+        body.theme-pure-black .theme-btn.active,
+        body.theme-pure-black .code-size-btn.active,
+        body.theme-pure-black .layout-btn.active {
+            background: #808080;
+            border-color: #555555;
+            color: #ffffff;
+        }
+
+        #smooth-scroll-option:not(.hidden) {
+            display: flex;
+        }
     </style>
 </head>
 
@@ -2368,6 +2401,10 @@
                                 onclick="setTheme('light')">浅色</button>
                             <button class="theme-btn rounded-xl" data-theme="dark"
                                 onclick="setTheme('dark')">深色</button>
+                            <button class="theme-btn rounded-xl" data-theme="pure-white"
+                                onclick="setTheme('pure-white')">纯白</button>
+                            <button class="theme-btn rounded-xl" data-theme="pure-black"
+                                onclick="setTheme('pure-black')">纯黑</button>
                         </div>
                     </div>
                     <div>
@@ -2595,6 +2632,16 @@
                         </div>
                         <p class="text-[11px] text-gray-500 mt-2">过期后可前往讯飞开放平台重新获取。</p>
                     </div>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col pr-3">
+                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
+                        </div>
+                        <button type="button" onclick="requestClearVoiceRecords()"
+                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                            清除
+                        </button>
+                    </div>
                 </div>
                 <div id="section-desktop-work" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">桌面协作</h3>
@@ -2653,14 +2700,24 @@
                         </label>
                     </div>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col pr-3">
-                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-200">接收输出时自动滚动到底部</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">开启后，AI 流式输出过程中会自动滚动到消息底部。</span>
                         </div>
-                        <button type="button" onclick="requestClearVoiceRecords()"
-                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
-                            清除
-                        </button>
+                        <label class="cloud-toggle">
+                            <input type="checkbox" id="auto-scroll-toggle" onchange="onAutoScrollToggleChange()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="smooth-scroll-option" class="hidden items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-medium text-gray-200">滚动到底部动画开关</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">开启后，每次自动滚动到底部都使用平滑动画。</span>
+                        </div>
+                        <label class="cloud-toggle">
+                            <input type="checkbox" id="smooth-scroll-toggle" onchange="onSmoothScrollToggleChange()">
+                            <span class="slider"></span>
+                        </label>
                     </div>
                 </div>
                 <div id="section-advanced" class="settings-content-section space-y-5">
@@ -4213,6 +4270,8 @@
         let currentFontSize = localStorage.getItem('font_size') || 'medium';
         let currentCanvasFontSize = localStorage.getItem('canvas_font_size') || 'medium';
         let selectedBackgroundImage = parseInt(localStorage.getItem('bg_image')) || 1;
+        let autoScrollOnReceive = localStorage.getItem('auto_scroll_on_receive') === 'true';
+        let smoothScrollOnReceive = localStorage.getItem('smooth_scroll_on_receive') === 'true';
         let currentLayoutMode = localStorage.getItem('layout_mode') || 'classic';
         let abortController = null;
         let isGenerating = false;
@@ -5034,6 +5093,16 @@
             renderMessages(resolved);
         }
 
+        function scrollMessagesToBottom(smooth = smoothScrollOnReceive) {
+            const wrapper = document.getElementById('messages-wrapper');
+            if (!wrapper) return;
+            if (smooth && typeof wrapper.scrollTo === 'function') {
+                wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'smooth' });
+            } else {
+                wrapper.scrollTop = wrapper.scrollHeight;
+            }
+        }
+
         function renderMessages(messages) {
             const wrapper = document.getElementById('messages-wrapper');
             wrapper.innerHTML = '';
@@ -5051,7 +5120,6 @@
                 appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
                     .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '');
             });
-            wrapper.scrollTop = wrapper.scrollHeight;
         }
 
         function appendMessageToUI(role, content, model, showActions = false, reasoning = '', attachments = [],
@@ -5179,19 +5247,15 @@
                     btnGroup.appendChild(copyMsgBtn);
                 }
                 if (voiceRecordId) {
-                    void (async () => {
-                        const record = await VoiceRecordStore.getRecord(voiceRecordId).catch(() => null);
-                        if (!record) return;
-                        const replayBtn = document.createElement('span');
-                        replayBtn.className = 'action-btn';
-                        replayBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> 回放`;
-                        replayBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            playVoiceRecord(record.id);
-                        };
-                        btnGroup.appendChild(replayBtn);
-                        lucide.createIcons();
-                    })();
+                    const replayBtn = document.createElement('span');
+                    replayBtn.className = 'action-btn';
+                    replayBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> 回放`;
+                    replayBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        playVoiceRecord(voiceRecordId);
+                    };
+                    btnGroup.appendChild(replayBtn);
+                    lucide.createIcons();
                 }
                 footer.appendChild(modelSpan);
                 footer.appendChild(btnGroup);
@@ -5201,7 +5265,6 @@
             wrapper.appendChild(row);
             lucide.createIcons();
             if (content) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
-            wrapper.scrollTop = wrapper.scrollHeight;
             return row;
         }
         async function copyToClipboard(text, btnElement) {
@@ -5558,17 +5621,23 @@
         }
 
         function setTheme(theme, save = true) {
-            document.body.classList.remove('theme-light', 'theme-dark');
-            document.body.classList.add(`theme-${theme}`);
+            document.body.classList.remove('theme-light', 'theme-dark', 'theme-pure-white', 'theme-pure-black');
+            const baseTheme = theme === 'pure-white' ? 'light' : (theme === 'pure-black' ? 'dark' : theme);
+            document.body.classList.add(`theme-${baseTheme}`);
+            if (theme === 'pure-white') document.body.classList.add('theme-pure-white');
+            if (theme === 'pure-black') document.body.classList.add('theme-pure-black');
             if (save) localStorage.setItem('theme', theme);
+            highlightThemeBtn(theme);
+            updateBackgroundImageControls(theme);
             updateBackgroundImage();
             if (cmEditor) {
-                cmEditor.setOption('theme', theme === 'light' ? 'default' : 'material-darker');
+                cmEditor.setOption('theme', baseTheme === 'light' ? 'default' : 'material-darker');
             }
             lucide.createIcons();
         }
 
         function setBackgroundImage(num, btn) {
+            if (document.body.classList.contains('theme-pure-white') || document.body.classList.contains('theme-pure-black')) return;
             selectedBackgroundImage = num;
             document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => {
                 img.style.borderColor = '#4b5563';
@@ -5696,6 +5765,12 @@
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
+            const autoScrollToggle = document.getElementById('auto-scroll-toggle');
+            const smoothScrollToggle = document.getElementById('smooth-scroll-toggle');
+            if (autoScrollToggle) autoScrollOnReceive = autoScrollToggle.checked;
+            if (smoothScrollToggle) smoothScrollOnReceive = smoothScrollToggle.checked;
+            localStorage.setItem('auto_scroll_on_receive', autoScrollOnReceive ? 'true' : 'false');
+            localStorage.setItem('smooth_scroll_on_receive', smoothScrollOnReceive ? 'true' : 'false');
             const devToggle = document.getElementById('developer-mode-toggle');
             if (devToggle) developerModeEnabled = devToggle.checked;
             localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
@@ -5716,6 +5791,14 @@
         }
 
         function updateBackgroundImage() {
+            if (document.body.classList.contains('theme-pure-white')) {
+                document.body.style.background = '#ffffff';
+                return;
+            }
+            if (document.body.classList.contains('theme-pure-black')) {
+                document.body.style.background = '#000000';
+                return;
+            }
             const bgNum = selectedBackgroundImage;
             const newUrl = `${bgNum}.JPG`;
             if (document.body.classList.contains('theme-light')) {
@@ -6159,6 +6242,7 @@
             chat.messages.push(userMsg);
             chat.updatedAt = Date.now();
             appendMessageToUI('user', actualMessage, null, false, '', attachmentsToSend);
+            scrollMessagesToBottom(false);
             resetInputState();
             clearAttachments();
             updateCanvasPanelForChat(chat);
@@ -6926,7 +7010,7 @@
             cmEditor = CodeMirror(cmContainer, {
                 value: '',
                 mode: 'javascript',
-                theme: savedTheme === 'light' ? 'default' : 'material-darker',
+                theme: (savedTheme === 'light' || savedTheme === 'pure-white') ? 'default' : 'material-darker',
                 lineNumbers: true,
                 readOnly: false,
                 tabSize: 2,
@@ -6959,6 +7043,21 @@
         function highlightFontBtn(size) {
             document.querySelectorAll('.font-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.size === size);
+            });
+        }
+
+        function highlightThemeBtn(theme) {
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === theme);
+            });
+        }
+
+        function updateBackgroundImageControls(theme) {
+            const pureTheme = theme === 'pure-white' || theme === 'pure-black';
+            document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => {
+                img.style.pointerEvents = pureTheme ? 'none' : '';
+                img.style.opacity = pureTheme ? '0.35' : '';
+                img.style.filter = pureTheme ? 'grayscale(1)' : '';
             });
         }
 
@@ -7050,6 +7149,20 @@
             }
         }
 
+        function onAutoScrollToggleChange() {
+            const toggle = document.getElementById('auto-scroll-toggle');
+            autoScrollOnReceive = toggle ? toggle.checked : false;
+            localStorage.setItem('auto_scroll_on_receive', autoScrollOnReceive ? 'true' : 'false');
+            const smoothOption = document.getElementById('smooth-scroll-option');
+            if (smoothOption) smoothOption.classList.toggle('hidden', !autoScrollOnReceive);
+        }
+
+        function onSmoothScrollToggleChange() {
+            const toggle = document.getElementById('smooth-scroll-toggle');
+            smoothScrollOnReceive = toggle ? toggle.checked : false;
+            localStorage.setItem('smooth_scroll_on_receive', smoothScrollOnReceive ? 'true' : 'false');
+        }
+
         function onDeveloperModeToggleChange() {
             const toggle = document.getElementById('developer-mode-toggle');
             developerModeEnabled = toggle ? toggle.checked : false;
@@ -7075,6 +7188,12 @@
         function populateOtherSettings() {
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathToggle.checked = mathRenderingEnabled;
+            const autoScrollToggle = document.getElementById('auto-scroll-toggle');
+            const smoothScrollToggle = document.getElementById('smooth-scroll-toggle');
+            const smoothOption = document.getElementById('smooth-scroll-option');
+            if (autoScrollToggle) autoScrollToggle.checked = autoScrollOnReceive;
+            if (smoothScrollToggle) smoothScrollToggle.checked = smoothScrollOnReceive;
+            if (smoothOption) smoothOption.classList.toggle('hidden', !autoScrollOnReceive);
         }
 
         function populateAdvancedSettings() {
@@ -7223,6 +7342,7 @@
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                    if (autoScrollOnReceive) scrollMessagesToBottom(smoothScrollOnReceive);
                 };
                 const applyStreamPayload = (payload, eventType = '', eventId = '') => {
                     if (!payload || typeof payload !== 'object') return false;
@@ -7367,6 +7487,7 @@
                 }
                 renderMathFormulas(contentArea);
                 if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                if (autoScrollOnReceive) scrollMessagesToBottom(smoothScrollOnReceive);
                 contentArea.querySelectorAll('pre code').forEach(el => {
                     hljs.highlightElement(el);
                     if (!el.parentElement.querySelector('.code-copy-btn') && !el.closest('.canvas-replace-notice')) {
@@ -7431,8 +7552,7 @@
                 document.getElementById('stop-btn').classList.add('hidden');
                 setCanvasEditable(true);
                 lucide.createIcons();
-                document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper')
-                    .scrollHeight;
+                if (autoScrollOnReceive) scrollMessagesToBottom(smoothScrollOnReceive);
             }
         }
     </script>
