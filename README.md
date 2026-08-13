@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V6.1.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V6.2.0_Release-blue)]()
 
 </div>
 
@@ -34,6 +34,13 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V6.2.0 Release
+
+- Windows Setup 安装版接入 `electron-updater`，启动时可自动检查 GitHub Release。
+- 新增默认开启的“自动探测更新”设置；Portable 版本不会进行自动更新检查。
+- 发现更新后使用系统原生对话框确认下载，并利用 NSIS blockmap 执行差分更新。
+- “关于信息”会在存在新版本时显示可用版本号。
 
 ### V6.1.0 Release
 
@@ -104,9 +111,18 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 除“结束对话”按钮区域外，窗口允许鼠标操作穿透到下层桌面。
 - 全局传图快捷键默认是 `Ctrl+A`，截图精细度默认使用 1920px / JPEG 85。
 - 多次截图只保留最后一张，并在下一次语音输入时作为用户消息附件发送。
+- 可在偏好设置中开启自动传图；每轮语音结束后若没有手动截图，会自动截取鼠标所在显示器。
 - 结束协作后，文字、AI 语音记录和截图会写回对应主会话。
 
-### 4. 多模型与 API 配置
+### 4. 自动更新
+
+- 仅 Windows Setup 安装版启用，Portable 版本和开发环境会跳过更新检查。
+- “自动探测更新”默认开启，可在偏好设置“其他”中关闭。
+- 启动时通过 GitHub Release 的 `latest.yml` 比较版本；发现更新后使用系统原生对话框询问用户。
+- 下载阶段由 `electron-updater` 使用 Setup 对应的 `.blockmap` 自动执行差分更新。
+- 每次 GitHub Release 必须同时上传 Setup 安装包、Setup `.blockmap` 和 `latest.yml`。
+
+### 5. 多模型与 API 配置
 
 ![nulti-model-endpoint](screenshot/multi-model-and-endpoint.png)
 
@@ -115,13 +131,13 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 主界面、语音聊天和桌面协作均支持 `/responses` 与 `/chat/completions`。
 - `/responses` 返回 501 时会自动使用 `/chat/completions` 重试。
 
-### 5. 图像与附件工作流
+### 6. 图像与附件工作流
 
 - 支持图片粘贴、图片上传和常见 Office 文档解析。
 - 图像请求支持提示词中的宽高比关键词。
 - 附件内容会在提取后注入当前对话上下文。
 
-### 6. 上下文压缩
+### 7. 上下文压缩
 
 - 可在长对话中自动或手动压缩上下文。
 - 摘要用于降低发送给模型的上下文长度，不覆盖原始聊天记录。
@@ -147,8 +163,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI6.1.0Release-Portable.exe`
-- Setup：`AIUI6.1.0Release-Setup.exe`
+- Portable：`AIUI6.2.0-Release-Portable.exe`
+- Setup：`AIUI6.2.0-Release-Setup.exe`
 
 构建命令：
 
@@ -175,7 +191,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V6.1.0 Release`
+- 当前版本：`V6.2.0 Release`
 - 当前构建标识：`build20260813`
 
 ---

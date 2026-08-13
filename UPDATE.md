@@ -11,6 +11,16 @@
 不要在版本标题与下一版本标题之间加入其他级别的标题，也不要省略版本正文；关于页会按此格式自动解析展示。
 -->
 
+## V6.2.0 Release · 2026-08-13
+
+- Windows Setup 安装版接入 `electron-updater`，每次启动时可从 GitHub Release 检查新版本；Portable 版本和开发环境不会触发更新检查。
+- 偏好设置“其他”新增“自动探测更新”，默认开启，用户可手动关闭；重新开启时会在本次进程尚未检查过的情况下立即检查。
+- 发现新版本后使用 Electron 系统级原生对话框询问是否下载，下载完成后可立即重启安装或在退出应用时安装。
+- 更新下载复用 Electron Builder 生成的 `latest.yml` 和 NSIS `.blockmap`，由 `electron-updater` 自动执行差分下载。
+- “关于信息”的版本号后会在发现更新时显示可用的新版本号；当前已是最新版本时不显示额外提示。
+- GitHub 发布源固定为 `JHCWColin/AIChat-UI`，Release 必须包含 Setup 安装包、对应 `.blockmap` 和 `latest.yml`。
+- 版本升级到 `V6.2.0 Release`，重新生成 Windows Portable / Setup 安装包。
+
 ## V6.1.0 Release · 2026-08-13
 
 - 修复 AI 消息和用户消息渲染链路中的 XSS 漏洞，原始 HTML 会转义显示为可见文本而不是被删除；统一使用 DOM 清洗后写入页面，阻止 `<script>`、事件属性和 `javascript:` 链接等注入向量。

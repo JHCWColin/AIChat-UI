@@ -2,6 +2,7 @@ const {
     app,
     BrowserWindow,
     ipcMain,
+    dialog,
     session,
     Tray,
     Menu,
@@ -10,6 +11,7 @@ const {
     screen,
     nativeImage
 } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
@@ -31,8 +33,95 @@ let mainRendererReady = false;
 let pendingMainCommands = [];
 let desktopShortcut = "";
 let desktopMouseInteractive = false;
+let autoUpdateCheckStarted = false;
+let availableUpdateVersion = "";
+let updateDownloadRequested = false;
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.allowPrerelease = true;
+
+function isInstalledWindowsBuild() {
+    const isPortable = Boolean(process.env.PORTABLE_EXECUTABLE_FILE || process.env.PORTABLE_EXECUTABLE_DIR);
+    return process.platform === "win32" && app.isPackaged && !isPortable;
+}
+
+function formatDisplayVersion(version) {
+    const text = String(version || "").trim();
+    if (!text) return "";
+    const match = text.match(/^(\d+\.\d+\.\d+)(?:-release)?$/i);
+    return match ? `V${match[1]} Release` : `V${text}`;
+}
+
+function sendAvailableUpdateVersion() {
+    if (!availableUpdateVersion || !mainWindow || mainWindow.isDestroyed() || !mainRendererReady) return;
+    mainWindow.webContents.send("app:update-available", {
+        version: availableUpdateVersion,
+        displayVersion: formatDisplayVersion(availableUpdateVersion)
+    });
+}
+
+async function showNativeMessage(options) {
+    if (mainWindow && !mainWindow.isDestroyed()) return dialog.showMessageBox(mainWindow, options);
+    return dialog.showMessageBox(options);
+}
+
+async function checkForAppUpdates() {
+    if (autoUpdateCheckStarted || !isInstalledWindowsBuild()) return;
+    autoUpdateCheckStarted = true;
+    try {
+        await autoUpdater.checkForUpdates();
+    } catch (error) {
+        console.warn(`[AutoUpdate] 检查更新失败: ${error.message}`);
+    }
+}
+
+autoUpdater.on("update-available", async (info) => {
+    availableUpdateVersion = String(info && info.version || "").trim();
+    sendAvailableUpdateVersion();
+    const displayVersion = formatDisplayVersion(availableUpdateVersion) || "新版本";
+    const result = await showNativeMessage({
+        type: "info",
+        title: "AIUI 更新",
+        message: `发现可用更新：${displayVersion}`,
+        detail: "是否现在下载更新？Setup 版本将使用差分更新数据以减少下载量。",
+        buttons: ["立即更新", "暂不更新"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+    });
+    if (result.response !== 0) return;
+    updateDownloadRequested = true;
+    autoUpdater.downloadUpdate().catch(error => {
+        updateDownloadRequested = false;
+        console.warn(`[AutoUpdate] 下载更新失败: ${error.message}`);
+    });
+});
+
+autoUpdater.on("update-downloaded", async (info) => {
+    if (!updateDownloadRequested) return;
+    const displayVersion = formatDisplayVersion(info && info.version) || "新版本";
+    const result = await showNativeMessage({
+        type: "info",
+        title: "AIUI 更新已下载",
+        message: `${displayVersion} 已准备完成`,
+        detail: "立即重启应用并完成安装，或在本次退出应用时自动安装。",
+        buttons: ["立即重启安装", "退出时安装"],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true
+    });
+    if (result.response === 0) {
+        isQuitting = true;
+        autoUpdater.quitAndInstall(false, true);
+    }
+});
+
+autoUpdater.on("error", error => {
+    console.warn(`[AutoUpdate] ${error.message}`);
+});
 
 function createWindow(htmlFile = "index.html", options = {}) {
     const win = new BrowserWindow({
@@ -752,11 +841,15 @@ ipcMain.on("renderer:ready", (event) => {
     if (!isMainSender(event)) return;
     mainRendererReady = true;
     flushMainCommands();
+    sendAvailableUpdateVersion();
 });
 
 ipcMain.on("app-state:update", (event, state) => {
     if (!isMainSender(event)) return;
-    developerModeEnabled = Boolean(state && state.developerMode);
+    if (state && Object.prototype.hasOwnProperty.call(state, "developerMode")) {
+        developerModeEnabled = Boolean(state.developerMode);
+    }
+    if (state && state.autoUpdateEnabled === true) checkForAppUpdates();
     refreshTrayMenu();
 });
 

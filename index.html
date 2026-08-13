@@ -2821,6 +2821,16 @@
                             <span class="slider"></span>
                         </label>
                     </div>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col pr-3">
+                            <span class="text-sm font-medium text-gray-200">自动探测更新</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">默认开启；仅 Setup 安装版会在每次启动时检查 GitHub Release，Portable 版本不会检查。</span>
+                        </div>
+                        <label class="cloud-toggle shrink-0">
+                            <input type="checkbox" id="auto-update-toggle" onchange="onAutoUpdateToggleChange()" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
                 </div>
                 <div id="section-advanced" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">开发调试</h3>
@@ -2969,7 +2979,8 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V6.1.0 Release</span>
+                            <span id="app-version">V6.2.0 Release</span>
+                            <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
                         <button type="button" id="toggle-update-history-btn" onclick="toggleUpdateHistory()"
@@ -4400,6 +4411,7 @@
         let voiceModel = localStorage.getItem('voice_model') || 'whisper-1';
         let mathRenderingEnabled = localStorage.getItem('math_rendering_enabled') !== 'false';
         let developerModeEnabled = localStorage.getItem('developer_mode') === 'true';
+        let autoUpdateEnabled = localStorage.getItem('auto_update_enabled') !== 'false';
         let logLevel = localStorage.getItem('log_level') || 'info';
         let recordLogsEnabled = localStorage.getItem('record_logs') === 'true';
         let logRecords = loadLogRecords();
@@ -5984,6 +5996,9 @@
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
+            const autoUpdateToggle = document.getElementById('auto-update-toggle');
+            if (autoUpdateToggle) autoUpdateEnabled = autoUpdateToggle.checked;
+            localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false');
             const devToggle = document.getElementById('developer-mode-toggle');
             if (devToggle) developerModeEnabled = devToggle.checked;
             localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
@@ -6000,7 +6015,7 @@
             applyLayoutMode(currentLayoutMode);
             toggleSettings();
             updateTokenEstimate();
-            if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
+            syncAppStateToMain();
         }
 
         function updateBackgroundImage() {
@@ -7238,7 +7253,10 @@
             updateCanvasPanelForChat(currentChat);
             populateVoiceModel();
             updateAttachMenuButtons();
-            if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
+            if (window.electronAPI?.onUpdateAvailable) {
+                window.electronAPI.onUpdateAvailable(showAvailableUpdateVersion);
+            }
+            syncAppStateToMain();
             if (window.electronAPI?.signalRendererReady) window.electronAPI.signalRendererReady();
             loadUpdateLog();
         };
@@ -7355,7 +7373,31 @@
             localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
             populateAdvancedSettings();
             updateLogActionVisibility();
-            if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
+            syncAppStateToMain();
+        }
+
+        function onAutoUpdateToggleChange() {
+            const toggle = document.getElementById('auto-update-toggle');
+            autoUpdateEnabled = toggle ? toggle.checked : true;
+            localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false');
+            syncAppStateToMain();
+        }
+
+        function syncAppStateToMain() {
+            if (!window.electronAPI?.updateAppState) return;
+            window.electronAPI.updateAppState({
+                developerMode: developerModeEnabled,
+                autoUpdateEnabled
+            });
+        }
+
+        function showAvailableUpdateVersion(payload) {
+            const label = document.getElementById('available-update-version');
+            if (!label) return;
+            const version = String(payload?.displayVersion || payload?.version || '').trim();
+            if (!version) return;
+            label.textContent = `有更新版本：${version}`;
+            label.classList.remove('hidden');
         }
 
         function onLogLevelChange(el) {
@@ -7373,7 +7415,9 @@
 
         function populateOtherSettings() {
             const mathToggle = document.getElementById('math-render-toggle');
+            const autoUpdateToggle = document.getElementById('auto-update-toggle');
             if (mathToggle) mathToggle.checked = mathRenderingEnabled;
+            if (autoUpdateToggle) autoUpdateToggle.checked = autoUpdateEnabled;
         }
 
         function populateAdvancedSettings() {
