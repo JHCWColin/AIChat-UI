@@ -2015,10 +2015,7 @@
         body.theme-light #voice-btn.recording {
             background: rgba(220, 38, 38, 0.8);
         }
-
-        #smooth-scroll-option:not(.hidden) {
-            display: flex;
-        }
+        
     </style>
 </head>
 
@@ -2374,25 +2371,6 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-3 text-gray-300">强调色</label>
-                        <div class="flex flex-wrap items-center gap-3">
-                            <input type="color" id="accent-color-picker" value="#10b981"
-                                class="w-12 h-10 rounded-lg border border-gray-700 bg-[#171717] cursor-pointer"
-                                oninput="setAccentColor(this.value, true)">
-                            <input type="text" id="accent-color-text" placeholder="#10b981"
-                                class="w-32 bg-[#171717] border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                oninput="setAccentColorFromText(this.value)">
-                            <div class="flex gap-2">
-                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#10b981" onclick="setAccentColor('#10b981', true)"></button>
-                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#3b82f6" onclick="setAccentColor('#3b82f6', true)"></button>
-                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#ef4444" onclick="setAccentColor('#ef4444', true)"></button>
-                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#000000" onclick="setAccentColor('#000000', true)"></button>
-                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#ffffff" onclick="setAccentColor('#ffffff', true)"></button>
-                            </div>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mt-2">从调色板选择，或直接输入十六进制颜色，例如 #000000。</p>
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">字体大小</label>
                         <div class="flex gap-2">
                             <button class="font-btn rounded-xl" data-size="small"
@@ -2617,16 +2595,6 @@
                         </div>
                         <p class="text-[11px] text-gray-500 mt-2">过期后可前往讯飞开放平台重新获取。</p>
                     </div>
-                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col pr-3">
-                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
-                        </div>
-                        <button type="button" onclick="requestClearVoiceRecords()"
-                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
-                            清除
-                        </button>
-                    </div>
                 </div>
                 <div id="section-desktop-work" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">桌面协作</h3>
@@ -2685,24 +2653,14 @@
                         </label>
                     </div>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col">
-                            <span class="text-sm font-medium text-gray-200">接收输出时自动滚动到底部</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">开启后，AI 流式输出过程中会自动滚动到消息底部。</span>
+                        <div class="flex flex-col pr-3">
+                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
                         </div>
-                        <label class="cloud-toggle">
-                            <input type="checkbox" id="auto-scroll-toggle" onchange="onAutoScrollToggleChange()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div id="smooth-scroll-option" class="hidden items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col">
-                            <span class="text-sm font-medium text-gray-200">滚动到底部动画开关</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">开启后，每次自动滚动到底部都使用平滑动画。</span>
-                        </div>
-                        <label class="cloud-toggle">
-                            <input type="checkbox" id="smooth-scroll-toggle" onchange="onSmoothScrollToggleChange()">
-                            <span class="slider"></span>
-                        </label>
+                        <button type="button" onclick="requestClearVoiceRecords()"
+                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                            清除
+                        </button>
                     </div>
                 </div>
                 <div id="section-advanced" class="settings-content-section space-y-5">
@@ -2916,10 +2874,6 @@
         marked.use({
             renderer: {
                 html(token) {
-                    const trimmed = String(token.text || '').trim();
-                    if (trimmed === '<span class="canvas-replace-notice">' || trimmed === '</span>') {
-                        return trimmed;
-                    }
                     return escapeHtml(token.text);
                 }
             }
@@ -4259,9 +4213,6 @@
         let currentFontSize = localStorage.getItem('font_size') || 'medium';
         let currentCanvasFontSize = localStorage.getItem('canvas_font_size') || 'medium';
         let selectedBackgroundImage = parseInt(localStorage.getItem('bg_image')) || 1;
-        let autoScrollOnReceive = localStorage.getItem('auto_scroll_on_receive') === 'true';
-        let smoothScrollOnReceive = localStorage.getItem('smooth_scroll_on_receive') === 'true';
-        let accentColor = localStorage.getItem('accent_color') || '#10b981';
         let currentLayoutMode = localStorage.getItem('layout_mode') || 'classic';
         let abortController = null;
         let isGenerating = false;
@@ -5083,20 +5034,9 @@
             renderMessages(resolved);
         }
 
-        function scrollMessagesToBottom(smooth = smoothScrollOnReceive) {
-            const wrapper = document.getElementById('messages-wrapper');
-            if (!wrapper) return;
-            if (smooth && typeof wrapper.scrollTo === 'function') {
-                wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'smooth' });
-            } else {
-                wrapper.scrollTop = wrapper.scrollHeight;
-            }
-        }
-
         function renderMessages(messages) {
             const wrapper = document.getElementById('messages-wrapper');
             wrapper.innerHTML = '';
-            wrapper.scrollTop = 0;
             if (!messages || messages.length === 0) {
                 const greetingText = getGreetingByTime();
                 const welcomeDiv = document.createElement('div');
@@ -5111,6 +5051,7 @@
                 appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
                     .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '');
             });
+            wrapper.scrollTop = wrapper.scrollHeight;
         }
 
         function appendMessageToUI(role, content, model, showActions = false, reasoning = '', attachments = [],
@@ -5238,15 +5179,19 @@
                     btnGroup.appendChild(copyMsgBtn);
                 }
                 if (voiceRecordId) {
-                    const replayBtn = document.createElement('span');
-                    replayBtn.className = 'action-btn';
-                    replayBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> 回放`;
-                    replayBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        playVoiceRecord(voiceRecordId);
-                    };
-                    btnGroup.appendChild(replayBtn);
-                    lucide.createIcons();
+                    void (async () => {
+                        const record = await VoiceRecordStore.getRecord(voiceRecordId).catch(() => null);
+                        if (!record) return;
+                        const replayBtn = document.createElement('span');
+                        replayBtn.className = 'action-btn';
+                        replayBtn.innerHTML = `<i data-lucide="play" class="w-3.5 h-3.5"></i> 回放`;
+                        replayBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            playVoiceRecord(record.id);
+                        };
+                        btnGroup.appendChild(replayBtn);
+                        lucide.createIcons();
+                    })();
                 }
                 footer.appendChild(modelSpan);
                 footer.appendChild(btnGroup);
@@ -5256,6 +5201,7 @@
             wrapper.appendChild(row);
             lucide.createIcons();
             if (content) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+            wrapper.scrollTop = wrapper.scrollHeight;
             return row;
         }
         async function copyToClipboard(text, btnElement) {
@@ -5438,7 +5384,6 @@
                 populateVoiceChatSettings();
                 populateDesktopWorkSettings();
                 populateOtherSettings();
-                populateAppearanceSettings();
                 populateAdvancedSettings();
                 updateSettingsPortraitMode();
             } else {
@@ -5612,87 +5557,10 @@
             document.querySelectorAll('.font-btn').forEach(b => b.classList.toggle('active', b.dataset.size === size));
         }
 
-        function normalizeHexColor(value) {
-            const text = String(value || '').trim();
-            if (!/^#?[0-9a-fA-F]{6}$/.test(text)) return null;
-            return text.startsWith('#') ? text.toLowerCase() : `#${text.toLowerCase()}`;
-        }
-
-        function isLightColor(hex) {
-            const value = hex.replace('#', '');
-            const r = parseInt(value.slice(0, 2), 16);
-            const g = parseInt(value.slice(2, 4), 16);
-            const b = parseInt(value.slice(4, 6), 16);
-            return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
-        }
-
-        function applyAccentColor(color) {
-            const safe = normalizeHexColor(color) || '#10b981';
-            const contrast = isLightColor(safe) ? '#111111' : '#ffffff';
-            document.documentElement.style.setProperty('--accent-color', safe);
-            document.documentElement.style.setProperty('--accent-contrast', contrast);
-            let style = document.getElementById('accent-color-style');
-            if (!style) {
-                style = document.createElement('style');
-                style.id = 'accent-color-style';
-                document.head.appendChild(style);
-            }
-            style.textContent = `
-                :root { accent-color: ${safe}; }
-                input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: ${safe} !important; }
-                .temp-btn.active,
-                .font-btn.active,
-                .theme-btn.active,
-                .code-size-btn.active,
-                .layout-btn.active {
-                    background: ${safe} !important;
-                    border-color: ${safe} !important;
-                    color: ${contrast} !important;
-                }
-                #settings-modal .settings-sidebar button.active-nav,
-                body.theme-light #settings-modal .settings-sidebar button.active-nav,
-                body.theme-dark #settings-modal .settings-sidebar button.active-nav {
-                    color: ${safe} !important;
-                }
-                .cloud-toggle input:checked + .slider { background-color: ${safe} !important; }
-                #voice-replay-progress { accent-color: ${safe} !important; }
-                #attach-btn.has-files { border-color: ${safe} !important; color: ${safe} !important; }
-                [class*="text-emerald"] { color: ${safe} !important; }
-                [class*="bg-emerald"] { background-color: ${safe} !important; }
-                [class*="border-emerald"] { border-color: ${safe} !important; }
-                [class*="hover:text-emerald"]:hover { color: ${safe} !important; }
-                [class*="hover:bg-emerald"]:hover { background-color: ${safe} !important; }
-                [class*="focus:border-emerald"]:focus { border-color: ${safe} !important; }
-            `;
-        }
-
-        function setAccentColor(color, syncInputs = false) {
-            const safe = normalizeHexColor(color);
-            if (!safe) return;
-            accentColor = safe;
-            localStorage.setItem('accent_color', accentColor);
-            applyAccentColor(accentColor);
-            const picker = document.getElementById('accent-color-picker');
-            const textInput = document.getElementById('accent-color-text');
-            if (syncInputs && picker) picker.value = accentColor;
-            if (syncInputs && textInput) textInput.value = accentColor;
-        }
-
-        function setAccentColorFromText(value) {
-            const safe = normalizeHexColor(value);
-            if (!safe) return;
-            accentColor = safe;
-            localStorage.setItem('accent_color', accentColor);
-            applyAccentColor(accentColor);
-            const picker = document.getElementById('accent-color-picker');
-            if (picker) picker.value = accentColor;
-        }
-
         function setTheme(theme, save = true) {
             document.body.classList.remove('theme-light', 'theme-dark');
             document.body.classList.add(`theme-${theme}`);
             if (save) localStorage.setItem('theme', theme);
-            highlightThemeBtn(theme);
             updateBackgroundImage();
             if (cmEditor) {
                 cmEditor.setOption('theme', theme === 'light' ? 'default' : 'material-darker');
@@ -5765,11 +5633,6 @@
             localStorage.setItem('chat_temp', currentTemp);
             localStorage.setItem('font_size', currentFontSize);
             localStorage.setItem('bg_image', selectedBackgroundImage);
-            const accentText = document.getElementById('accent-color-text')?.value || accentColor;
-            const normalizedAccent = normalizeHexColor(accentText) || accentColor;
-            accentColor = normalizedAccent;
-            localStorage.setItem('accent_color', accentColor);
-            applyAccentColor(accentColor);
             localStorage.setItem('canvas_font_size', currentCanvasFontSize);
             localStorage.setItem('layout_mode', currentLayoutMode);
             const apiKeyInput = document.getElementById('api-key-input').value.trim();
@@ -5833,12 +5696,6 @@
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
-            const autoScrollToggle = document.getElementById('auto-scroll-toggle');
-            const smoothScrollToggle = document.getElementById('smooth-scroll-toggle');
-            if (autoScrollToggle) autoScrollOnReceive = autoScrollToggle.checked;
-            if (smoothScrollToggle) smoothScrollOnReceive = smoothScrollToggle.checked;
-            localStorage.setItem('auto_scroll_on_receive', autoScrollOnReceive ? 'true' : 'false');
-            localStorage.setItem('smooth_scroll_on_receive', smoothScrollOnReceive ? 'true' : 'false');
             const devToggle = document.getElementById('developer-mode-toggle');
             if (devToggle) developerModeEnabled = devToggle.checked;
             localStorage.setItem('developer_mode', developerModeEnabled ? 'true' : 'false');
@@ -6302,7 +6159,6 @@
             chat.messages.push(userMsg);
             chat.updatedAt = Date.now();
             appendMessageToUI('user', actualMessage, null, false, '', attachmentsToSend);
-            scrollMessagesToBottom(false);
             resetInputState();
             clearAttachments();
             updateCanvasPanelForChat(chat);
@@ -7019,7 +6875,6 @@
             await migrateOldChats();
             const savedTheme = localStorage.getItem('theme') || 'light';
             setTheme(savedTheme, false);
-            applyAccentColor(accentColor);
             applyTextModelList(loadModelList(), localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL);
             document.body.classList.add(`font-size-${currentFontSize}`);
             lucide.createIcons();
@@ -7104,12 +6959,6 @@
         function highlightFontBtn(size) {
             document.querySelectorAll('.font-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.size === size);
-            });
-        }
-
-        function highlightThemeBtn(theme) {
-            document.querySelectorAll('.theme-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.dataset.theme === theme);
             });
         }
 
@@ -7201,20 +7050,6 @@
             }
         }
 
-        function onAutoScrollToggleChange() {
-            const toggle = document.getElementById('auto-scroll-toggle');
-            autoScrollOnReceive = toggle ? toggle.checked : false;
-            localStorage.setItem('auto_scroll_on_receive', autoScrollOnReceive ? 'true' : 'false');
-            const smoothOption = document.getElementById('smooth-scroll-option');
-            if (smoothOption) smoothOption.classList.toggle('hidden', !autoScrollOnReceive);
-        }
-
-        function onSmoothScrollToggleChange() {
-            const toggle = document.getElementById('smooth-scroll-toggle');
-            smoothScrollOnReceive = toggle ? toggle.checked : false;
-            localStorage.setItem('smooth_scroll_on_receive', smoothScrollOnReceive ? 'true' : 'false');
-        }
-
         function onDeveloperModeToggleChange() {
             const toggle = document.getElementById('developer-mode-toggle');
             developerModeEnabled = toggle ? toggle.checked : false;
@@ -7240,20 +7075,6 @@
         function populateOtherSettings() {
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathToggle.checked = mathRenderingEnabled;
-            const autoScrollToggle = document.getElementById('auto-scroll-toggle');
-            const smoothScrollToggle = document.getElementById('smooth-scroll-toggle');
-            const smoothOption = document.getElementById('smooth-scroll-option');
-            if (autoScrollToggle) autoScrollToggle.checked = autoScrollOnReceive;
-            if (smoothScrollToggle) smoothScrollToggle.checked = smoothScrollOnReceive;
-            if (smoothOption) smoothOption.classList.toggle('hidden', !autoScrollOnReceive);
-        }
-
-        function populateAppearanceSettings() {
-            const picker = document.getElementById('accent-color-picker');
-            const textInput = document.getElementById('accent-color-text');
-            if (picker) picker.value = accentColor;
-            if (textInput) textInput.value = accentColor;
-            applyAccentColor(accentColor);
         }
 
         function populateAdvancedSettings() {
@@ -7402,7 +7223,6 @@
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                    if (autoScrollOnReceive) scrollMessagesToBottom(smoothScrollOnReceive);
                 };
                 const applyStreamPayload = (payload, eventType = '', eventId = '') => {
                     if (!payload || typeof payload !== 'object') return false;
@@ -7547,7 +7367,6 @@
                 }
                 renderMathFormulas(contentArea);
                 if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                if (autoScrollOnReceive) scrollMessagesToBottom(smoothScrollOnReceive);
                 contentArea.querySelectorAll('pre code').forEach(el => {
                     hljs.highlightElement(el);
                     if (!el.parentElement.querySelector('.code-copy-btn') && !el.closest('.canvas-replace-notice')) {
@@ -7612,7 +7431,8 @@
                 document.getElementById('stop-btn').classList.add('hidden');
                 setCanvasEditable(true);
                 lucide.createIcons();
-                if (autoScrollOnReceive) scrollMessagesToBottom(smoothScrollOnReceive);
+                document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper')
+                    .scrollHeight;
             }
         }
     </script>
