@@ -11,6 +11,11 @@
 不要在版本标题与下一版本标题之间加入其他级别的标题，也不要省略版本正文；关于页会按此格式自动解析展示。
 -->
 
+## V6.3.0 Release · 2026-08-13
+
+- 自动更新检查确认当前版本已是 GitHub Release 最新版本时，在“关于信息”的版本号后以绿色文字显示“当前已是最新版本”。
+- 版本升级到 `V6.3.0 Release`，由 GitHub Actions 重新生成并发布 Windows Portable / Setup 安装包及自动更新元数据。
+
 ## V6.2.0 Release · 2026-08-13
 
 - Windows Setup 安装版接入 `electron-updater`，每次启动时可从 GitHub Release 检查新版本；Portable 版本和开发环境不会触发更新检查。

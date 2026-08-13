@@ -35,6 +35,7 @@ let desktopShortcut = "";
 let desktopMouseInteractive = false;
 let autoUpdateCheckStarted = false;
 let availableUpdateVersion = "";
+let currentVersionConfirmedLatest = false;
 let updateDownloadRequested = false;
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -55,12 +56,19 @@ function formatDisplayVersion(version) {
     return match ? `V${match[1]} Release` : `V${text}`;
 }
 
-function sendAvailableUpdateVersion() {
-    if (!availableUpdateVersion || !mainWindow || mainWindow.isDestroyed() || !mainRendererReady) return;
-    mainWindow.webContents.send("app:update-available", {
-        version: availableUpdateVersion,
-        displayVersion: formatDisplayVersion(availableUpdateVersion)
-    });
+function sendUpdateStatus() {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainRendererReady) return;
+    if (availableUpdateVersion) {
+        mainWindow.webContents.send("app:update-available", {
+            version: availableUpdateVersion,
+            displayVersion: formatDisplayVersion(availableUpdateVersion)
+        });
+    } else if (currentVersionConfirmedLatest) {
+        mainWindow.webContents.send("app:update-not-available", {
+            version: app.getVersion(),
+            displayVersion: formatDisplayVersion(app.getVersion())
+        });
+    }
 }
 
 async function showNativeMessage(options) {
@@ -79,8 +87,9 @@ async function checkForAppUpdates() {
 }
 
 autoUpdater.on("update-available", async (info) => {
+    currentVersionConfirmedLatest = false;
     availableUpdateVersion = String(info && info.version || "").trim();
-    sendAvailableUpdateVersion();
+    sendUpdateStatus();
     const displayVersion = formatDisplayVersion(availableUpdateVersion) || "新版本";
     const result = await showNativeMessage({
         type: "info",
@@ -98,6 +107,12 @@ autoUpdater.on("update-available", async (info) => {
         updateDownloadRequested = false;
         console.warn(`[AutoUpdate] 下载更新失败: ${error.message}`);
     });
+});
+
+autoUpdater.on("update-not-available", () => {
+    availableUpdateVersion = "";
+    currentVersionConfirmedLatest = true;
+    sendUpdateStatus();
 });
 
 autoUpdater.on("update-downloaded", async (info) => {
@@ -841,7 +856,7 @@ ipcMain.on("renderer:ready", (event) => {
     if (!isMainSender(event)) return;
     mainRendererReady = true;
     flushMainCommands();
-    sendAvailableUpdateVersion();
+    sendUpdateStatus();
 });
 
 ipcMain.on("app-state:update", (event, state) => {

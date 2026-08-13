@@ -2979,7 +2979,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V6.2.0 Release</span>
+                            <span id="app-version">V6.3.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -7256,6 +7256,9 @@
             if (window.electronAPI?.onUpdateAvailable) {
                 window.electronAPI.onUpdateAvailable(showAvailableUpdateVersion);
             }
+            if (window.electronAPI?.onUpdateNotAvailable) {
+                window.electronAPI.onUpdateNotAvailable(showCurrentVersionLatest);
+            }
             syncAppStateToMain();
             if (window.electronAPI?.signalRendererReady) window.electronAPI.signalRendererReady();
             loadUpdateLog();
@@ -7397,6 +7400,17 @@
             const version = String(payload?.displayVersion || payload?.version || '').trim();
             if (!version) return;
             label.textContent = `有更新版本：${version}`;
+            label.classList.remove('text-green-400');
+            label.classList.add('text-emerald-400');
+            label.classList.remove('hidden');
+        }
+
+        function showCurrentVersionLatest() {
+            const label = document.getElementById('available-update-version');
+            if (!label) return;
+            label.textContent = '当前已是最新版本';
+            label.classList.remove('text-emerald-400');
+            label.classList.add('text-green-400');
             label.classList.remove('hidden');
         }
 

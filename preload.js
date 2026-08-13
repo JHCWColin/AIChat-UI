@@ -44,6 +44,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
         ipcRenderer.on("app:update-available", listener);
         return () => ipcRenderer.removeListener("app:update-available", listener);
     },
+    onUpdateNotAvailable: (callback) => {
+        const listener = (_event, payload) => callback(payload);
+        ipcRenderer.on("app:update-not-available", listener);
+        return () => ipcRenderer.removeListener("app:update-not-available", listener);
+    },
     startXunfei: (credentials) => ipcRenderer.invoke("xunfei:start", credentials),
     sendXunfeiAudio: (samples) => ipcRenderer.send("xunfei:audio", Array.from(samples || [])),
     finishXunfei: () => ipcRenderer.invoke("xunfei:finish"),
