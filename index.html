@@ -297,10 +297,6 @@
             background: rgba(255, 255, 255, 0.95) !important;
         }
 
-        body.theme-light .memory-list {
-            background: rgba(240, 240, 245, 0.5);
-        }
-
         body.theme-light #settings-modal>div {
             background: rgba(255, 255, 255, 0.95) !important;
             color: #1f1f1f !important;
@@ -479,11 +475,6 @@
             background: var(--accent-primary);
             border-color: var(--accent-primary);
             color: var(--accent-contrast);
-        }
-
-        body.theme-dark .memory-card {
-            background: rgba(20, 20, 30, 0.7);
-            border-left: 3px solid var(--accent-primary);
         }
 
         button:hover,
@@ -675,26 +666,6 @@
             100% {
                 opacity: 0;
             }
-        }
-
-        .sync-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            position: relative;
-        }
-
-        .sync-dot::after {
-            content: '';
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            top: -8px;
-            left: -8px;
-            border-radius: 50%;
-            border: 2px solid var(--accent-primary);
-            animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
         }
 
         #retry-popover {
@@ -998,22 +969,6 @@
             backdrop-filter: blur(4px);
         }
 
-        .memory-list {
-            max-height: 180px;
-            overflow-y: auto;
-            border-radius: 0.75rem;
-            padding: 0.25rem;
-        }
-
-        .memory-card {
-            padding: 0.6rem 0.8rem;
-            border-radius: 0.75rem;
-            font-size: 0.8rem;
-            line-height: 1.4;
-            backdrop-filter: blur(4px);
-            margin-bottom: 0.5rem;
-        }
-
         .delete-chat-btn {
             display: inline-flex;
             align-items: center;
@@ -1039,14 +994,6 @@
                 top: 50% !important;
                 transform: translateY(-50%) !important;
                 margin-right: 0 !important;
-                z-index: 10;
-            }
-
-            #sync-status {
-                position: absolute !important;
-                right: 8px !important;
-                top: 50% !important;
-                transform: translateY(-50%) !important;
                 z-index: 10;
             }
 
@@ -1854,14 +1801,6 @@
             background-color: var(--accent-primary);
         }
 
-        #cloud-sync-btn-inline {
-            transition: all 0.25s ease;
-        }
-
-        #cloud-config-area {
-            transition: all 0.3s ease;
-        }
-
         #attach-menu {
             position: absolute;
             bottom: 100%;
@@ -2168,9 +2107,6 @@
             <button id="canvas-toggle-btn" onclick="toggleCanvasPanel()" title="切换Canvas面板">
                 <i data-lucide="code-2" class="w-3.5 h-3.5"></i> Canvas
             </button>
-            <div id="sync-status" class="hidden flex items-center gap-2 pr-2">
-                <span class="sync-dot"></span><span class="text-[10px] text-emerald-400 font-bold uppercase">同步中</span>
-            </div>
         </header>
         <div id="main-content">
             <div id="chat-column">
@@ -3029,10 +2965,6 @@
     <script>
         const DEFAULT_API_KEY = '';
         const DEFAULT_BASE_URL = 'https://api.vveai.com/v1';
-        const DEFAULT_LC_ID = 'G2jNexXDgQoJkiR5bf7aGqZj-gzGzoHsz';
-        const DEFAULT_LC_KEY = 'tO6fRxnoCUEAJ3HyHbzmlG9R';
-        const DEFAULT_LC_MASTER_KEY = 'tO6fRxnoCUEAJ3HyHbzmlG9R';
-        const DEFAULT_LC_BASE = 'https://g2jnexxd.lc-cn-n1-shared.com/1.1/classes/AIChats';
         const DEFAULT_VOICE_CHAT_MODEL = 'gemini-3.5-flash-nothinking';
         const DEFAULT_CONTEXT_COMPACTION_MODEL = 'gemini-3.5-flash-lite';
         const CONTEXT_COMPACTION_PROMPT = '你是上下文压缩助手。分析下面的历史对话，生成一个精简但信息完整的上下文摘要。1. 保留用户的重要信息、偏好、约束条件。2. 保留当前正在进行的任务、项目状态和关键技术细节。3. 保留已经做出的决定和不可重复询问的信息。4. 删除无关闲聊、重复内容和临时信息。5. 摘要必须让另一个AI仅凭此内容继续对话，不丢失关键上下文。请输出结构化摘要。';
@@ -3091,31 +3023,6 @@
 
         function getBaseURL() {
             return localStorage.getItem('base_url') || DEFAULT_BASE_URL;
-        }
-
-        function getLCConfig() {
-            return {
-                id: localStorage.getItem('lc_app_id') || DEFAULT_LC_ID,
-                key: localStorage.getItem('lc_api_key') || DEFAULT_LC_KEY,
-                masterKey: localStorage.getItem('lc_master_key') || DEFAULT_LC_MASTER_KEY,
-                base: localStorage.getItem('lc_base_url') || DEFAULT_LC_BASE
-            };
-        }
-
-        function isCloudEnabled() {
-            return false;
-        }
-
-        function setCloudEnabledUI(enabled) {
-            return;
-        }
-
-        function onCloudToggleChange() {
-            return;
-        }
-
-        function syncDataFromSettings() {
-            return;
         }
 
         // ========== IndexedDB 图片存储封装 ==========
@@ -3787,7 +3694,6 @@
                     await compactConversationTurns(chat, batch, 'auto');
                 }
                 hideVoiceNotification();
-                if (isCloudEnabled()) syncData().catch(error => appendLog('error', `上下文压缩后云端同步失败：${error.message}`));
                 return true;
             } catch (error) {
                 hideVoiceNotification();
@@ -3885,7 +3791,6 @@
                 await compactConversationTurns(chat, turns, 'manual', extraInstruction);
                 hideVoiceNotification();
                 renderChatHistory();
-                if (isCloudEnabled()) syncData().catch(error => appendLog('error', `手动压缩后云端同步失败：${error.message}`));
                 showVoiceNotification('上下文压缩完成', false, 2500);
             } catch (error) {
                 hideVoiceNotification();
@@ -4395,7 +4300,6 @@
         let abortController = null;
         let isGenerating = false;
         let filteredChats = [];
-        let cachedMemories = [];
         let currentAttachments = [];
         let maxTokensLimit = parseInt(localStorage.getItem('max_tokens_limit') || '0') || 0;
         let autoSummaryInterval = parseInt(localStorage.getItem('auto_summary_interval') || '10', 10);
@@ -4703,63 +4607,6 @@
             element.innerHTML = sanitizeHtml(html);
         }
 
-        async function fetchMemoriesFromCloud() {
-            if (!isCloudEnabled()) {
-                cachedMemories = [];
-                return [];
-            }
-            try {
-                const lcConfig = getLCConfig();
-                const url = `${lcConfig.base.replace('AIChats', 'Memory')}`;
-                const headers = {
-                    'X-LC-Id': lcConfig.id,
-                    'X-LC-Key': `${lcConfig.masterKey},master`,
-                    'Content-Type': 'application/json'
-                };
-                const res = await fetch(url, {
-                    method: 'GET',
-                    headers
-                });
-                if (!res.ok) throw new Error(`记忆获取失败: ${res.status}`);
-                const data = await res.json();
-                const results = data.results || [];
-                const memories = results.map(item => item.Memory).filter(m => m && typeof m === 'string' && m.trim()
-                    .length > 0);
-                cachedMemories = memories;
-                return memories;
-            } catch (err) {
-                console.warn("获取记忆异常:", err);
-                cachedMemories = [];
-                return [];
-            }
-        }
-        async function renderMemoriesToSettings() {
-            const container = document.getElementById('memory-list-container');
-            if (!container) return;
-            if (!isCloudEnabled()) {
-                container.innerHTML = `<div class="text-gray-400 text-xs italic p-2">云端模式未启用</div>`;
-                return;
-            }
-            try {
-                const memories = await fetchMemoriesFromCloud();
-                if (!memories.length) {
-                    container.innerHTML = `<div class="text-gray-400 text-xs italic p-2">暂无云端记忆</div>`;
-                } else {
-                    container.innerHTML = memories.map((mem, idx) => `
-                        <div class="memory-card">
-                            <div class="flex gap-2 items-start">
-                                <span class="text-emerald-400 text-xs font-bold">#${idx + 1}</span>
-                                <span class="text-sm leading-relaxed break-words">${escapeHtml(mem)}</span>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-                lucide.createIcons();
-            } catch (err) {
-                container.innerHTML = `<div class="text-red-400 text-xs p-2">无法加载记忆: ${sanitizeHtml(err.message)}</div>`;
-            }
-        }
-
         function sanitizeHtml(html) {
             if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
                 return window.DOMPurify.sanitize(html, {
@@ -4820,10 +4667,6 @@
                 }[m];
             });
         }
-        async function buildSystemMessageWithMemories() {
-            return systemPrompt || "";
-        }
-
         function compressImage(base64Data, maxWidth = 800, quality = 0.7) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -5460,124 +5303,6 @@
                 return false;
             }
         }
-        async function lcFetch(path = '', options = {}) {
-            if (!isCloudEnabled()) throw new Error('云端模式未启用');
-            const lcConfig = getLCConfig();
-            const url = path ? `${lcConfig.base}/${path}` : lcConfig.base;
-            const headers = {
-                'X-LC-Id': lcConfig.id,
-                'X-LC-Key': options.master ? `${lcConfig.masterKey},master` : lcConfig.key,
-                'Content-Type': 'application/json'
-            };
-            return fetch(url, {
-                ...options,
-                headers: {
-                    ...headers,
-                    ...options.headers
-                }
-            });
-        }
-
-        function stripAttachmentsForCloud(messages) {
-            return messages;
-        }
-        async function pushToCloud(chat, method) {
-            if (!isCloudEnabled()) return;
-            const cleanMessages = stripAttachmentsForCloud(chat.messages);
-            const body = {
-                chatId: chat.id,
-                title: chat.title,
-                messages: cleanMessages,
-                updatedAtMs: chat.updatedAt || Date.now(),
-                canvasEnabled: chat.canvasEnabled || false,
-                canvasCode: chat.canvasCode || [''],
-                contextCompaction: chat.contextCompaction || { version: 1, summaries: [] }
-            };
-            const path = method === 'PUT' ? chat.lcObjectId : '';
-            try {
-                const res = await lcFetch(path, {
-                    method,
-                    body: JSON.stringify(body)
-                });
-                const result = await res.json();
-                if (method === 'POST') chat.lcObjectId = result.objectId;
-                localStorage.setItem('ai_chats', JSON.stringify(chats));
-            } catch (e) {
-                console.error("云端同步失败", e);
-                throw e;
-            }
-        }
-
-        function setSyncUI(isSyncing) {
-            document.getElementById('sync-status').classList.toggle('hidden', !isSyncing);
-        }
-        async function syncData() {
-            if (!isCloudEnabled()) {
-                console.log('云端模式未启用，跳过同步');
-                return;
-            }
-            setSyncUI(true);
-            try {
-                const res = await lcFetch();
-                if (!res.ok) throw new Error(`云端获取失败: ${res.status}`);
-                const data = await res.json();
-                const cloudChats = data.results || [];
-                let localChats = chats;
-                let hasLocalChange = false;
-                const cloudMap = new Map(cloudChats.map(c => [c.chatId, c]));
-                for (const c of cloudChats) {
-                    const l = localChats.find(lc => lc.id === c.chatId);
-                    if (!l || (c.updatedAtMs || 0) > (l.updatedAt || 0)) {
-                        if (!l) localChats.push({
-                            id: c.chatId,
-                            title: c.title,
-                            messages: c.messages,
-                            updatedAt: c.updatedAtMs || 0,
-                            lcObjectId: c.objectId,
-                            canvasEnabled: c.canvasEnabled || false,
-                            canvasCode: c.canvasCode || [''],
-                            contextCompaction: c.contextCompaction || { version: 1, summaries: [] }
-                        });
-                        else Object.assign(l, {
-                            id: c.chatId,
-                            title: c.title,
-                            messages: c.messages,
-                            updatedAt: c.updatedAtMs || 0,
-                            lcObjectId: c.objectId,
-                            canvasEnabled: c.canvasEnabled || false,
-                            canvasCode: c.canvasCode || [''],
-                            contextCompaction: c.contextCompaction || { version: 1, summaries: [] }
-                        });
-                        hasLocalChange = true;
-                    }
-                }
-                const pushPromises = [];
-                for (const l of localChats) {
-                    const c = cloudMap.get(l.id);
-                    if (!c) pushPromises.push(pushToCloud(l, 'POST'));
-                    else if ((l.updatedAt || 0) > (c.updatedAtMs || 0)) {
-                        l.lcObjectId = c.objectId;
-                        pushPromises.push(pushToCloud(l, 'PUT'));
-                    }
-                }
-                await Promise.all(pushPromises);
-                if (hasLocalChange) {
-                    localChats.sort((a, b) => b.updatedAt - a.updatedAt);
-                    chats = localChats;
-                    localStorage.setItem('ai_chats', JSON.stringify(chats));
-                    renderChatHistory();
-                    if (activeChatId) {
-                        const currentChat = chats.find(c => c.id === activeChatId);
-                        if (currentChat) renderMessagesWithResolvedRefs(currentChat.messages);
-                    }
-                }
-            } catch (err) {
-                console.error("同步异常:", err);
-            } finally {
-                setSyncUI(false);
-            }
-        }
-
         function toggleSidebar(show) {
             document.getElementById('sidebar').classList.toggle('active', show);
             document.getElementById('sidebar-overlay').classList.toggle('active', show);
@@ -5588,10 +5313,8 @@
             const shouldOpen = !modal.classList.contains('flex');
             if (shouldOpen) {
                 openAnimatedModal(modal, 'flex');
-                renderMemoriesToSettings();
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
                 populateAutoSummarySettings();
-                populateLCFields();
                 populateModelListEditor();
                 populateVoiceModel();
                 populateVoiceChatSettings();
@@ -5622,21 +5345,6 @@
                 updateSettingsPortraitMode();
             }
         });
-
-        function populateLCFields() {
-            const lcConfig = getLCConfig();
-            const appIdInput = document.getElementById('lc-app-id-input');
-            const apiKeyInput = document.getElementById('lc-api-key-input');
-            const masterKeyInput = document.getElementById('lc-master-key-input');
-            const baseUrlInput = document.getElementById('lc-base-url-input');
-            if (appIdInput) appIdInput.value = lcConfig.id;
-            if (apiKeyInput) apiKeyInput.value = lcConfig.key;
-            if (masterKeyInput) masterKeyInput.value = lcConfig.masterKey;
-            if (baseUrlInput) baseUrlInput.value = lcConfig.base;
-            const toggle = document.getElementById('cloud-enabled-toggle');
-            if (toggle) toggle.checked = isCloudEnabled();
-            setCloudEnabledUI(isCloudEnabled());
-        }
 
         function populateVoiceModel() {
             const select = document.getElementById('voice-model-select');
@@ -5730,10 +5438,6 @@
             const target = document.getElementById('section-' + sectionId);
             if (target) target.classList.add('active-section');
             if (btn) btn.classList.add('active-nav');
-            if (sectionId === 'memory') {
-                populateLCFields();
-                renderMemoriesToSettings();
-            }
             if (sectionId === 'ai-chat') {
                 populateAutoSummarySettings();
             }
@@ -6319,23 +6023,6 @@
             if (!confirm('确定删除此对话？')) return;
             const chat = chats.find(c => c.id === chatId);
             if (!chat) return;
-            if (isCloudEnabled() && chat.lcObjectId) {
-                const lcConfig = getLCConfig();
-                try {
-                    const deleteUrl = `${lcConfig.base}/${chat.lcObjectId}`;
-                    await fetch(deleteUrl, {
-                        method: 'DELETE',
-                        headers: {
-                            'X-LC-Id': lcConfig.id,
-                            'X-LC-Key': `${lcConfig.masterKey},master`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
-                } catch (e) {
-                    alert('云端删除失败，请稍后再试。');
-                    return;
-                }
-            }
             const index = chats.findIndex(c => c.id === chatId);
             if (index !== -1) chats.splice(index, 1);
             localStorage.setItem('ai_chats', JSON.stringify(chats));
@@ -6362,7 +6049,6 @@
             localStorage.setItem('ai_chats', JSON.stringify(chats));
             renderChatHistory();
             switchChat(id);
-            if (isCloudEnabled()) syncData();
             toggleSidebar(false);
             clearAttachments();
             return id;
@@ -6427,7 +6113,6 @@
                     processedReplaceCount = 0;
                     sessionReplaceBlocks = [];
                     resetInputState();
-                    if (isCloudEnabled()) syncData();
                     return;
                 }
                 chat.canvasEnabled = true;
@@ -6467,7 +6152,6 @@
             updateCanvasPanelForChat(chat);
             renderChatHistory();
             localStorage.setItem('ai_chats', JSON.stringify(chats));
-            if (isCloudEnabled()) syncData();
             await performAutomaticCompaction(chat);
             await requestAI(actualMessage, model, chat, attachmentsToSend);
         }
@@ -6671,7 +6355,6 @@
                 await renderMessagesWithResolvedRefs(chat.messages);
             }
             showVoiceNotification(payload.mode === 'desktop' ? '桌面协作记录已保存到当前对话' : '语音通话记录已保存到当前对话', false, 3000);
-            if (isCloudEnabled()) syncData().catch(error => console.error('语音记录云同步失败', error));
         }
 
         if (window.electronAPI?.isElectron) {
@@ -7195,12 +6878,7 @@
             updateBackgroundImage();
             highlightBackgroundThumb();
             syncRetrySelect();
-            setCloudEnabledUI(isCloudEnabled());
             renderChatHistory();
-            if (isCloudEnabled()) {
-                await syncData();
-                await fetchMemoriesFromCloud();
-            }
             chats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             const latestChat = chats.length ? chats[0] : null;
             if (!latestChat || (latestChat.messages && latestChat.messages.length > 0)) createNewChat();
@@ -7492,7 +7170,7 @@
             processedReplaceCount = 0;
             sessionReplaceBlocks = [];
             streamBytesReceived = 0;
-            const systemWithMem = await buildSystemMessageWithMemories();
+            const systemWithMem = systemPrompt || "";
             try {
                 const chatMessagesCopy = chat.messages.slice();
                 if (sendAttachments.length > 0 && chatMessagesCopy.length > 0) {
@@ -7730,7 +7408,6 @@
                 chat.updatedAt = Date.now();
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
                 renderChatHistory();
-                if (isCloudEnabled()) await syncData();
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     appendLog('debug', `AI 请求出错: ${err.message}`);
@@ -7754,7 +7431,6 @@
                     chat.updatedAt = Date.now();
                     localStorage.setItem('ai_chats', JSON.stringify(chats));
                     renderChatHistory();
-                    if (isCloudEnabled()) await syncData();
                 }
             } finally {
                 abortController = null;
