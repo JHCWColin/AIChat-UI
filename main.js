@@ -782,7 +782,7 @@ function createTray() {
     tray.on("click", () => tray.popUpContextMenu());
 }
 
-app.whenReady().then(() => {
+/*app.whenReady().then(() => {
     createMainWindow();
     createTray();
 
@@ -790,6 +790,30 @@ app.whenReady().then(() => {
         showMainWindow();
     });
 });
+*/
+
+// 1. 请求单实例锁
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+    // 如果获取锁失败，说明已有实例在运行，直接退出当前新启动的实例
+    app.quit();
+} else {
+    // 2. 当第二个实例尝试启动时，触发此回调，调出已存在的第一个实例
+    app.on("second-instance", (event, commandLine, workingDirectory) => {
+        showMainWindow();
+    });
+
+    // 3. 正常初始化应用
+    app.whenReady().then(() => {
+        createMainWindow();
+        createTray();
+
+        app.on("activate", () => {
+            showMainWindow();
+        });
+    });
+}
 
 app.on("before-quit", () => {
     isQuitting = true;

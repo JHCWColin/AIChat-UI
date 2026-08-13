@@ -8,6 +8,7 @@
     <script src="tailwindcss.js"></script>
     <script src="lucide.js"></script>
     <script src="marked.js"></script>
+    <script src="dompurify.min.js"></script>
     <link rel="stylesheet" href="katex.min.css">
     <script src="katex.min.js"></script>
     <link rel="stylesheet" href="github-dark.min.css">
@@ -2809,7 +2810,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V6.0.0 Release</span>
+                            <span id="app-version">V6.1.0 Release</span>
                         </p>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
@@ -4512,7 +4513,7 @@
             if (!window.katex || !mathRenderingEnabled) return;
             let html = element.innerHTML;
             html = restoreAndRenderMath(html);
-            element.innerHTML = html;
+            element.innerHTML = sanitizeHtml(html);
         }
 
         async function fetchMemoriesFromCloud() {
@@ -4568,8 +4569,20 @@
                 }
                 lucide.createIcons();
             } catch (err) {
-                container.innerHTML = `<div class="text-red-400 text-xs p-2">无法加载记忆: ${err.message}</div>`;
+                container.innerHTML = `<div class="text-red-400 text-xs p-2">无法加载记忆: ${sanitizeHtml(err.message)}</div>`;
             }
+        }
+
+        function sanitizeHtml(html) {
+            if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+                return window.DOMPurify.sanitize(html, {
+                    USE_PROFILES: {
+                        html: true
+                    },
+                    ALLOW_UNKNOWN_PROTOCOLS: false
+                });
+            }
+            return escapeHtml(html);
         }
 
         function escapeHtml(str) {
@@ -4910,7 +4923,7 @@
                 let thumbHtml = '';
                 if (att.isImage && att.fullDataUrl) {
                     thumbHtml =
-                        `<img src="${att.fullDataUrl}" alt="${escapeHtml(att.name)}" class="attachment-thumb" onclick="viewAttachmentImage(${idx})" title="点击查看大图">`;
+                        `<img src="${escapeHtml(att.fullDataUrl)}" alt="${escapeHtml(att.name)}" class="attachment-thumb" onclick="viewAttachmentImage(${idx})" title="点击查看大图">`;
                 } else {
                     let iconName = 'file-text';
                     if (att.isDocx) iconName = 'file-text';
@@ -5058,7 +5071,7 @@
                     const preprocessedContent = extractAndPreserveMath(content);
                     let html = marked.parse(preprocessedContent);
                     html = restoreAndRenderMath(html);
-                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${html}</div>`;
+                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${sanitizeHtml(html)}</div>`;
                     const contentArea = bubble.querySelector('.ai-content-area');
                     if (contentArea) renderMathFormulas(contentArea);
                     bubble.querySelectorAll('pre').forEach(pre => {
@@ -5075,7 +5088,7 @@
                         }
                     });
                 } else {
-                    bubble.innerHTML = `<div class="plain-text-content">${escapeHtml(content)}</div>`;
+                    bubble.innerHTML = `<div class="plain-text-content">${sanitizeHtml(escapeHtml(content))}</div>`;
                 }
             } else {
                 bubble.innerHTML =
@@ -6455,17 +6468,32 @@
         function renderAttachmentsPreview() {
             const container = document.getElementById('attachments-preview');
             if (!container) return;
-            if (currentAttachments.length === 0) {
-                container.innerHTML = '';
-                return;
-            }
-            container.innerHTML = currentAttachments.map((att, idx) => `
-          <div class="relative inline-flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20 gap-1" style="max-width:100px;">
-            <button class="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs cursor-pointer" onclick="removeAttachment(${idx})">×</button>
-            <img src="${att.dataUrl}" class="attachment-thumb" onclick="showLightbox('${att.dataUrl}')" title="${att.name}">
-            <span class="text-xs text-gray-300 truncate w-full text-center">${att.name}</span>
-          </div>
-        `).join('');
+            container.innerHTML = '';
+            currentAttachments.forEach((att, idx) => {
+                const card = document.createElement('div');
+                card.className =
+                    'relative inline-flex flex-col items-center bg-white/10 backdrop-blur-md rounded-xl p-2 border border-white/20 gap-1';
+                card.style.maxWidth = '100px';
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className =
+                    'absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs cursor-pointer';
+                removeBtn.textContent = '×';
+                removeBtn.addEventListener('click', () => removeAttachment(idx));
+
+                const img = document.createElement('img');
+                img.src = att.dataUrl || '';
+                img.className = 'attachment-thumb';
+                img.title = att.name || '';
+                img.addEventListener('click', () => showLightbox(att.dataUrl));
+
+                const label = document.createElement('span');
+                label.className = 'text-xs text-gray-300 truncate w-full text-center';
+                label.textContent = att.name || '';
+
+                card.append(removeBtn, img, label);
+                container.appendChild(card);
+            });
         }
 
         function updateContextBadge() {
@@ -7179,11 +7207,11 @@
                     let preprocessedContent = extractAndPreserveMath(contentForRender);
                     let html = marked.parse(preprocessedContent);
                     html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = html;
+                    contentArea.innerHTML = sanitizeHtml(html);
                     if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                         preprocessedContent = extractAndPreserveMath(rawFullContent);
                         html = marked.parse(preprocessedContent);
-                        contentArea.innerHTML = restoreAndRenderMath(html);
+                        contentArea.innerHTML = sanitizeHtml(restoreAndRenderMath(html));
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
@@ -7321,13 +7349,13 @@
                 let preprocessedContent = extractAndPreserveMath(contentForRender);
                 let html = marked.parse(preprocessedContent);
                 html = restoreAndRenderMath(html);
-                contentArea.innerHTML = html;
+                contentArea.innerHTML = sanitizeHtml(html);
                 if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                     contentForRender = rawFullContent;
                     preprocessedContent = extractAndPreserveMath(contentForRender);
                     html = marked.parse(preprocessedContent);
                     html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = html;
+                    contentArea.innerHTML = sanitizeHtml(html);
                 }
                 renderMathFormulas(contentArea);
                 if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
@@ -7357,7 +7385,7 @@
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     appendLog('debug', `AI 请求出错: ${err.message}`);
-                    contentArea.innerHTML = `<span class="text-red-500">Error: ${err.message}</span>`;
+                    contentArea.innerHTML = `<span class="text-red-500">Error: ${sanitizeHtml(err.message)}</span>`;
                 } else {
                     appendLog('debug', `AI 请求被中止`);
                     showVoiceNotification('已停止', false, 1800, false);
@@ -7367,13 +7395,13 @@
                     let preprocessedContent = extractAndPreserveMath(contentForRender || '');
                     let html = marked.parse(preprocessedContent);
                     html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = html;
+                    contentArea.innerHTML = sanitizeHtml(html);
                     if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                         contentForRender = rawFullContent;
                         preprocessedContent = extractAndPreserveMath(contentForRender || '');
                         html = marked.parse(preprocessedContent);
                         html = restoreAndRenderMath(html);
-                        contentArea.innerHTML = html;
+                        contentArea.innerHTML = sanitizeHtml(html);
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
