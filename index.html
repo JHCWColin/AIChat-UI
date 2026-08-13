@@ -21,10 +21,89 @@
     <script src="codemirror.min.js"></script>
     <script src="javascript.min.js"></script>
     <style>
+        :root {
+            --accent-primary: #10b981;
+            --accent-strong: #059669;
+            --accent-hover: #047857;
+            --accent-rgb: 16, 185, 129;
+            --accent-rgb-space: 16 185 129;
+            --accent-contrast: #ffffff;
+        }
+
+        body[data-accent-color="sky"] {
+            --accent-primary: #38bdf8;
+            --accent-strong: #0284c7;
+            --accent-hover: #0369a1;
+            --accent-rgb: 56, 189, 248;
+            --accent-rgb-space: 56 189 248;
+            --accent-contrast: #082f49;
+        }
+
+        body[data-accent-color="amber"] {
+            --accent-primary: #f59e0b;
+            --accent-strong: #d97706;
+            --accent-hover: #b45309;
+            --accent-rgb: 245, 158, 11;
+            --accent-rgb-space: 245 158 11;
+            --accent-contrast: #451a03;
+        }
+
+        body[data-accent-color="rose"] {
+            --accent-primary: #fb7185;
+            --accent-strong: #e11d48;
+            --accent-hover: #be123c;
+            --accent-rgb: 251, 113, 133;
+            --accent-rgb-space: 251 113 133;
+            --accent-contrast: #4c0519;
+        }
+
+        body[data-accent-color="claude"] {
+            --accent-primary: #d97757;
+            --accent-strong: #b85c3b;
+            --accent-hover: #984a30;
+            --accent-rgb: 217, 119, 87;
+            --accent-rgb-space: 217 119 87;
+            --accent-contrast: #fffaf2;
+        }
+
         body {
             transition: background 0.2s ease;
             margin: 0;
             min-height: 100vh;
+        }
+
+        .text-emerald-400,
+        .text-emerald-300 {
+            color: var(--accent-primary) !important;
+        }
+
+        .bg-emerald-600 {
+            background-color: var(--accent-primary) !important;
+            color: var(--accent-contrast) !important;
+        }
+
+        .hover\:bg-emerald-700:hover {
+            background-color: var(--accent-hover) !important;
+        }
+
+        .hover\:text-emerald-400:hover,
+        .hover\:text-emerald-300:hover {
+            color: var(--accent-primary) !important;
+        }
+
+        .hover\:border-emerald-500:hover,
+        .focus\:border-emerald-500:focus {
+            border-color: var(--accent-primary) !important;
+        }
+
+        .accent-emerald-500 {
+            accent-color: var(--accent-primary) !important;
+        }
+
+        .from-emerald-400 {
+            --tw-gradient-from: rgb(var(--accent-rgb-space)) var(--tw-gradient-from-position) !important;
+            --tw-gradient-to: rgb(var(--accent-rgb-space) / 0) var(--tw-gradient-to-position) !important;
+            --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
         }
 
         body.theme-light {
@@ -85,7 +164,7 @@
         body.theme-light #model-select:focus,
         body.theme-light #retry-model-select:focus,
         body.theme-light #image-detail-select:focus {
-            border-color: #10b981 !important;
+            border-color: var(--accent-primary) !important;
         }
 
         body.theme-light .sidebar button {
@@ -138,6 +217,7 @@
         body.theme-light .temp-btn,
         body.theme-light .font-btn,
         body.theme-light .theme-btn,
+        body.theme-light .accent-color-btn,
         body.theme-light .code-size-btn,
         body.theme-light .layout-btn {
             background: rgba(200, 200, 200, 0.3);
@@ -148,6 +228,7 @@
         body.theme-light #settings-modal .temp-btn,
         body.theme-light #settings-modal .font-btn,
         body.theme-light #settings-modal .theme-btn,
+        body.theme-light #settings-modal .accent-color-btn,
         body.theme-light #settings-modal .code-size-btn,
         body.theme-light #settings-modal .layout-btn {
             background: rgba(220, 220, 220, 0.5);
@@ -158,11 +239,12 @@
         body.theme-light .temp-btn.active,
         body.theme-light .font-btn.active,
         body.theme-light .theme-btn.active,
+        body.theme-light .accent-color-btn.active,
         body.theme-light .code-size-btn.active,
         body.theme-light .layout-btn.active {
-            background: #10b981;
-            border-color: #10b981;
-            color: white;
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: var(--accent-contrast);
         }
 
         body.theme-light .license-box {
@@ -211,7 +293,7 @@
         }
 
         body.theme-light #sys-prompt:focus {
-            border-color: #10b981 !important;
+            border-color: var(--accent-primary) !important;
             background: rgba(255, 255, 255, 0.95) !important;
         }
 
@@ -274,8 +356,8 @@
         }
 
         body.theme-light #settings-modal .settings-sidebar button.active-nav {
-            background: rgba(16, 185, 129, 0.15) !important;
-            color: #059669 !important;
+            background: rgba(var(--accent-rgb), 0.15) !important;
+            color: var(--accent-strong) !important;
         }
 
         body.theme-dark {
@@ -380,6 +462,7 @@
         body.theme-dark .temp-btn,
         body.theme-dark .font-btn,
         body.theme-dark .theme-btn,
+        body.theme-dark .accent-color-btn,
         body.theme-dark .code-size-btn,
         body.theme-dark .layout-btn {
             background: rgba(255, 255, 255, 0.08);
@@ -390,16 +473,17 @@
         body.theme-dark .temp-btn.active,
         body.theme-dark .font-btn.active,
         body.theme-dark .theme-btn.active,
+        body.theme-dark .accent-color-btn.active,
         body.theme-dark .code-size-btn.active,
         body.theme-dark .layout-btn.active {
-            background: #10b981;
-            border-color: #10b981;
-            color: white;
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: var(--accent-contrast);
         }
 
         body.theme-dark .memory-card {
             background: rgba(20, 20, 30, 0.7);
-            border-left: 3px solid #10b981;
+            border-left: 3px solid var(--accent-primary);
         }
 
         button:hover,
@@ -411,6 +495,7 @@
         .temp-btn:hover,
         .font-btn:hover,
         .theme-btn:hover,
+        .accent-color-btn:hover,
         .code-size-btn:hover,
         .layout-btn:hover,
         select:hover,
@@ -551,7 +636,7 @@
         }
 
         #image-detail-select:focus {
-            border-color: #10b981 !important;
+            border-color: var(--accent-primary) !important;
         }
 
         body.theme-light #image-detail-select {
@@ -561,7 +646,7 @@
         }
 
         body.theme-light #image-detail-select:focus {
-            border-color: #10b981 !important;
+            border-color: var(--accent-primary) !important;
         }
 
         .code-copy-btn {
@@ -608,7 +693,7 @@
             top: -8px;
             left: -8px;
             border-radius: 50%;
-            border: 2px solid #10b981;
+            border: 2px solid var(--accent-primary);
             animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
         }
 
@@ -623,6 +708,7 @@
         .temp-btn,
         .font-btn,
         .theme-btn,
+        .accent-color-btn,
         .code-size-btn,
         .layout-btn {
             flex: 1;
@@ -632,6 +718,37 @@
             border-radius: 0.75rem;
             transition: all 0.2s;
             cursor: pointer;
+        }
+
+        .accent-color-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+
+        .accent-color-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            min-width: 0;
+            white-space: nowrap;
+        }
+
+        .accent-color-swatch {
+            width: 0.85rem;
+            height: 0.85rem;
+            flex: 0 0 auto;
+            border-radius: 50%;
+            background: var(--swatch-color);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+        }
+
+        @media (max-width: 640px) {
+            .accent-color-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
         #settings-modal {
@@ -859,6 +976,14 @@
 
         .font-size-large .msg-bubble {
             font-size: 1.125rem;
+        }
+
+        .font-size-extra-large .msg-bubble {
+            font-size: 1.25rem;
+        }
+
+        .font-size-huge .msg-bubble {
+            font-size: 1.375rem;
         }
 
         .search-box {
@@ -1091,14 +1216,14 @@
         }
 
         .attachment-card:hover {
-            border-color: rgba(16, 185, 129, 0.7);
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -2px 0 rgba(0, 0, 0, 0.04);
+            border-color: rgba(var(--accent-rgb), 0.7);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(var(--accent-rgb), 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -2px 0 rgba(0, 0, 0, 0.04);
             transform: translateY(-2px);
         }
 
         body.theme-light .attachment-card:hover {
-            border-color: rgba(16, 185, 129, 0.6);
-            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(16, 185, 129, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -2px 0 rgba(0, 0, 0, 0.02);
+            border-color: rgba(var(--accent-rgb), 0.6);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(var(--accent-rgb), 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -2px 0 rgba(0, 0, 0, 0.02);
             transform: translateY(-2px);
         }
 
@@ -1121,8 +1246,8 @@
         }
 
         .attachment-thumb:hover {
-            border-color: rgba(16, 185, 129, 0.55);
-            box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+            border-color: rgba(var(--accent-rgb), 0.55);
+            box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.2);
         }
 
         .attachment-file-icon {
@@ -1147,8 +1272,8 @@
         }
 
         .attachment-card:hover .attachment-file-icon {
-            border-color: rgba(16, 185, 129, 0.4);
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.12);
+            border-color: rgba(var(--accent-rgb), 0.4);
+            box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.12);
         }
 
         .attachment-name {
@@ -1221,7 +1346,7 @@
         }
 
         .msg-attachment-thumb:hover {
-            border-color: #10b981;
+            border-color: var(--accent-primary);
             transform: scale(1.03);
         }
 
@@ -1303,13 +1428,13 @@
         }
 
         #attach-btn.has-files {
-            border-color: #10b981;
-            color: #10b981;
-            background: rgba(16, 185, 129, 0.15);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: rgba(var(--accent-rgb), 0.15);
         }
 
         body.theme-light #attach-btn.has-files {
-            background: rgba(16, 185, 129, 0.2);
+            background: rgba(var(--accent-rgb), 0.2);
         }
 
         #token-estimate {
@@ -1443,7 +1568,7 @@
         }
 
         .canvas-modified-line {
-            background-color: rgba(16, 185, 129, 0.2) !important;
+            background-color: rgba(var(--accent-rgb), 0.2) !important;
         }
 
         #canvas-status {
@@ -1500,9 +1625,9 @@
             border-radius: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
-            background: rgba(16, 185, 129, 0.2);
-            border: 1px solid rgba(16, 185, 129, 0.4);
-            color: #10b981;
+            background: rgba(var(--accent-rgb), 0.2);
+            border: 1px solid rgba(var(--accent-rgb), 0.4);
+            color: var(--accent-primary);
             flex-shrink: 0;
         }
 
@@ -1511,18 +1636,18 @@
         }
 
         #canvas-toggle-btn:hover {
-            background: rgba(16, 185, 129, 0.35);
+            background: rgba(var(--accent-rgb), 0.35);
             filter: brightness(1.05);
         }
 
         body.theme-light #canvas-toggle-btn {
-            background: rgba(16, 185, 129, 0.15);
-            border-color: rgba(16, 185, 129, 0.5);
-            color: #059669;
+            background: rgba(var(--accent-rgb), 0.15);
+            border-color: rgba(var(--accent-rgb), 0.5);
+            color: var(--accent-strong);
         }
 
         body.theme-light #canvas-toggle-btn:hover {
-            background: rgba(16, 185, 129, 0.25);
+            background: rgba(var(--accent-rgb), 0.25);
         }
 
         .canvas-replace-notice {
@@ -1532,7 +1657,7 @@
             display: block;
             margin: 0.5rem 0;
             padding-left: 0.5rem;
-            border-left: 3px solid #10b981;
+            border-left: 3px solid var(--accent-primary);
             opacity: 0.9;
         }
 
@@ -1637,14 +1762,14 @@
         }
 
         #settings-modal .settings-sidebar button.active-nav {
-            background: rgba(16, 185, 129, 0.2);
-            color: #10b981;
+            background: rgba(var(--accent-rgb), 0.2);
+            color: var(--accent-primary);
             font-weight: 600;
         }
 
         body.theme-light #settings-modal .settings-sidebar button.active-nav {
-            background: rgba(16, 185, 129, 0.15);
-            color: #059669;
+            background: rgba(var(--accent-rgb), 0.15);
+            color: var(--accent-strong);
         }
 
         #settings-modal .settings-content-section {
@@ -1714,7 +1839,7 @@
         }
 
         .cloud-toggle input:checked+.slider {
-            background-color: #10b981;
+            background-color: var(--accent-primary);
         }
 
         .cloud-toggle input:checked+.slider:before {
@@ -1726,7 +1851,7 @@
         }
 
         body.theme-light .cloud-toggle input:checked+.slider {
-            background-color: #10b981;
+            background-color: var(--accent-primary);
         }
 
         #cloud-sync-btn-inline {
@@ -1870,7 +1995,7 @@
         #voice-replay-progress {
             flex: 0 1 54%;
             min-width: 120px;
-            accent-color: #10b981;
+            accent-color: var(--accent-primary);
             margin: 0;
         }
 
@@ -1989,8 +2114,8 @@
         }
 
         #compact-confirm-modal .compact-confirm {
-            border-color: rgba(16, 185, 129, 0.7);
-            background: #10b981;
+            border-color: rgba(var(--accent-rgb), 0.7);
+            background: var(--accent-primary);
             color: #07140f;
             font-weight: 700;
         }
@@ -2371,14 +2496,38 @@
                         </div>
                     </div>
                     <div>
+                        <label class="block text-sm font-medium mb-3 text-gray-300">强调色</label>
+                        <div class="accent-color-grid">
+                            <button class="accent-color-btn rounded-xl" data-accent="green" onclick="setAccentColor('green')">
+                                <span class="accent-color-swatch" style="--swatch-color:#10b981"></span>绿色
+                            </button>
+                            <button class="accent-color-btn rounded-xl" data-accent="sky" onclick="setAccentColor('sky')">
+                                <span class="accent-color-swatch" style="--swatch-color:#38bdf8"></span>浅蓝
+                            </button>
+                            <button class="accent-color-btn rounded-xl" data-accent="amber" onclick="setAccentColor('amber')">
+                                <span class="accent-color-swatch" style="--swatch-color:#f59e0b"></span>琥珀
+                            </button>
+                            <button class="accent-color-btn rounded-xl" data-accent="rose" onclick="setAccentColor('rose')">
+                                <span class="accent-color-swatch" style="--swatch-color:#fb7185"></span>玫红
+                            </button>
+                            <button class="accent-color-btn rounded-xl" data-accent="claude" onclick="setAccentColor('claude')">
+                                <span class="accent-color-swatch" style="--swatch-color:#d97757"></span>暖白
+                            </button>
+                        </div>
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">字体大小</label>
-                        <div class="flex gap-2">
+                        <div class="grid grid-cols-5 gap-2">
                             <button class="font-btn rounded-xl" data-size="small"
                                 onclick="setFontSize('small', this)">小</button>
                             <button class="font-btn rounded-xl" data-size="medium"
                                 onclick="setFontSize('medium', this)">中</button>
                             <button class="font-btn rounded-xl" data-size="large"
                                 onclick="setFontSize('large', this)">大</button>
+                            <button class="font-btn rounded-xl" data-size="extra-large"
+                                onclick="setFontSize('extra-large', this)">特大</button>
+                            <button class="font-btn rounded-xl" data-size="huge"
+                                onclick="setFontSize('huge', this)">巨大</button>
                         </div>
                     </div>
                     <div>
@@ -2574,7 +2723,7 @@
                             class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">
                             <i data-lucide="waves" class="w-4 h-4"></i> 生成/覆盖预制语音包
                         </button>
-                        <p class="text-[11px] text-gray-500 mt-2">预制语音包可以明显减少语音聊天的等待感。</p>
+                        <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">A 组：每轮请求开始时立即播放的短回应。B 组：A 组后按设定概率播放的思考等待语音。C 组：本轮附带桌面截图时，在 A 组后播放的看图提示语音。预制语音包可以明显减少等待感。</p>
                     </div>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <p class="text-xs font-semibold text-gray-300">科大讯飞流式听写</p>
@@ -2594,6 +2743,16 @@
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                         </div>
                         <p class="text-[11px] text-gray-500 mt-2">过期后可前往讯飞开放平台重新获取。</p>
+                    </div>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col pr-3">
+                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
+                        </div>
+                        <button type="button" onclick="requestClearVoiceRecords()"
+                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                            清除
+                        </button>
                     </div>
                 </div>
                 <div id="section-desktop-work" class="settings-content-section space-y-5">
@@ -2619,10 +2778,20 @@
                         <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-300" for="desktop-skip-b-preset-input">跳过B组语音</label>
-                                <p class="text-[11px] text-gray-500 mt-2">开启后桌面协作预制语音只播放 A 组和 C 组。</p>
+                                <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">B 组是按概率播放的思考等待语音；C 组是附带截图时播放的看图提示语音。开启后桌面协作只播放 A 组和 C 组。</p>
                             </div>
                             <label class="cloud-toggle shrink-0">
                                 <input type="checkbox" id="desktop-skip-b-preset-input">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300" for="desktop-auto-screenshot-input">自动传图</label>
+                                <p class="text-[11px] text-gray-500 mt-2">每次 VAD 结束并完成语音识别后，若本轮没有手动截图，则自动截取鼠标所在显示器并附带到请求。</p>
+                            </div>
+                            <label class="cloud-toggle shrink-0">
+                                <input type="checkbox" id="desktop-auto-screenshot-input">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -2651,16 +2820,6 @@
                             <input type="checkbox" id="math-render-toggle" onchange="onMathRenderToggleChange()" checked>
                             <span class="slider"></span>
                         </label>
-                    </div>
-                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col pr-3">
-                            <span class="text-sm font-medium text-gray-200">清除语音记录</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">删除所有语音聊天生成的语音记录，预制语音不受影响。</span>
-                        </div>
-                        <button type="button" onclick="requestClearVoiceRecords()"
-                            class="px-4 py-2 rounded-xl border border-gray-700 text-sm text-gray-200 bg-[#171717] hover:border-emerald-500 hover:text-emerald-400 transition-colors">
-                            清除
-                        </button>
                     </div>
                 </div>
                 <div id="section-advanced" class="settings-content-section space-y-5">
@@ -2798,7 +2957,7 @@
                     </h3>
                     <div class="text-xs text-gray-400 space-y-3">
                         <p class="leading-relaxed">
-                            <strong class="text-gray-300">AI Chat UI Demo</strong><br>
+                            <strong class="text-gray-300">AI Chat UI NEXT</strong><br>
                             一个轻量级云端的智能对话应用，支持多种AI模型，具备持久化存储和多模态能力，致力于提供流畅的AI交互体验。
                             <br>Your Next Gen Vibe Coding Toolkit.<br>
                             享受乐趣。
@@ -2812,6 +2971,12 @@
                             <strong class="text-gray-300">版本</strong><br>
                             <span id="app-version">V6.1.0 Release</span>
                         </p>
+                        <div id="current-update-notes" class="leading-relaxed"></div>
+                        <button type="button" id="toggle-update-history-btn" onclick="toggleUpdateHistory()"
+                            class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-gray-700 text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i><span>展开历史更新</span>
+                        </button>
+                        <div id="update-history" class="hidden space-y-4"></div>
                         <div class="bg-[#1a1a1a] rounded-xl p-3 border border-gray-700 license-box">
                             <p class="font-mono text-[10px] text-gray-500 mb-2">MIT License</p>
                             <p class="text-gray-500">本项目基于MIT开源协议发布，允许自由使用、修改和分发。详见 <a href="#"
@@ -2868,8 +3033,10 @@
         const DEFAULT_XF_API_KEY = 'a1eff87d5b81fc49bd210a7a947916c3';
         const DEFAULT_XF_API_SECRET = 'YzMxZjY1NmRiMDhkOWQ1ZGFiMjM1NzAy';
         const MODAL_ANIMATION_MS = 220;
+        const ACCENT_COLOR_KEYS = new Set(['green', 'sky', 'amber', 'rose', 'claude']);
         let voiceReplayController = null;
         let dangerConfirmResolver = null;
+        let updateLogSections = [];
 
         marked.use({
             renderer: {
@@ -4593,6 +4760,43 @@
             return escapeHtml(html);
         }
 
+        function renderAssistantMarkdown(content) {
+            const notices = [];
+            const tokenPrefix = `CANVASREPLACENOTICE${crypto.randomUUID().replace(/-/g, '')}`;
+            const summarizedContent = replaceBlocksToSummary(String(content || ''));
+            const noticePattern = /<span class="canvas-replace-notice">修改了画布代码：canvas\[replace\]with\[(\d+)行\]。<\/span>/g;
+            const protectedContent = summarizedContent.replace(noticePattern, (_match, lineCount) => {
+                const token = `${tokenPrefix}${notices.length}TOKEN`;
+                notices.push({ token, lineCount: String(parseInt(lineCount, 10)) });
+                return token;
+            });
+            const preprocessedContent = extractAndPreserveMath(protectedContent);
+            let html = marked.parse(preprocessedContent);
+            html = sanitizeHtml(restoreAndRenderMath(html));
+            notices.forEach(({ token, lineCount }) => {
+                const notice = `<span class="canvas-replace-notice">修改了画布代码：canvas[replace]with[${lineCount}行]。</span>`;
+                html = html.split(token).join(notice);
+            });
+            return html;
+        }
+
+        function renderThinkingText(element, text) {
+            if (!element) return;
+            element.replaceChildren();
+            const source = String(text || '');
+            const pattern = /\*\*([^*]+?)\*\*/g;
+            let cursor = 0;
+            let match;
+            while ((match = pattern.exec(source))) {
+                if (match.index > cursor) element.appendChild(document.createTextNode(source.slice(cursor, match.index)));
+                const strong = document.createElement('strong');
+                strong.textContent = match[1];
+                element.appendChild(strong);
+                cursor = match.index + match[0].length;
+            }
+            if (cursor < source.length) element.appendChild(document.createTextNode(source.slice(cursor)));
+        }
+
         function escapeHtml(str) {
             return String(str ?? '').replace(/[&<>"']/g, function (m) {
                 return {
@@ -5066,7 +5270,7 @@
                 const thinkingDiv = document.createElement('div');
                 thinkingDiv.className = 'thinking-text text-gray-400 text-xs mb-1';
                 if (reasoning) {
-                    thinkingDiv.innerText = reasoning;
+                    renderThinkingText(thinkingDiv, reasoning);
                 } else {
                     thinkingDiv.style.display = 'none';
                 }
@@ -5076,10 +5280,7 @@
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
             if (content) {
                 if (isAI) {
-                    const preprocessedContent = extractAndPreserveMath(content);
-                    let html = marked.parse(preprocessedContent);
-                    html = restoreAndRenderMath(html);
-                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${sanitizeHtml(html)}</div>`;
+                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${renderAssistantMarkdown(content)}</div>`;
                     const contentArea = bubble.querySelector('.ai-content-area');
                     if (contentArea) renderMathFormulas(contentArea);
                     bubble.querySelectorAll('pre').forEach(pre => {
@@ -5217,7 +5418,7 @@
                 }
                 const original = btnElement.innerHTML;
                 btnElement.innerHTML = `<i data-lucide="check" class="w-3.5 h-3.5"></i> 已复制`;
-                btnElement.style.color = "#10b981";
+                btnElement.style.color = getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981';
                 lucide.createIcons();
                 setTimeout(() => {
                     btnElement.innerHTML = original;
@@ -5469,9 +5670,11 @@
             const shortcut = document.getElementById('desktop-shortcut-input');
             const quality = document.getElementById('desktop-image-quality-input');
             const skipB = document.getElementById('desktop-skip-b-preset-input');
+            const autoScreenshot = document.getElementById('desktop-auto-screenshot-input');
             if (shortcut) shortcut.value = localStorage.getItem('desktop_shortcut') || 'Ctrl+A';
             if (quality) quality.value = localStorage.getItem('desktop_image_quality') || 'balanced';
             if (skipB) skipB.checked = localStorage.getItem('desktop_skip_b_preset') === 'true';
+            if (autoScreenshot) autoScreenshot.checked = localStorage.getItem('desktop_auto_screenshot') === 'true';
         }
 
         function updateVoicePresetProbabilityLabel() {
@@ -5552,7 +5755,7 @@
 
         function setFontSize(size, btn) {
             currentFontSize = size;
-            document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large');
+            document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large', 'font-size-extra-large', 'font-size-huge');
             document.body.classList.add(`font-size-${size}`);
             document.querySelectorAll('.font-btn').forEach(b => b.classList.toggle('active', b.dataset.size === size));
         }
@@ -5565,7 +5768,89 @@
             if (cmEditor) {
                 cmEditor.setOption('theme', theme === 'light' ? 'default' : 'material-darker');
             }
+            highlightThemeBtn(theme);
             lucide.createIcons();
+        }
+
+        function parseUpdateLog(markdown) {
+            const sections = [];
+            let current = null;
+            String(markdown || '').split(/\r?\n/).forEach(line => {
+                const heading = line.match(/^##\s+(.+?)\s+·\s+(\d{4}-\d{2}-\d{2})\s*$/);
+                if (heading) {
+                    current = { version: heading[1].trim(), date: heading[2], items: [] };
+                    sections.push(current);
+                    return;
+                }
+                const item = line.match(/^-\s+(.+)$/);
+                if (current && item) current.items.push(item[1].trim());
+            });
+            return sections.filter(section => section.items.length > 0);
+        }
+
+        function createUpdateSection(section, isCurrent = false) {
+            const wrapper = document.createElement('section');
+            wrapper.className = isCurrent
+                ? 'bg-[#1a1a1a] rounded-xl p-3 border border-gray-700'
+                : 'border-l-2 pl-3';
+            if (!isCurrent) wrapper.style.borderColor = 'var(--accent-primary)';
+            const heading = document.createElement('p');
+            heading.className = 'font-semibold text-gray-300 mb-2';
+            heading.textContent = `${section.version} · ${section.date}`;
+            const list = document.createElement('ul');
+            list.className = 'space-y-1.5 text-gray-500';
+            section.items.forEach(item => {
+                const entry = document.createElement('li');
+                entry.className = 'leading-relaxed';
+                entry.textContent = `• ${item}`;
+                list.appendChild(entry);
+            });
+            wrapper.append(heading, list);
+            return wrapper;
+        }
+
+        async function loadUpdateLog() {
+            const currentContainer = document.getElementById('current-update-notes');
+            const historyContainer = document.getElementById('update-history');
+            const toggleButton = document.getElementById('toggle-update-history-btn');
+            if (!currentContainer || !historyContainer || !toggleButton || !window.electronAPI?.getUpdateLog) return;
+            try {
+                updateLogSections = parseUpdateLog(await window.electronAPI.getUpdateLog());
+                currentContainer.replaceChildren();
+                historyContainer.replaceChildren();
+                if (!updateLogSections.length) {
+                    toggleButton.classList.add('hidden');
+                    return;
+                }
+                currentContainer.appendChild(createUpdateSection(updateLogSections[0], true));
+                updateLogSections.slice(1).forEach(section => historyContainer.appendChild(createUpdateSection(section)));
+                toggleButton.classList.toggle('hidden', updateLogSections.length < 2);
+            } catch (error) {
+                currentContainer.textContent = '更新记录读取失败。';
+                toggleButton.classList.add('hidden');
+            }
+        }
+
+        function toggleUpdateHistory() {
+            const history = document.getElementById('update-history');
+            const button = document.getElementById('toggle-update-history-btn');
+            if (!history || !button) return;
+            const expanding = history.classList.contains('hidden');
+            history.classList.toggle('hidden', !expanding);
+            button.innerHTML = expanding
+                ? '<i data-lucide="chevron-up" class="w-4 h-4"></i><span>收起历史更新</span>'
+                : '<i data-lucide="chevron-down" class="w-4 h-4"></i><span>展开历史更新</span>';
+            lucide.createIcons();
+        }
+
+        function setAccentColor(color, save = true) {
+            const nextColor = ACCENT_COLOR_KEYS.has(color) ? color : 'green';
+            document.body.dataset.accentColor = nextColor;
+            if (save) localStorage.setItem('accent_color', nextColor);
+            document.querySelectorAll('.accent-color-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.accent === nextColor);
+            });
+            highlightBackgroundThumb();
         }
 
         function setBackgroundImage(num, btn) {
@@ -5573,7 +5858,7 @@
             document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => {
                 img.style.borderColor = '#4b5563';
             });
-            btn.style.borderColor = '#10b981';
+            btn.style.borderColor = getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981';
             updateBackgroundImage();
         }
 
@@ -5632,6 +5917,7 @@
             localStorage.setItem('sys_prompt', systemPrompt);
             localStorage.setItem('chat_temp', currentTemp);
             localStorage.setItem('font_size', currentFontSize);
+            localStorage.setItem('accent_color', document.body.dataset.accentColor || 'green');
             localStorage.setItem('bg_image', selectedBackgroundImage);
             localStorage.setItem('canvas_font_size', currentCanvasFontSize);
             localStorage.setItem('layout_mode', currentLayoutMode);
@@ -5689,10 +5975,12 @@
             const desktopShortcutInput = document.getElementById('desktop-shortcut-input');
             const desktopQualityInput = document.getElementById('desktop-image-quality-input');
             const desktopSkipBInput = document.getElementById('desktop-skip-b-preset-input');
+            const desktopAutoScreenshotInput = document.getElementById('desktop-auto-screenshot-input');
             const savedDesktopShortcut = String(desktopShortcutInput?.value || 'Ctrl+A').trim() || 'Ctrl+A';
             localStorage.setItem('desktop_shortcut', savedDesktopShortcut);
             localStorage.setItem('desktop_image_quality', desktopQualityInput?.value || 'balanced');
             localStorage.setItem('desktop_skip_b_preset', desktopSkipBInput?.checked ? 'true' : 'false');
+            localStorage.setItem('desktop_auto_screenshot', desktopAutoScreenshotInput?.checked ? 'true' : 'false');
             const mathToggle = document.getElementById('math-render-toggle');
             if (mathToggle) mathRenderingEnabled = mathToggle.checked;
             localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false');
@@ -5994,7 +6282,7 @@
                 title.textContent = String(chat.title || '新对话');
                 if (chat.canvasEnabled) {
                     const canvasBadge = document.createElement('span');
-                    canvasBadge.style.cssText = 'font-size:0.55rem;color:#10b981;margin-left:0.25rem;';
+                    canvasBadge.style.cssText = `font-size:0.55rem;color:${getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981'};margin-left:0.25rem;`;
                     canvasBadge.textContent = '[Canvas]';
                     title.appendChild(canvasBadge);
                 }
@@ -6241,6 +6529,7 @@
                 desktopShortcut: localStorage.getItem('desktop_shortcut') || 'Ctrl+A',
                 desktopImageQuality: localStorage.getItem('desktop_image_quality') || 'balanced',
                 desktopSkipB: localStorage.getItem('desktop_skip_b_preset') === 'true',
+                desktopAutoScreenshot: localStorage.getItem('desktop_auto_screenshot') === 'true',
                 theme: localStorage.getItem('theme') || 'light',
                 backgroundImage: selectedBackgroundImage
             };
@@ -6874,6 +7163,8 @@
         window.onload = async () => {
             await migrateOldChats();
             const savedTheme = localStorage.getItem('theme') || 'light';
+            const savedAccentColor = localStorage.getItem('accent_color') || 'green';
+            setAccentColor(savedAccentColor, false);
             setTheme(savedTheme, false);
             applyTextModelList(loadModelList(), localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL);
             document.body.classList.add(`font-size-${currentFontSize}`);
@@ -6908,6 +7199,7 @@
             });
             input.addEventListener('paste', handlePaste);
             highlightFontBtn(currentFontSize);
+            highlightThemeBtn(savedTheme);
             highlightCanvasSizeBtn(currentCanvasFontSize);
             highlightLayoutBtn(currentLayoutMode);
             applyLayoutMode(currentLayoutMode);
@@ -6948,6 +7240,7 @@
             updateAttachMenuButtons();
             if (window.electronAPI?.updateAppState) window.electronAPI.updateAppState({ developerMode: developerModeEnabled });
             if (window.electronAPI?.signalRendererReady) window.electronAPI.signalRendererReady();
+            loadUpdateLog();
         };
 
         function updateTempUI() {
@@ -6959,6 +7252,12 @@
         function highlightFontBtn(size) {
             document.querySelectorAll('.font-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.size === size);
+            });
+        }
+
+        function highlightThemeBtn(theme) {
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.theme === theme);
             });
         }
 
@@ -6980,7 +7279,7 @@
                 document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => {
                     img.style.borderColor = '#3d3d3d';
                 });
-                selectedThumb.style.borderColor = '#10b981';
+                selectedThumb.style.borderColor = getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981';
             }
         }
 
@@ -7210,16 +7509,9 @@
                 let sawSSEEvent = false;
                 const seenStreamEvents = new Set();
                 const renderLiveContent = () => {
-                    let displayContent = replaceBlocksToSummary(rawFullContent);
-                    let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
-                    let preprocessedContent = extractAndPreserveMath(contentForRender);
-                    let html = marked.parse(preprocessedContent);
-                    html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = sanitizeHtml(html);
+                    contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                     if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
-                        preprocessedContent = extractAndPreserveMath(rawFullContent);
-                        html = marked.parse(preprocessedContent);
-                        contentArea.innerHTML = sanitizeHtml(restoreAndRenderMath(html));
+                        contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
@@ -7253,7 +7545,7 @@
                     rawFullContent = nextContent;
                     if (thinkingChanged && thinkingDiv) {
                         thinkingDiv.style.display = thinkingContent ? 'block' : 'none';
-                        thinkingDiv.innerText = thinkingContent;
+                        renderThinkingText(thinkingDiv, thinkingContent);
                     }
                     if (contentChanged) {
                         receivedAny = true;
@@ -7352,18 +7644,9 @@
                     showVoiceNotification(`流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
                 }
                 if (!receivedAny && !rawFullContent.trim()) rawFullContent = '';
-                let displayContent = replaceBlocksToSummary(rawFullContent);
-                let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
-                let preprocessedContent = extractAndPreserveMath(contentForRender);
-                let html = marked.parse(preprocessedContent);
-                html = restoreAndRenderMath(html);
-                contentArea.innerHTML = sanitizeHtml(html);
+                contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                 if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
-                    contentForRender = rawFullContent;
-                    preprocessedContent = extractAndPreserveMath(contentForRender);
-                    html = marked.parse(preprocessedContent);
-                    html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = sanitizeHtml(html);
+                    contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                 }
                 renderMathFormulas(contentArea);
                 if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
@@ -7382,7 +7665,7 @@
                 });
                 chat.messages.push({
                     role: 'assistant',
-                    content: displayContent,
+                    content: rawFullContent,
                     model,
                     reasoning: thinkingContent
                 });
@@ -7398,24 +7681,15 @@
                     appendLog('debug', `AI 请求被中止`);
                     showVoiceNotification('已停止', false, 1800, false);
                     if (!rawFullContent.trim() && !receivedAny) rawFullContent = '';
-                    let displayContent = replaceBlocksToSummary(rawFullContent);
-                    let contentForRender = displayContent && displayContent.trim() ? displayContent : rawFullContent;
-                    let preprocessedContent = extractAndPreserveMath(contentForRender || '');
-                    let html = marked.parse(preprocessedContent);
-                    html = restoreAndRenderMath(html);
-                    contentArea.innerHTML = sanitizeHtml(html);
+                    contentArea.innerHTML = renderAssistantMarkdown(rawFullContent || '');
                     if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
-                        contentForRender = rawFullContent;
-                        preprocessedContent = extractAndPreserveMath(contentForRender || '');
-                        html = marked.parse(preprocessedContent);
-                        html = restoreAndRenderMath(html);
-                        contentArea.innerHTML = sanitizeHtml(html);
+                        contentArea.innerHTML = renderAssistantMarkdown(rawFullContent || '');
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
                     chat.messages.push({
                         role: 'assistant',
-                        content: displayContent,
+                        content: rawFullContent,
                         model,
                         reasoning: thinkingContent
                     });

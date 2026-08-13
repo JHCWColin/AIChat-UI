@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     openDesktopWork: (payload) => ipcRenderer.invoke("desktop-work:open", payload),
     getAudioChatSession: () => ipcRenderer.invoke("audio-chat:get-session"),
     getDesktopWorkSession: () => ipcRenderer.invoke("desktop-work:get-session"),
+    captureDesktopScreenshot: () => ipcRenderer.invoke("desktop-work:capture-screenshot"),
+    getUpdateLog: () => ipcRenderer.invoke("app:get-update-log"),
     checkpointAudioChat: (turns) => ipcRenderer.invoke("audio-chat:checkpoint", turns),
     completeAudioChat: (turns) => ipcRenderer.invoke("audio-chat:complete", turns),
     completeDesktopWork: (turns) => ipcRenderer.invoke("desktop-work:complete", turns),

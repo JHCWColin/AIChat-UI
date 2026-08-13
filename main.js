@@ -508,12 +508,15 @@ async function captureCurrentDisplayScreenshot() {
     const dataUrl = `data:image/jpeg;base64,${resized.toJPEG(settings.jpegQuality).toString("base64")}`;
     audioSession.pendingScreenshot = dataUrl;
     if (audioWindow && !audioWindow.isDestroyed()) {
-        audioWindow.webContents.send("desktop-work:screenshot-captured", {
+        const payload = {
             dataUrl,
             displayId: String(display.id),
             quality: audioSession.settings.desktopImageQuality || "balanced"
-        });
+        };
+        audioWindow.webContents.send("desktop-work:screenshot-captured", payload);
+        return payload;
     }
+    return { dataUrl, displayId: String(display.id), quality: audioSession.settings.desktopImageQuality || "balanced" };
     } finally {
         if (captureWindow && !captureWindow.isDestroyed()) captureWindow.setOpacity(1);
     }
@@ -624,6 +627,18 @@ ipcMain.handle("audio-chat:get-session", async (event) => {
 ipcMain.handle("desktop-work:get-session", async (event) => {
     if (!isAudioSender(event) || !audioSession || audioSession.mode !== "desktop") throw new Error("桌面协作会话不存在");
     return audioSession;
+});
+
+ipcMain.handle("desktop-work:capture-screenshot", async (event) => {
+    if (!isAudioSender(event) || !audioSession || audioSession.mode !== "desktop") {
+        throw new Error("桌面协作会话不存在");
+    }
+    return captureCurrentDisplayScreenshot();
+});
+
+ipcMain.handle("app:get-update-log", async (event) => {
+    if (!isMainSender(event)) throw new Error("非法的更新日志请求");
+    return fs.readFile(path.join(__dirname, "UPDATE.md"), "utf8");
 });
 
 ipcMain.handle("audio-chat:checkpoint", async (event, turns) => {

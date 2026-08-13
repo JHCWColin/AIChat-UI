@@ -1543,6 +1543,14 @@
                     return;
                 }
                 this.setUserText(text, false);
+                if (desktopMode && this.settings.desktopAutoScreenshot && !this.pendingScreenshot) {
+                    try {
+                        const captured = await bridge.captureDesktopScreenshot();
+                        if (captured?.dataUrl) this.pendingScreenshot = captured.dataUrl;
+                    } catch (error) {
+                        this.showToast(`自动截图失败：${error.message || '未知错误'}，将继续发送纯文字请求`, true);
+                    }
+                }
                 const screenshot = desktopMode ? this.pendingScreenshot : null;
                 const userTurn = { role: 'user', content: text };
                 if (screenshot) {
@@ -1565,7 +1573,9 @@
 
             voiceSystemPrompt() {
                 const base = String(this.settings.systemPrompt || '').trim();
-                const collaborationPrompt = `用户正在请求你的协作。当用户按下${this.settings.desktopShortcut || 'Control+A'}后你可以查看用户当前的电脑图片。`;
+                const collaborationPrompt = this.settings.desktopAutoScreenshot
+                    ? `用户正在请求你的协作。每轮请求可能自动附带用户当前电脑图片，用户也可以按下${this.settings.desktopShortcut || 'Control+A'}手动更新图片。`
+                    : `用户正在请求你的协作。当用户按下${this.settings.desktopShortcut || 'Control+A'}后你可以查看用户当前的电脑图片。`;
                 const voiceRules = desktopMode ? `你正在进行实时桌面协作语音对话。
 回复要自然、口语化、简洁。
 每句单独一行。
