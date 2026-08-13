@@ -2016,36 +2016,6 @@
             background: rgba(220, 38, 38, 0.8);
         }
 
-        body.theme-pure-white {
-            background: #ffffff;
-            color: #111111;
-        }
-
-        body.theme-pure-black {
-            background: #000000;
-            color: #f0f0f0;
-        }
-
-        body.theme-pure-white,
-        body.theme-pure-black {
-            filter: grayscale(1);
-        }
-
-        body.theme-pure-white .temp-btn.active,
-        body.theme-pure-white .font-btn.active,
-        body.theme-pure-white .theme-btn.active,
-        body.theme-pure-white .code-size-btn.active,
-        body.theme-pure-white .layout-btn.active,
-        body.theme-pure-black .temp-btn.active,
-        body.theme-pure-black .font-btn.active,
-        body.theme-pure-black .theme-btn.active,
-        body.theme-pure-black .code-size-btn.active,
-        body.theme-pure-black .layout-btn.active {
-            background: #808080;
-            border-color: #555555;
-            color: #ffffff;
-        }
-
         #smooth-scroll-option:not(.hidden) {
             display: flex;
         }
@@ -2401,11 +2371,26 @@
                                 onclick="setTheme('light')">浅色</button>
                             <button class="theme-btn rounded-xl" data-theme="dark"
                                 onclick="setTheme('dark')">深色</button>
-                            <button class="theme-btn rounded-xl" data-theme="pure-white"
-                                onclick="setTheme('pure-white')">纯白</button>
-                            <button class="theme-btn rounded-xl" data-theme="pure-black"
-                                onclick="setTheme('pure-black')">纯黑</button>
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-3 text-gray-300">强调色</label>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <input type="color" id="accent-color-picker" value="#10b981"
+                                class="w-12 h-10 rounded-lg border border-gray-700 bg-[#171717] cursor-pointer"
+                                oninput="setAccentColor(this.value, true)">
+                            <input type="text" id="accent-color-text" placeholder="#10b981"
+                                class="w-32 bg-[#171717] border border-gray-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-emerald-500 transition-colors"
+                                oninput="setAccentColorFromText(this.value)">
+                            <div class="flex gap-2">
+                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#10b981" onclick="setAccentColor('#10b981', true)"></button>
+                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#3b82f6" onclick="setAccentColor('#3b82f6', true)"></button>
+                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#ef4444" onclick="setAccentColor('#ef4444', true)"></button>
+                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#000000" onclick="setAccentColor('#000000', true)"></button>
+                                <button type="button" class="w-8 h-8 rounded-full border border-gray-600" style="background:#ffffff" onclick="setAccentColor('#ffffff', true)"></button>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-2">从调色板选择，或直接输入十六进制颜色，例如 #000000。</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">字体大小</label>
@@ -2931,6 +2916,10 @@
         marked.use({
             renderer: {
                 html(token) {
+                    const trimmed = String(token.text || '').trim();
+                    if (trimmed === '<span class="canvas-replace-notice">' || trimmed === '</span>') {
+                        return trimmed;
+                    }
                     return escapeHtml(token.text);
                 }
             }
@@ -4272,6 +4261,7 @@
         let selectedBackgroundImage = parseInt(localStorage.getItem('bg_image')) || 1;
         let autoScrollOnReceive = localStorage.getItem('auto_scroll_on_receive') === 'true';
         let smoothScrollOnReceive = localStorage.getItem('smooth_scroll_on_receive') === 'true';
+        let accentColor = localStorage.getItem('accent_color') || '#10b981';
         let currentLayoutMode = localStorage.getItem('layout_mode') || 'classic';
         let abortController = null;
         let isGenerating = false;
@@ -5106,6 +5096,7 @@
         function renderMessages(messages) {
             const wrapper = document.getElementById('messages-wrapper');
             wrapper.innerHTML = '';
+            wrapper.scrollTop = 0;
             if (!messages || messages.length === 0) {
                 const greetingText = getGreetingByTime();
                 const welcomeDiv = document.createElement('div');
@@ -5447,6 +5438,7 @@
                 populateVoiceChatSettings();
                 populateDesktopWorkSettings();
                 populateOtherSettings();
+                populateAppearanceSettings();
                 populateAdvancedSettings();
                 updateSettingsPortraitMode();
             } else {
@@ -5620,24 +5612,95 @@
             document.querySelectorAll('.font-btn').forEach(b => b.classList.toggle('active', b.dataset.size === size));
         }
 
+        function normalizeHexColor(value) {
+            const text = String(value || '').trim();
+            if (!/^#?[0-9a-fA-F]{6}$/.test(text)) return null;
+            return text.startsWith('#') ? text.toLowerCase() : `#${text.toLowerCase()}`;
+        }
+
+        function isLightColor(hex) {
+            const value = hex.replace('#', '');
+            const r = parseInt(value.slice(0, 2), 16);
+            const g = parseInt(value.slice(2, 4), 16);
+            const b = parseInt(value.slice(4, 6), 16);
+            return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
+        }
+
+        function applyAccentColor(color) {
+            const safe = normalizeHexColor(color) || '#10b981';
+            const contrast = isLightColor(safe) ? '#111111' : '#ffffff';
+            document.documentElement.style.setProperty('--accent-color', safe);
+            document.documentElement.style.setProperty('--accent-contrast', contrast);
+            let style = document.getElementById('accent-color-style');
+            if (!style) {
+                style = document.createElement('style');
+                style.id = 'accent-color-style';
+                document.head.appendChild(style);
+            }
+            style.textContent = `
+                :root { accent-color: ${safe}; }
+                input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: ${safe} !important; }
+                .temp-btn.active,
+                .font-btn.active,
+                .theme-btn.active,
+                .code-size-btn.active,
+                .layout-btn.active {
+                    background: ${safe} !important;
+                    border-color: ${safe} !important;
+                    color: ${contrast} !important;
+                }
+                #settings-modal .settings-sidebar button.active-nav,
+                body.theme-light #settings-modal .settings-sidebar button.active-nav,
+                body.theme-dark #settings-modal .settings-sidebar button.active-nav {
+                    color: ${safe} !important;
+                }
+                .cloud-toggle input:checked + .slider { background-color: ${safe} !important; }
+                #voice-replay-progress { accent-color: ${safe} !important; }
+                #attach-btn.has-files { border-color: ${safe} !important; color: ${safe} !important; }
+                [class*="text-emerald"] { color: ${safe} !important; }
+                [class*="bg-emerald"] { background-color: ${safe} !important; }
+                [class*="border-emerald"] { border-color: ${safe} !important; }
+                [class*="hover:text-emerald"]:hover { color: ${safe} !important; }
+                [class*="hover:bg-emerald"]:hover { background-color: ${safe} !important; }
+                [class*="focus:border-emerald"]:focus { border-color: ${safe} !important; }
+            `;
+        }
+
+        function setAccentColor(color, syncInputs = false) {
+            const safe = normalizeHexColor(color);
+            if (!safe) return;
+            accentColor = safe;
+            localStorage.setItem('accent_color', accentColor);
+            applyAccentColor(accentColor);
+            const picker = document.getElementById('accent-color-picker');
+            const textInput = document.getElementById('accent-color-text');
+            if (syncInputs && picker) picker.value = accentColor;
+            if (syncInputs && textInput) textInput.value = accentColor;
+        }
+
+        function setAccentColorFromText(value) {
+            const safe = normalizeHexColor(value);
+            if (!safe) return;
+            accentColor = safe;
+            localStorage.setItem('accent_color', accentColor);
+            applyAccentColor(accentColor);
+            const picker = document.getElementById('accent-color-picker');
+            if (picker) picker.value = accentColor;
+        }
+
         function setTheme(theme, save = true) {
-            document.body.classList.remove('theme-light', 'theme-dark', 'theme-pure-white', 'theme-pure-black');
-            const baseTheme = theme === 'pure-white' ? 'light' : (theme === 'pure-black' ? 'dark' : theme);
-            document.body.classList.add(`theme-${baseTheme}`);
-            if (theme === 'pure-white') document.body.classList.add('theme-pure-white');
-            if (theme === 'pure-black') document.body.classList.add('theme-pure-black');
+            document.body.classList.remove('theme-light', 'theme-dark');
+            document.body.classList.add(`theme-${theme}`);
             if (save) localStorage.setItem('theme', theme);
             highlightThemeBtn(theme);
-            updateBackgroundImageControls(theme);
             updateBackgroundImage();
             if (cmEditor) {
-                cmEditor.setOption('theme', baseTheme === 'light' ? 'default' : 'material-darker');
+                cmEditor.setOption('theme', theme === 'light' ? 'default' : 'material-darker');
             }
             lucide.createIcons();
         }
 
         function setBackgroundImage(num, btn) {
-            if (document.body.classList.contains('theme-pure-white') || document.body.classList.contains('theme-pure-black')) return;
             selectedBackgroundImage = num;
             document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => {
                 img.style.borderColor = '#4b5563';
@@ -5702,6 +5765,11 @@
             localStorage.setItem('chat_temp', currentTemp);
             localStorage.setItem('font_size', currentFontSize);
             localStorage.setItem('bg_image', selectedBackgroundImage);
+            const accentText = document.getElementById('accent-color-text')?.value || accentColor;
+            const normalizedAccent = normalizeHexColor(accentText) || accentColor;
+            accentColor = normalizedAccent;
+            localStorage.setItem('accent_color', accentColor);
+            applyAccentColor(accentColor);
             localStorage.setItem('canvas_font_size', currentCanvasFontSize);
             localStorage.setItem('layout_mode', currentLayoutMode);
             const apiKeyInput = document.getElementById('api-key-input').value.trim();
@@ -5791,14 +5859,6 @@
         }
 
         function updateBackgroundImage() {
-            if (document.body.classList.contains('theme-pure-white')) {
-                document.body.style.background = '#ffffff';
-                return;
-            }
-            if (document.body.classList.contains('theme-pure-black')) {
-                document.body.style.background = '#000000';
-                return;
-            }
             const bgNum = selectedBackgroundImage;
             const newUrl = `${bgNum}.JPG`;
             if (document.body.classList.contains('theme-light')) {
@@ -6959,6 +7019,7 @@
             await migrateOldChats();
             const savedTheme = localStorage.getItem('theme') || 'light';
             setTheme(savedTheme, false);
+            applyAccentColor(accentColor);
             applyTextModelList(loadModelList(), localStorage.getItem(SELECTED_MODEL_STORAGE_KEY) || DEFAULT_CHAT_MODEL);
             document.body.classList.add(`font-size-${currentFontSize}`);
             lucide.createIcons();
@@ -7010,7 +7071,7 @@
             cmEditor = CodeMirror(cmContainer, {
                 value: '',
                 mode: 'javascript',
-                theme: (savedTheme === 'light' || savedTheme === 'pure-white') ? 'default' : 'material-darker',
+                theme: savedTheme === 'light' ? 'default' : 'material-darker',
                 lineNumbers: true,
                 readOnly: false,
                 tabSize: 2,
@@ -7049,15 +7110,6 @@
         function highlightThemeBtn(theme) {
             document.querySelectorAll('.theme-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.theme === theme);
-            });
-        }
-
-        function updateBackgroundImageControls(theme) {
-            const pureTheme = theme === 'pure-white' || theme === 'pure-black';
-            document.querySelectorAll('[id^="bg-thumb-"]').forEach(img => {
-                img.style.pointerEvents = pureTheme ? 'none' : '';
-                img.style.opacity = pureTheme ? '0.35' : '';
-                img.style.filter = pureTheme ? 'grayscale(1)' : '';
             });
         }
 
@@ -7194,6 +7246,14 @@
             if (autoScrollToggle) autoScrollToggle.checked = autoScrollOnReceive;
             if (smoothScrollToggle) smoothScrollToggle.checked = smoothScrollOnReceive;
             if (smoothOption) smoothOption.classList.toggle('hidden', !autoScrollOnReceive);
+        }
+
+        function populateAppearanceSettings() {
+            const picker = document.getElementById('accent-color-picker');
+            const textInput = document.getElementById('accent-color-text');
+            if (picker) picker.value = accentColor;
+            if (textInput) textInput.value = accentColor;
+            applyAccentColor(accentColor);
         }
 
         function populateAdvancedSettings() {
