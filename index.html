@@ -2871,6 +2871,14 @@
         let voiceReplayController = null;
         let dangerConfirmResolver = null;
 
+        marked.use({
+            renderer: {
+                html(token) {
+                    return escapeHtml(token.text);
+                }
+            }
+        });
+
         function openAnimatedModal(modal, visibleClass) {
             if (!modal) return;
             const closeTimer = Number(modal.dataset.closeTimer || 0);
