@@ -29,6 +29,9 @@
     let agentToolSequence = 0;
     let agentCurrentExecutionId = "";
     let agentShellProgressUnsubscribe = null;
+    let agentTaskStartedAt = 0;
+    let agentTaskTimer = null;
+    let agentActiveStatusRow = null;
     const agentShellProgressByExecution = new Map();
 
     function currentAgentChat() {
@@ -287,15 +290,110 @@
         });
     }
 
+    function formatAgentWorkingTime(milliseconds, completed = false) {
+        const seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
+        return completed ? `worked for ${seconds}s` : `working for ${seconds}s...`;
+    }
+
+    function currentAgentTaskDuration() {
+        return agentTaskStartedAt ? Date.now() - agentTaskStartedAt : 0;
+    }
+
+    function updateAgentTaskTimer() {
+        const elapsed = agentActiveStatusRow?.querySelector(".agent-working-time");
+        if (elapsed) elapsed.textContent = formatAgentWorkingTime(currentAgentTaskDuration());
+    }
+
+    function setAgentActiveStatusRow(row) {
+        if (agentActiveStatusRow && agentActiveStatusRow !== row) {
+            const previous = agentActiveStatusRow.querySelector(".agent-working-time");
+            if (previous) previous.textContent = "";
+        }
+        agentActiveStatusRow = row || null;
+        updateAgentTaskTimer();
+    }
+
+    function startAgentTaskTimer() {
+        if (agentTaskTimer) clearInterval(agentTaskTimer);
+        agentTaskStartedAt = Date.now();
+        agentActiveStatusRow = null;
+        agentTaskTimer = setInterval(updateAgentTaskTimer, 1000);
+    }
+
+    function finishAgentTaskTimer(chat, targetMessage = null) {
+        const durationMs = currentAgentTaskDuration();
+        if (agentTaskTimer) clearInterval(agentTaskTimer);
+        agentTaskTimer = null;
+        agentTaskStartedAt = 0;
+        const elapsed = agentActiveStatusRow?.querySelector(".agent-working-time");
+        if (elapsed) elapsed.textContent = formatAgentWorkingTime(durationMs, true);
+        const persistedTarget = targetMessage || [...(chat?.messages || [])].reverse().find(message => message?.role === "tool");
+        if (persistedTarget && !persistedTarget.taskDurationMs) persistedTarget.taskDurationMs = durationMs;
+        agentActiveStatusRow = null;
+        return durationMs;
+    }
+
     function appendAgentThinkingRow(text = "Agent 正在规划下一步…") {
         const wrapper = document.getElementById("messages-wrapper");
         const row = document.createElement("div");
         row.className = "chat-row agent-thinking-row";
-        row.innerHTML = `<div class="agent-tool-row"><div class="agent-tool-summary"><i data-lucide="bot"></i><span>${escapeHtml(text)}</span></div></div>`;
+        row.innerHTML = `<div class="agent-tool-row running"><div class="agent-tool-summary"><i data-lucide="bot"></i><span class="agent-tool-summary-text">${escapeHtml(text)}</span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"><div class="thinking-text"></div></div></div></div>`;
+        const toolRow = row.querySelector(".agent-tool-row");
+        const summary = row.querySelector(".agent-tool-summary");
+        const thinkingText = row.querySelector(".thinking-text");
+        row.updateReasoning = reasoning => {
+            const hasReasoning = Boolean(String(reasoning || ""));
+            renderThinkingText(thinkingText, reasoning);
+            toolRow.classList.toggle("has-preview", hasReasoning);
+            summary.classList.toggle("clickable", hasReasoning);
+            summary.tabIndex = hasReasoning ? 0 : -1;
+            summary.setAttribute("role", hasReasoning ? "button" : "presentation");
+            const toggle = summary.querySelector(".agent-tool-toggle");
+            if (toggle) toggle.style.display = hasReasoning ? "block" : "none";
+            if (hasReasoning && !row.dataset.detailInitialized) {
+                toolRow.classList.toggle("collapsed", getAgentDetailDefaultBehavior() === "collapsed");
+                row.dataset.detailInitialized = "true";
+            }
+            summary.setAttribute("aria-expanded", String(hasReasoning && !toolRow.classList.contains("collapsed")));
+        };
+        const toggleReasoning = () => {
+            if (!toolRow.classList.contains("has-preview")) return;
+            const collapsed = toolRow.classList.toggle("collapsed");
+            summary.setAttribute("aria-expanded", String(!collapsed));
+            lucide.createIcons();
+        };
+        summary.onclick = toggleReasoning;
+        summary.onkeydown = event => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleReasoning();
+            }
+        };
         wrapper.appendChild(row);
         lucide.createIcons();
+        setAgentActiveStatusRow(row);
         wrapper.scrollTop = wrapper.scrollHeight;
         return row;
+    }
+
+    function appendAgentEndpointFallbackRow(info) {
+        const wrapper = document.getElementById("messages-wrapper");
+        if (!wrapper) return null;
+        const row = document.createElement("div");
+        row.className = "chat-row agent-tool-row-wrapper agent-endpoint-fallback-row";
+        row.innerHTML = `<div class="agent-tool-row warning running"><div class="agent-tool-summary"><i data-lucide="route"></i><span class="agent-tool-summary-text">接口返回 501，正在转接至 ${escapeHtml(info?.to || "备用接口")}</span><span class="agent-working-time"></span></div></div>`;
+        wrapper.appendChild(row);
+        lucide.createIcons();
+        setAgentActiveStatusRow(row);
+        wrapper.scrollTop = wrapper.scrollHeight;
+        return row;
+    }
+
+    function completeAgentEndpointFallbackRow(row, endpoint) {
+        if (!row) return;
+        row.querySelector(".agent-tool-row")?.classList.remove("running");
+        const summary = row.querySelector(".agent-tool-summary-text");
+        if (summary) summary.textContent = `已转接至 ${endpoint}`;
     }
 
     function toolArguments(message) {
@@ -365,6 +463,8 @@
         const previewContent = row?.querySelector(".agent-tool-preview-content");
         if (!toolRow || !summary || !previewContent) return;
         const lines = getAgentPreviewLines(message);
+        const hadPreview = toolRow.classList.contains("has-preview");
+        const wasCollapsed = toolRow.classList.contains("collapsed");
         previewContent.replaceChildren();
         for (const line of lines) {
             const element = document.createElement("div");
@@ -374,11 +474,12 @@
         }
         const canToggle = lines.length > 0;
         toolRow.classList.toggle("has-preview", canToggle);
-        toolRow.classList.remove("collapsed");
+        const shouldCollapse = canToggle && (hadPreview ? wasCollapsed : getAgentDetailDefaultBehavior() === "collapsed");
+        toolRow.classList.toggle("collapsed", shouldCollapse);
         summary.classList.toggle("clickable", canToggle);
         summary.tabIndex = canToggle ? 0 : -1;
         summary.setAttribute("role", canToggle ? "button" : "presentation");
-        summary.setAttribute("aria-expanded", canToggle ? "true" : "false");
+        summary.setAttribute("aria-expanded", String(canToggle && !shouldCollapse));
         summary.title = canToggle ? "显示或隐藏工具详情" : "";
         const toggle = summary.querySelector(".agent-tool-toggle");
         if (toggle) toggle.style.display = canToggle ? "block" : "none";
@@ -436,14 +537,17 @@
             : "chat-row agent-tool-row-wrapper";
         row.dataset.agentToolId = message.toolId || "";
         const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
-        row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-detail"></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
+        const running = message.status === "running";
+        row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-detail"></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
         row.querySelector(".agent-tool-summary-text").textContent = formatAgentToolSummary(message);
+        if (message.taskDurationMs) row.querySelector(".agent-working-time").textContent = formatAgentWorkingTime(message.taskDurationMs, true);
         row.querySelector(".agent-tool-detail").textContent = formatAgentToolDetail(message);
         renderAgentToolPreview(row, message);
         const container = options.container || wrapper;
         if (options.before && options.before.parentNode === container) container.insertBefore(row, options.before);
         else container.appendChild(row);
         lucide.createIcons();
+        if (running && isAgentTaskRunning()) setAgentActiveStatusRow(row);
         wrapper.scrollTop = wrapper.scrollHeight;
         return row;
     }
@@ -466,12 +570,18 @@
         if (!row) return appendAgentToolMessageToUI(message);
         const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
         const toolRow = row.querySelector(".agent-tool-row");
-        if (toolRow) toolRow.classList.toggle("failed", failed);
+        if (toolRow) {
+            toolRow.classList.toggle("failed", failed);
+            toolRow.classList.toggle("running", message.status === "running");
+        }
         const summary = row.querySelector(".agent-tool-summary-text");
         const detail = row.querySelector(".agent-tool-detail");
         if (summary) summary.textContent = formatAgentToolSummary(message);
         if (detail) detail.textContent = formatAgentToolDetail(message);
+        const elapsed = row.querySelector(".agent-working-time");
+        if (elapsed && message.taskDurationMs) elapsed.textContent = formatAgentWorkingTime(message.taskDurationMs, true);
         renderAgentToolPreview(row, message);
+        if (message.status === "running" && isAgentTaskRunning()) setAgentActiveStatusRow(row);
         lucide.createIcons();
     }
 
@@ -503,7 +613,7 @@
         return result;
     }
 
-    async function requestAgentModel(chat, model) {
+    async function requestAgentModel(chat, model, options = {}) {
         const messages = await buildAgentMessages(chat);
         const promptCacheKey = String(localStorage.getItem("prompt_cache_key") || "").trim();
         const cacheControl = String(localStorage.getItem("cache_control") || "").trim();
@@ -519,21 +629,41 @@
         };
         const preferredEndpoint = getRequestEndpoint();
         abortController = new AbortController();
-        const { response, endpoint, requestBody } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal);
+        let fallbackRow = null;
+        appendLog("debug", "开始请求 Agent AI 接口");
+        appendLog("trace", `Agent AI 请求 URL: ${getBaseURL()}${preferredEndpoint}`);
+        const { response, endpoint, requestBody } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal, {
+            onFallback: info => {
+                fallbackRow = appendAgentEndpointFallbackRow(info);
+                if (typeof options.onFallback === "function") options.onFallback(info);
+            }
+        });
+        completeAgentEndpointFallbackRow(fallbackRow, endpoint);
+        if (options.statusRow) setAgentActiveStatusRow(options.statusRow);
         lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
+        appendLog("trace", `Agent 请求体: ${JSON.stringify(requestBody)}`);
         if (!response.ok) {
             const detail = await response.text().catch(() => "");
+            appendLog("error", `Agent AI 接口响应错误: ${response.status} ${response.statusText || ""}${detail ? ` - ${detail.slice(0, 500)}` : ""}`);
             throw new Error(`Agent API error: ${response.status}${detail ? ` - ${detail.slice(0, 500)}` : ""}`);
         }
+        appendLog("trace", `Agent AI 接口响应状态: ${response.status} ${response.statusText || ""}`);
         if (!response.body || typeof response.body.getReader !== "function") {
             const payload = await response.json();
-            return { text: extractNonStreamingResponseText(payload, endpoint), reasoning: "" };
+            const update = extractStreamingUpdate(payload, endpoint);
+            const reasoning = String(update.reasoningSnapshot || update.reasoningDelta || "");
+            if (reasoning && typeof options.onReasoning === "function") options.onReasoning(reasoning);
+            return { text: extractNonStreamingResponseText(payload, endpoint), reasoning };
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        const debugStream = developerModeEnabled && (logLevel === "debug" || logLevel === "trace");
+        const traceStream = developerModeEnabled && logLevel === "trace";
         let fullText = "";
+        let reasoningText = "";
         let sseBuffer = "";
         let sawSSE = false;
+        let streamBytesReceived = 0;
         const seenStreamEvents = new Set();
         const consume = block => {
             const event = parseSSEEventBlock(block);
@@ -552,14 +682,36 @@
             if (streamError) throw new Error(streamError);
             const update = extractStreamingUpdate(normalizedPayload, endpoint);
             fullText = mergeStreamingText(fullText, update.contentDelta, update.contentSnapshot);
+            const nextReasoning = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
+            if (nextReasoning !== reasoningText) {
+                reasoningText = nextReasoning;
+                if (typeof options.onReasoning === "function") options.onReasoning(reasoningText);
+            }
         };
+        if (debugStream) {
+            appendLog("debug", "Agent 流式输出接收开始");
+            showVoiceNotification("正在接收 Agent 流数据 已接收数据量：0 字节", false, 0, true);
+        }
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
+            streamBytesReceived += value ? value.length : 0;
             sseBuffer += decoder.decode(value, { stream: true });
+            if (debugStream) {
+                appendLog("debug", `收到 Agent 流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
+                showVoiceNotification(`正在接收 Agent 流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
+            }
+            if (traceStream) appendLog("trace", `Agent 原始流内容: ${sseBuffer.replace(/\n/g, "\\n")}`);
             const parts = sseBuffer.split(/\r?\n\r?\n/);
             sseBuffer = parts.pop() || "";
-            parts.forEach(consume);
+            for (const part of parts) {
+                try {
+                    consume(part);
+                } catch (error) {
+                    appendLog("debug", `解析 Agent 流数据失败: ${error.message}`);
+                    throw error;
+                }
+            }
         }
         sseBuffer += decoder.decode();
         if (sseBuffer.trim()) {
@@ -567,9 +719,17 @@
             else if (!sawSSE) {
                 const payload = JSON.parse(sseBuffer.trim());
                 fullText = mergeStreamingText(fullText, "", extractNonStreamingResponseText(payload, endpoint));
+                const update = extractStreamingUpdate(payload, endpoint);
+                reasoningText = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
+                if (reasoningText && typeof options.onReasoning === "function") options.onReasoning(reasoningText);
             }
         }
-        return { text: fullText, reasoning: "" };
+        appendLog("debug", "Agent 流式输出接收完毕");
+        if (debugStream) {
+            hideVoiceNotification();
+            showVoiceNotification(`Agent 流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
+        }
+        return { text: fullText, reasoning: reasoningText };
     }
 
     function appendAgentHiddenAssistant(chat, rawText, model, reasoning) {
@@ -707,6 +867,7 @@
         if (!(await refreshAgentWorkspace(chat))) return;
         agentTaskChatId = chat.id;
         agentStopRequested = false;
+        startAgentTaskTimer();
         isGenerating = true;
         document.getElementById("send-btn")?.classList.add("hidden");
         document.getElementById("stop-btn")?.classList.remove("hidden");
@@ -714,7 +875,10 @@
         let invalidResponses = 0;
         try {
             while (!agentStopRequested) {
-                const result = await requestAgentModel(chat, model);
+                const result = await requestAgentModel(chat, model, {
+                    statusRow: thinkingRow,
+                    onReasoning: reasoning => thinkingRow?.updateReasoning?.(reasoning)
+                });
                 if (thinkingRow?.isConnected) thinkingRow.remove();
                 thinkingRow = null;
                 if (agentStopRequested) break;
@@ -765,6 +929,7 @@
                             content: JSON.stringify({ success: true }),
                             toolId: `${chat.id}-${Date.now()}-${agentToolSequence += 1}`
                         };
+                        finishMessage.taskDurationMs = finishAgentTaskTimer(chat, finishMessage);
                         chat.messages.push(finishMessage);
                         if (trailingFinalText) {
                             appendAgentVisibleText(chat, trailingFinalText, model, result.reasoning || "", true);
@@ -796,6 +961,8 @@
             }
         } finally {
             if (thinkingRow?.isConnected) thinkingRow.remove();
+            if (agentTaskStartedAt) finishAgentTaskTimer(chat);
+            hideVoiceNotification();
             if (agentStopRequested && !chat.messages.some((message, index) => index === chat.messages.length - 1 && message?.role === "assistant" && message?.agentFinal)) {
                 chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentFinal: true });
                 persistAgentChats();
@@ -824,8 +991,10 @@
 
     async function populateAgentSettings() {
         const diffMaxLines = document.getElementById("agent-diff-max-lines");
+        const detailBehavior = document.getElementById("agent-detail-default-behavior");
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
         if (diffMaxLines) diffMaxLines.value = String(getAgentDiffMaxLines());
+        if (detailBehavior) detailBehavior.value = getAgentDetailDefaultBehavior();
         if (shellTimeout) shellTimeout.value = String(Math.round(getAgentShellTimeoutMs() / 1000));
         if (!window.electronAPI?.getAgentCommandSettings) return;
         try {
@@ -841,9 +1010,11 @@
 
     async function saveAgentCommandSettings() {
         const diffMaxLines = document.getElementById("agent-diff-max-lines");
+        const detailBehavior = document.getElementById("agent-detail-default-behavior");
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
         const selectedDiffLimit = Number(diffMaxLines?.value);
         localStorage.setItem("agent_diff_max_lines", String([10, 20, 50, 0].includes(selectedDiffLimit) ? selectedDiffLimit : DEFAULT_AGENT_DIFF_MAX_LINES));
+        localStorage.setItem("agent_detail_default_behavior", detailBehavior?.value === "collapsed" ? "collapsed" : "expanded");
         const requestedSeconds = Number(shellTimeout?.value);
         const timeoutSeconds = Number.isFinite(requestedSeconds)
             ? Math.min(Math.max(Math.round(requestedSeconds), 5), 3600)

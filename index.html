@@ -1017,13 +1017,36 @@
         }
 
         .thinking-text {
-            font-style: italic;
             white-space: pre-wrap;
-            opacity: 0.8;
-            padding-left: 1.25rem;
-            margin-bottom: 0.25rem;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
+            line-height: 1.45;
             color: #9ca3af;
+        }
+
+        .ai-thinking-status {
+            display: none;
+            margin-bottom: 0.35rem;
+        }
+
+        .ai-thinking-detail {
+            display: grid;
+            grid-template-rows: 1fr;
+            margin-top: 4px;
+            transition: grid-template-rows 0.18s ease, margin-top 0.18s ease;
+        }
+
+        .ai-thinking-detail-inner {
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .ai-thinking-status.collapsed .ai-thinking-detail {
+            grid-template-rows: 0fr;
+            margin-top: 0;
+        }
+
+        .ai-thinking-status.collapsed .agent-tool-toggle {
+            transform: rotate(-90deg);
         }
 
         .ai-content-area table {
@@ -2192,6 +2215,7 @@
 
         .agent-command-approval-tool {
             background: rgba(var(--accent-rgb), 0.06);
+            padding: 10px 12px 11px 14px;
         }
 
         .agent-tool-row {
@@ -2250,6 +2274,13 @@
             display: none;
             margin-left: auto;
             transition: transform 0.18s ease;
+        }
+
+        .agent-working-time {
+            flex: 0 0 auto;
+            color: #6b7280;
+            font-size: 0.82em;
+            white-space: nowrap;
         }
 
         .agent-tool-row.collapsed .agent-tool-toggle {
@@ -2345,6 +2376,44 @@
 
         .agent-tool-row.failed .agent-tool-summary svg {
             color: #ef4444;
+        }
+
+        .agent-tool-row.warning {
+            border-left-color: #f59e0b;
+        }
+
+        .agent-tool-row.warning .agent-tool-summary,
+        .agent-tool-row.warning .agent-tool-summary svg {
+            color: #fbbf24;
+        }
+
+        @keyframes agent-status-glow {
+            0%, 100% {
+                background: rgba(var(--accent-rgb), 0.025);
+                box-shadow: 0 0 0 rgba(var(--accent-rgb), 0);
+            }
+            50% {
+                background: rgba(var(--accent-rgb), 0.09);
+                box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.2);
+            }
+        }
+
+        .agent-tool-row.running,
+        .ai-pending-text {
+            animation: agent-status-glow 1.8s ease-in-out infinite;
+        }
+
+        .ai-pending-text {
+            display: inline-flex;
+            border-radius: 4px;
+            padding: 2px 6px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .agent-tool-row.running,
+            .ai-pending-text {
+                animation: none;
+            }
         }
 
         #agent-yolo-warning-modal {
@@ -3210,13 +3279,21 @@
                 <div id="section-agent" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
                     <div>
-                        <label for="agent-diff-max-lines" class="block text-sm font-medium mb-2 text-gray-300">工具详情最大显示行数</label>
+                        <label for="agent-diff-max-lines" class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
                         <select id="agent-diff-max-lines"
                             class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             <option value="10">10</option>
                             <option value="20">20</option>
                             <option value="50">50</option>
                             <option value="0">不省略</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="agent-detail-default-behavior" class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
+                        <select id="agent-detail-default-behavior"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                            <option value="expanded" selected>展开（默认）</option>
+                            <option value="collapsed">折叠</option>
                         </select>
                     </div>
                     <div>
@@ -3254,7 +3331,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 5</span>
+                            <span id="app-version">V7.0.0 Canary 6</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -4526,7 +4603,7 @@
             return extractResponsesOutputText(payload);
         }
 
-        async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal) {
+        async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, options = {}) {
             const send = async endpoint => {
                 const requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
                 const response = await fetch(`${getBaseURL()}${endpoint}`, {
@@ -4542,12 +4619,16 @@
             };
 
             let result = await send(preferredEndpoint);
-            if (preferredEndpoint === '/responses' && result.response.status === 501) {
+            if (result.response.status === 501) {
                 const detail = await result.response.text().catch(() => '');
-                appendLog('info', `Responses API 返回 501，自动回退到 /chat/completions${detail ? `: ${detail.slice(0, 200)}` : ''}`);
-                showVoiceNotification('选定的模型不支持/responses接口，已自动回退/chat/completions', false,3000);
-                result = await send('/chat/completions');
-                result.fellBackFromResponses = true;
+                const fallbackEndpoint = preferredEndpoint === '/responses' ? '/chat/completions' : '/responses';
+                appendLog('info', `${preferredEndpoint} 返回 501，自动转接到 ${fallbackEndpoint}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+                showVoiceNotification(`接口返回 501，正在转接至 ${fallbackEndpoint}`, false, 3000, false, 'warning');
+                if (typeof options.onFallback === 'function') {
+                    options.onFallback({ from: preferredEndpoint, to: fallbackEndpoint, status: 501, detail });
+                }
+                result = await send(fallbackEndpoint);
+                result.fellBackFrom = preferredEndpoint;
             }
             return result;
         }
@@ -5018,10 +5099,48 @@
             return html;
         }
 
+        function getAgentDetailDefaultBehavior() {
+            return localStorage.getItem('agent_detail_default_behavior') === 'collapsed' ? 'collapsed' : 'expanded';
+        }
+
+        function limitThinkingDisplayText(text) {
+            const source = String(text || '');
+            const configured = Number(localStorage.getItem('agent_diff_max_lines'));
+            const limit = [10, 20, 50, 0].includes(configured) ? configured : 10;
+            const lines = source.split(/\r\n|\n|\r/);
+            if (limit === 0 || lines.length <= limit) return source;
+            const headCount = Math.ceil(limit / 2);
+            const tailCount = Math.floor(limit / 2);
+            return [
+                ...lines.slice(0, headCount),
+                `……（省略${lines.length - limit}行）`,
+                ...lines.slice(lines.length - tailCount)
+            ].join('\n');
+        }
+
+        function setThinkingStatus(element, running) {
+            const status = element?.closest('.ai-thinking-status');
+            if (!status) return;
+            status.classList.toggle('running', Boolean(running));
+            status.querySelector('.agent-tool-row')?.classList.toggle('running', Boolean(running));
+            const label = status.querySelector('.ai-thinking-label');
+            if (label) label.textContent = running ? 'AI 正在思考' : 'AI 思考过程';
+        }
+
         function renderThinkingText(element, text) {
             if (!element) return;
             element.replaceChildren();
-            const source = String(text || '');
+            const rawSource = String(text || '');
+            const status = element.closest('.ai-thinking-status');
+            element.style.display = rawSource ? 'block' : 'none';
+            if (status) {
+                status.style.display = rawSource ? 'block' : 'none';
+                if (rawSource && !status.dataset.detailInitialized) {
+                    status.classList.toggle('collapsed', getAgentDetailDefaultBehavior() === 'collapsed');
+                    status.dataset.detailInitialized = 'true';
+                }
+            }
+            const source = limitThinkingDisplayText(rawSource);
             const pattern = /\*\*([^*]+?)\*\*/g;
             let cursor = 0;
             let match;
@@ -5547,14 +5666,30 @@
             const contentCol = document.createElement('div');
             contentCol.className = `message-content-col flex flex-col w-full`;
             if (isAI && !messageOptions.agentSegment) {
-                const thinkingDiv = document.createElement('div');
-                thinkingDiv.className = 'thinking-text text-gray-400 text-xs mb-1';
+                const thinkingStatus = document.createElement('div');
+                thinkingStatus.className = 'ai-thinking-status';
+                thinkingStatus.innerHTML = `<div class="agent-tool-row"><div class="agent-tool-summary clickable" role="button" tabindex="0" aria-expanded="true"><i data-lucide="bot"></i><span class="ai-thinking-label">AI 思考过程</span><i class="agent-tool-toggle" data-lucide="chevron-down" style="display:block"></i></div><div class="ai-thinking-detail"><div class="ai-thinking-detail-inner"><div class="thinking-text text-gray-400 text-xs mb-1"></div></div></div></div>`;
+                const renderedThinkingDiv = thinkingStatus.querySelector('.thinking-text');
+                const summary = thinkingStatus.querySelector('.agent-tool-summary');
+                const toggleThinking = () => {
+                    const collapsed = thinkingStatus.classList.toggle('collapsed');
+                    summary.setAttribute('aria-expanded', String(!collapsed));
+                    lucide.createIcons();
+                };
+                summary.onclick = toggleThinking;
+                summary.onkeydown = event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleThinking();
+                    }
+                };
                 if (reasoning) {
-                    renderThinkingText(thinkingDiv, reasoning);
+                    renderThinkingText(renderedThinkingDiv, reasoning);
                 } else {
-                    thinkingDiv.style.display = 'none';
+                    thinkingStatus.style.display = 'none';
                 }
-                contentCol.appendChild(thinkingDiv);
+                setThinkingStatus(renderedThinkingDiv, messageOptions.thinkingActive === true);
+                contentCol.appendChild(thinkingStatus);
             }
             const bubble = document.createElement('div');
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
@@ -5581,7 +5716,7 @@
                 }
             } else {
                 bubble.innerHTML =
-                    `<div class="ai-content-area"><div class="animate-pulse text-gray-400 text-sm">AI 正在思考...</div></div>`;
+                    `<div class="ai-content-area"><div class="ai-pending-text text-gray-400 text-sm">AI 正在思考...</div></div>`;
             }
             if (!isAI && attachments && attachments.length > 0) {
                 const attContainer = document.createElement('div');
@@ -7633,11 +7768,11 @@
             logActions.classList.toggle('hidden', !(developerModeEnabled && recordLogsEnabled));
         }
 
-        function showVoiceNotification(message, isError = false, timeout = 2500, persistent = false) {
+        function showVoiceNotification(message, isError = false, timeout = 2500, persistent = false, tone = '') {
             const el = document.getElementById('voice-notification');
             if (!el) return;
             el.textContent = message;
-            el.style.color = isError ? '#f87171' : '';
+            el.style.color = isError ? '#f87171' : (tone === 'warning' ? '#fbbf24' : '');
             el.classList.add('show');
             clearTimeout(el._timeout);
             if (persistent) {
@@ -7664,7 +7799,7 @@
             document.getElementById('send-btn').classList.add('hidden');
             document.getElementById('stop-btn').classList.remove('hidden');
             setCanvasEditable(false);
-            const aiRow = appendMessageToUI('assistant', '', model, true);
+            const aiRow = appendMessageToUI('assistant', '', model, true, '', [], [], '', { thinkingActive: true });
             const thinkingDiv = aiRow.querySelector('.thinking-text');
             const contentArea = aiRow.querySelector('.ai-content-area');
             let rawFullContent = "",
@@ -7883,6 +8018,7 @@
                     showVoiceNotification(`流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
                 }
                 if (!receivedAny && !rawFullContent.trim()) rawFullContent = '';
+                setThinkingStatus(thinkingDiv, false);
                 contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                 if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                     contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
@@ -7914,11 +8050,13 @@
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     appendLog('debug', `AI 请求出错: ${err.message}`);
+                    setThinkingStatus(thinkingDiv, false);
                     contentArea.innerHTML = `<span class="text-red-500">Error: ${sanitizeHtml(err.message)}</span>`;
                 } else {
                     appendLog('debug', `AI 请求被中止`);
                     showVoiceNotification('已停止', false, 1800, false);
                     if (!rawFullContent.trim() && !receivedAny) rawFullContent = '';
+                    setThinkingStatus(thinkingDiv, false);
                     contentArea.innerHTML = renderAssistantMarkdown(rawFullContent || '');
                     if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                         contentArea.innerHTML = renderAssistantMarkdown(rawFullContent || '');

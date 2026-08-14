@@ -269,7 +269,7 @@
 
 ---
 
-## 六、Agent Tool Calling（V7.0.0 Canary 5）
+## 六、Agent Tool Calling（V7.0.0 Canary 6）
 
 ### 7.1 文件与主链路
 
@@ -294,7 +294,7 @@
         → finish_task → 显示最终文本并结束
 ```
 
-Agent 工具 JSON 不直接渲染给用户。Agent 的 `/responses` 请求使用结构化消息数组保留角色边界，不会把上下文压成带 `user:`/`assistant:` 标签的字符串。解析器将单次回复拆成有序正文段和工具段，兼容标准对象、扁平 `tool_call`、`<.../>` 和 DSML 包装，并丢弃回显的 `ToolResult` 与工具结果正文；可见 Agent 文本在进入 Markdown/KaTeX 前还会再次剥离工具对象。模型 SSE 事件按 `id` 或 `sequence_number` 去重，因此正文、工具提示可以交错显示且不会在后续任务中重复 JSON。即使模型把最终正文放在 `finish_task` 后，界面也会重新排列为正文、完成提示、模型/复制页脚。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/毫秒耗时/字节数展示。写入/编辑差异与 Shell 输出可以点击工具提示展开或折叠，并按 Agent 设置保留 10、20、50 行或完整显示。工具消息不会被上下文压缩删除；Agent 自动压缩按已完成的用户任务轮次统计，内部循环调用不计数。
+Agent 工具 JSON 不直接渲染给用户。Agent 的 `/responses` 请求使用结构化消息数组保留角色边界，不会把上下文压成带 `user:`/`assistant:` 标签的字符串。解析器将单次回复拆成有序正文段和工具段，兼容标准对象、扁平 `tool_call`、`<.../>` 和 DSML 包装，并丢弃回显的 `ToolResult` 与工具结果正文；可见 Agent 文本在进入 Markdown/KaTeX 前还会再次剥离工具对象。模型 SSE 事件按 `id` 或 `sequence_number` 去重，因此正文、工具提示和 reasoning 思考过程可以流式显示且不会在后续任务中重复 JSON。AI 思考详情只解析 `**加粗**`，与工具详情共用 10、20、50 行或完整显示限制，并可设置默认展开或折叠。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/毫秒耗时/字节数展示；运行状态带辉光，任务秒级耗时跟随最新提示。开发者模式会记录 Agent 流数据累计字节；任一接口返回 501 时转接另一端点并显示黄色提示。工具消息不会被上下文压缩删除；Agent 自动压缩按已完成的用户任务轮次统计，内部循环调用不计数。
 
 ### 7.3 Electron IPC
 

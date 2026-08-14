@@ -11,7 +11,7 @@ const liveWindows = new Set();
 let server = null;
 let baseUrl = "";
 
-ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 5 · 2026-08-14\n\n- Smoke test");
+ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 6 · 2026-08-15\n\n- Smoke test");
 ipcMain.handle("agent:get-command-settings", async () => ({
     defaults: ["git status", "npm run test"],
     additions: ["git push"]
@@ -80,6 +80,7 @@ async function captureWindow(width, height, fileName, prepare) {
         hasCommandMode: Boolean(document.getElementById('agent-command-mode-select')),
         hasAgentSettings: Boolean(document.getElementById('section-agent')),
         hasAgentDiffSetting: Boolean(document.getElementById('agent-diff-max-lines')),
+        hasAgentDetailBehaviorSetting: Boolean(document.getElementById('agent-detail-default-behavior')),
         hasAgentTimeoutSetting: Boolean(document.getElementById('agent-shell-timeout-seconds')),
         hasLegacyApprovalPrefixInput: Boolean(document.getElementById('agent-command-approval-prefix')),
         attachMenuClass: document.getElementById('attach-menu')?.className || '',
@@ -144,6 +145,12 @@ async function captureWindow(width, height, fileName, prepare) {
         agentMockHasInternalNarration: window.__agentMockFinished
             ? (document.getElementById('messages-wrapper')?.innerText || '').includes('现在用中文回答用户的问题')
             : false,
+        agentMockReasoningRenderCount: window.__agentReasoningRenderCount || 0,
+        agentMockHasThinkingStrong: Boolean(document.querySelector('.agent-final-row .ai-thinking-status .thinking-text strong')),
+        agentMockThinkingWasLimited: (document.querySelector('.agent-final-row .thinking-text')?.innerText || '').includes('省略2行'),
+        agentFallbackRequests: window.__agentFallbackRequests || [],
+        agentSaw501Warning: window.__agentSaw501Warning === true,
+        agentFallbackHasProtocolError: window.__agentFallbackHasProtocolError === true,
         bodyWidth: document.body.scrollWidth,
         viewportWidth: window.innerWidth
             }) };
@@ -266,6 +273,8 @@ app.whenReady().then(async () => {
         });
         const mixedProtocol = await captureWindow(1200, 800, "agent-mixed-protocol.png", async function () {
             localStorage.setItem("request_endpoint", "/responses");
+            localStorage.setItem("agent_diff_max_lines", "10");
+            localStorage.setItem("agent_detail_default_behavior", "expanded");
             const chat = chats.find(item => item.id === activeChatId);
             chat.agentEnabled = true;
             chat.agentWorkspace = "D:\\workspace\\demo";
@@ -316,12 +325,21 @@ app.whenReady().then(async () => {
             ];
             const requestBodies = [];
             let responseIndex = 0;
+            const originalRenderThinkingText = renderThinkingText;
+            window.__agentReasoningRenderCount = 0;
+            window.renderThinkingText = function (element, text) {
+                if (element?.closest('.agent-thinking-row')) window.__agentReasoningRenderCount += 1;
+                return originalRenderThinkingText(element, text);
+            };
             window.fetch = async (_url, options = {}) => {
                 requestBodies.push(JSON.parse(options.body || "{}"));
                 const responseText = mockResponses[responseIndex++] || mockResponses[mockResponses.length - 1];
                 const encoder = new TextEncoder();
                 const stream = new ReadableStream({
                     start(controller) {
+                        const reasoningLines = ['**分析**', '第2行', '第3行', '第4行', '第5行', '第6行', '第7行', '第8行', '第9行', '第10行', '第11行', '第12行'];
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: reasoningLines.slice(0, 6).join('\n') } }] })}\n\n`));
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: `\n${reasoningLines.slice(6).join('\n')}` } }] })}\n\n`));
                         const payload = JSON.stringify({ choices: [{ delta: { content: responseText } }] });
                         controller.enqueue(encoder.encode(`data: ${payload}\n\ndata: [DONE]\n\n`));
                         controller.close();
@@ -333,9 +351,43 @@ app.whenReady().then(async () => {
             window.__agentMockRequestBodies = requestBodies;
             window.__agentMockFinished = true;
         });
-        const result = { main, settings, active, mixedProtocol, consoleErrors };
+        const fallback = await captureWindow(1200, 800, "agent-501-fallback.png", async function () {
+            localStorage.setItem("request_endpoint", "/responses");
+            const chat = chats.find(item => item.id === activeChatId);
+            chat.agentEnabled = true;
+            chat.agentWorkspace = "D:\\workspace\\demo";
+            chat.agentEnvironment = "OS: Windows 11\nShell: PowerShell\nWorkspace: D:\\workspace\\demo\nNode: v24.0.0";
+            chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({ environment: chat.agentEnvironment });
+            chat.messages = [{ role: "user", content: "测试 501 转接" }];
+            updateAgentUIForChat(chat);
+            renderMessages(chat.messages);
+            const requests = [];
+            window.__agentSaw501Warning = false;
+            const observer = new MutationObserver(() => {
+                if (document.querySelector('.agent-tool-row.warning')?.textContent.includes('501')) window.__agentSaw501Warning = true;
+            });
+            observer.observe(document.getElementById('messages-wrapper'), { childList: true, subtree: true });
+            window.fetch = async url => {
+                requests.push(String(url));
+                if (requests.length === 1) return new Response('501 Not Implemented', { status: 501 });
+                const encoder = new TextEncoder();
+                const stream = new ReadableStream({
+                    start(controller) {
+                        const text = '已通过备用接口完成。\n{"tool_call":{"name":"finish_task","arguments":{}}}';
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`));
+                        controller.close();
+                    }
+                });
+                return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+            };
+            await requestAgentLoop("deepseek-v4-flash", chat);
+            observer.disconnect();
+            window.__agentFallbackRequests = requests;
+            window.__agentFallbackHasProtocolError = chat.messages.some(message => message?.toolName === 'agent_protocol');
+        });
+        const result = { main, settings, active, mixedProtocol, fallback, consoleErrors };
         console.log(JSON.stringify(result, null, 2));
-        if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || main.state.hasLegacyApprovalPrefixInput || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentTimeoutSetting) {
+        if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || main.state.hasLegacyApprovalPrefixInput || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentDetailBehaviorSetting || !settings.state.hasAgentTimeoutSetting) {
             process.exitCode = 1;
         }
         if (main.state.bodyWidth > main.state.viewportWidth + 2 || settings.state.bodyWidth > settings.state.viewportWidth + 2) {
@@ -347,7 +399,10 @@ app.whenReady().then(async () => {
         if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
             process.exitCode = 1;
         }
-        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
+        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentMockReasoningRenderCount < 8 || !mixedProtocol.state.agentMockHasThinkingStrong || !mixedProtocol.state.agentMockThinkingWasLimited || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
+            process.exitCode = 1;
+        }
+        if (fallback.state.agentFallbackRequests.length !== 2 || !fallback.state.agentFallbackRequests[0].endsWith('/responses') || !fallback.state.agentFallbackRequests[1].endsWith('/chat/completions') || !fallback.state.agentSaw501Warning || fallback.state.agentFallbackHasProtocolError) {
             process.exitCode = 1;
         }
     } catch (error) {
