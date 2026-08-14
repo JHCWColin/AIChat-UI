@@ -7,6 +7,7 @@ const {
     readFileRange,
     writeFile,
     editFile,
+    buildLineDiff,
     commandMatchesPrefix,
     findAllowedCommandPrefix,
     deriveAllowedCommandPrefix,
@@ -65,6 +66,25 @@ test("write_file creates parents and edit_file requires a unique match", async (
         const edited = await editFile(root, { path: "nested/file.txt", old_text: "alpha beta", new_text: "gamma" });
         assert.equal(edited.success, true);
         assert.equal(await fs.readFile(path.join(root, "nested/file.txt"), "utf8"), "gamma alpha");
+    });
+});
+
+test("file changes return line-oriented display diffs", async () => {
+    assert.deepEqual(buildLineDiff("same\nold\ntail", "same\nnew\ntail"), {
+        removedLines: 1,
+        addedLines: 1,
+        lines: [
+            { type: "delete", text: "old" },
+            { type: "add", text: "new" }
+        ]
+    });
+    await withWorkspace(async root => {
+        await fs.writeFile(path.join(root, "sample.txt"), "old", "utf8");
+        const result = await writeFile(root, { path: "sample.txt", content: "new" });
+        assert.deepEqual(result.displayDiff.lines, [
+            { type: "delete", text: "old" },
+            { type: "add", text: "new" }
+        ]);
     });
 });
 

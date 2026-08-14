@@ -861,11 +861,16 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
     if (name === "edit_file") return editAgentFile(binding.realPath || binding.path, args);
     if (name === "run_shell") {
         const executionId = String(source.executionId || "").trim();
+        const requestedTimeoutMs = Number(source.timeoutMs);
+        const timeoutMs = Number.isFinite(requestedTimeoutMs)
+            ? Math.min(Math.max(Math.round(requestedTimeoutMs), 5000), 3600000)
+            : undefined;
         try {
             return await agentShellRunner.run({
                 executionId,
                 command: args.command,
                 cwd: binding.realPath || binding.path,
+                timeoutMs,
                 onProgress: progress => {
                     if (!event.sender.isDestroyed()) event.sender.send("agent:shell-progress", progress);
                 }

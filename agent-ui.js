@@ -1,5 +1,7 @@
 (function () {
     const MAX_TOOL_CALLS_PER_RESPONSE = 30;
+    const DEFAULT_AGENT_DIFF_MAX_LINES = 10;
+    const DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS = 120;
     const TOOL_ICONS = {
         read_file_range: "file-search",
         write_file: "file-plus-2",
@@ -288,6 +290,95 @@
         return message?.arguments && typeof message.arguments === "object" ? message.arguments : {};
     }
 
+    function getAgentDiffMaxLines() {
+        const value = Number(localStorage.getItem("agent_diff_max_lines"));
+        return [10, 20, 50, 0].includes(value) ? value : DEFAULT_AGENT_DIFF_MAX_LINES;
+    }
+
+    function getAgentShellTimeoutMs() {
+        const value = Number(localStorage.getItem("agent_shell_timeout_seconds"));
+        const seconds = Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 5), 3600) : DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS;
+        return seconds * 1000;
+    }
+
+    function splitAgentDisplayLines(content) {
+        const text = String(content || "");
+        if (!text) return [];
+        const lines = text.split(/\r\n|\n|\r/);
+        if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+        return lines;
+    }
+
+    function truncateAgentDisplayLines(lines) {
+        const limit = getAgentDiffMaxLines();
+        if (limit === 0 || lines.length <= limit) return lines;
+        const headCount = Math.ceil(limit / 2);
+        const tailCount = Math.floor(limit / 2);
+        const omittedCount = lines.length - headCount - tailCount;
+        return [
+            ...lines.slice(0, headCount),
+            { type: "omitted", text: `……（省略${omittedCount}行）` },
+            ...lines.slice(lines.length - tailCount)
+        ];
+    }
+
+    function getAgentPreviewLines(message) {
+        if (!message?.result || message.status === "running") return [];
+        if (message.toolName === "write_file" || message.toolName === "edit_file") {
+            const diff = message.displayDiff || message.result.displayDiff;
+            return truncateAgentDisplayLines(Array.isArray(diff?.lines) ? diff.lines : []);
+        }
+        if (message.toolName === "run_shell") {
+            const output = [
+                ...splitAgentDisplayLines(message.result.stdout).map(text => ({ type: "output", text })),
+                ...splitAgentDisplayLines(message.result.stderr).map(text => ({ type: "error", text }))
+            ];
+            return truncateAgentDisplayLines(output);
+        }
+        return [];
+    }
+
+    function toggleAgentToolPreview(row) {
+        const toolRow = row?.querySelector(".agent-tool-row");
+        const summary = row?.querySelector(".agent-tool-summary");
+        if (!toolRow?.classList.contains("has-preview")) return;
+        const collapsed = toolRow.classList.toggle("collapsed");
+        summary?.setAttribute("aria-expanded", String(!collapsed));
+        lucide.createIcons();
+    }
+
+    function renderAgentToolPreview(row, message) {
+        const toolRow = row?.querySelector(".agent-tool-row");
+        const summary = row?.querySelector(".agent-tool-summary");
+        const previewContent = row?.querySelector(".agent-tool-preview-content");
+        if (!toolRow || !summary || !previewContent) return;
+        const lines = getAgentPreviewLines(message);
+        previewContent.replaceChildren();
+        for (const line of lines) {
+            const element = document.createElement("div");
+            element.className = `agent-tool-preview-line ${line.type || "output"}`;
+            element.textContent = String(line.text || "");
+            previewContent.appendChild(element);
+        }
+        const canToggle = lines.length > 0;
+        toolRow.classList.toggle("has-preview", canToggle);
+        toolRow.classList.remove("collapsed");
+        summary.classList.toggle("clickable", canToggle);
+        summary.tabIndex = canToggle ? 0 : -1;
+        summary.setAttribute("role", canToggle ? "button" : "presentation");
+        summary.setAttribute("aria-expanded", canToggle ? "true" : "false");
+        summary.title = canToggle ? "显示或隐藏工具详情" : "";
+        const toggle = summary.querySelector(".agent-tool-toggle");
+        if (toggle) toggle.style.display = canToggle ? "block" : "none";
+        summary.onclick = canToggle ? () => toggleAgentToolPreview(row) : null;
+        summary.onkeydown = canToggle ? event => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleAgentToolPreview(row);
+            }
+        } : null;
+    }
+
     function formatAgentToolSummary(message) {
         const name = String(message?.toolName || "");
         const args = toolArguments(message);
@@ -321,7 +412,6 @@
     function formatAgentToolDetail(message) {
         if (!message?.result || message.status === "running") return "";
         if (message.result.error) return String(message.result.error).slice(0, 500);
-        if (message.toolName === "run_shell" && message.result.stderr) return String(message.result.stderr).trim().slice(0, 500);
         return "";
     }
 
@@ -332,9 +422,10 @@
         row.className = `chat-row agent-tool-row-wrapper`;
         row.dataset.agentToolId = message.toolId || "";
         const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
-        row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span></div><div class="agent-tool-detail"></div></div>`;
+        row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-detail"></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
         row.querySelector(".agent-tool-summary-text").textContent = formatAgentToolSummary(message);
         row.querySelector(".agent-tool-detail").textContent = formatAgentToolDetail(message);
+        renderAgentToolPreview(row, message);
         wrapper.appendChild(row);
         lucide.createIcons();
         wrapper.scrollTop = wrapper.scrollHeight;
@@ -351,6 +442,7 @@
         const detail = row.querySelector(".agent-tool-detail");
         if (summary) summary.textContent = formatAgentToolSummary(message);
         if (detail) detail.textContent = formatAgentToolDetail(message);
+        renderAgentToolPreview(row, message);
         lucide.createIcons();
     }
 
@@ -500,7 +592,8 @@
                         chatId: chat.id,
                         name: call.name,
                         arguments: call.arguments || {},
-                        executionId: message.executionId
+                        executionId: message.executionId,
+                        timeoutMs: getAgentShellTimeoutMs()
                     });
                 } finally {
                     clearInterval(progressTimer);
@@ -517,6 +610,10 @@
             result = { success: false, error: `unknown tool: ${call.name}` };
         }
         message.result = result || { success: false, error: "tool did not return a result" };
+        if (message.result.displayDiff) {
+            message.displayDiff = message.result.displayDiff;
+            delete message.result.displayDiff;
+        }
         message.status = message.result.success === false || (call.name === "run_shell" && message.result.exitCode !== 0) ? "error" : "done";
         message.content = message.result.rejected
             ? String(message.result.error || "")
@@ -641,6 +738,10 @@
     }
 
     async function populateAgentSettings() {
+        const diffMaxLines = document.getElementById("agent-diff-max-lines");
+        const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
+        if (diffMaxLines) diffMaxLines.value = String(getAgentDiffMaxLines());
+        if (shellTimeout) shellTimeout.value = String(Math.round(getAgentShellTimeoutMs() / 1000));
         if (!window.electronAPI?.getAgentCommandSettings) return;
         try {
             const settings = await window.electronAPI.getAgentCommandSettings();
@@ -654,6 +755,15 @@
     }
 
     async function saveAgentCommandSettings() {
+        const diffMaxLines = document.getElementById("agent-diff-max-lines");
+        const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
+        const selectedDiffLimit = Number(diffMaxLines?.value);
+        localStorage.setItem("agent_diff_max_lines", String([10, 20, 50, 0].includes(selectedDiffLimit) ? selectedDiffLimit : DEFAULT_AGENT_DIFF_MAX_LINES));
+        const requestedSeconds = Number(shellTimeout?.value);
+        const timeoutSeconds = Number.isFinite(requestedSeconds)
+            ? Math.min(Math.max(Math.round(requestedSeconds), 5), 3600)
+            : DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS;
+        localStorage.setItem("agent_shell_timeout_seconds", String(timeoutSeconds));
         if (!window.electronAPI?.saveAgentCommandAdditions) return;
         const additions = document.getElementById("agent-command-additions")?.value || "";
         try {

@@ -168,6 +168,29 @@ function splitTextLines(content) {
     return lines;
 }
 
+function buildLineDiff(beforeContent, afterContent) {
+    const before = splitTextLines(beforeContent);
+    const after = splitTextLines(afterContent);
+    let prefix = 0;
+    while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix += 1;
+    let suffix = 0;
+    while (
+        suffix < before.length - prefix
+        && suffix < after.length - prefix
+        && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+    ) suffix += 1;
+    const removed = before.slice(prefix, before.length - suffix);
+    const added = after.slice(prefix, after.length - suffix);
+    return {
+        removedLines: removed.length,
+        addedLines: added.length,
+        lines: [
+            ...removed.map(text => ({ type: "delete", text })),
+            ...added.map(text => ({ type: "add", text }))
+        ]
+    };
+}
+
 async function readFileRange(workspacePath, args = {}) {
     const startLine = Number(args.start_line);
     const endLine = Number(args.end_line);
@@ -215,13 +238,23 @@ async function writeFile(workspacePath, args = {}) {
     if (typeof args.content !== "string") return { success: false, error: "content must be a string" };
     try {
         const { targetPath, workspaceReal } = await resolveWorkspacePath(workspacePath, args.path, { allowMissing: true });
+        let previousContent = "";
+        let existed = true;
+        try {
+            previousContent = await fs.readFile(targetPath, "utf8");
+        } catch (error) {
+            if (error?.code !== "ENOENT") throw error;
+            existed = false;
+        }
         await fs.mkdir(path.dirname(targetPath), { recursive: true });
         await fs.writeFile(targetPath, args.content, "utf8");
         return {
             success: true,
             path: path.relative(workspaceReal, targetPath) || path.basename(targetPath),
             charactersWritten: args.content.length,
-            bytesWritten: Buffer.byteLength(args.content, "utf8")
+            bytesWritten: Buffer.byteLength(args.content, "utf8"),
+            created: !existed,
+            displayDiff: buildLineDiff(previousContent, args.content)
         };
     } catch (error) {
         return { success: false, error: error.message };
@@ -256,7 +289,8 @@ async function editFile(workspacePath, args = {}) {
             path: path.relative(workspaceReal, targetPath) || path.basename(targetPath),
             occurrences: 1,
             charactersBefore: content.length,
-            charactersAfter: nextContent.length
+            charactersAfter: nextContent.length,
+            displayDiff: buildLineDiff(args.old_text, args.new_text)
         };
     } catch (error) {
         return { success: false, error: error.message };
@@ -447,6 +481,7 @@ module.exports = {
     saveUserAllowedCommands,
     isPathInside,
     resolveWorkspacePath,
+    buildLineDiff,
     readFileRange,
     writeFile,
     editFile,

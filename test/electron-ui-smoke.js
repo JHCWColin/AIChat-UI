@@ -52,6 +52,8 @@ async function captureWindow(width, height, fileName, prepare) {
         hasAgentEntry: Boolean(document.getElementById('agent-entry-btn')),
         hasCommandMode: Boolean(document.getElementById('agent-command-mode-select')),
         hasAgentSettings: Boolean(document.getElementById('section-agent')),
+        hasAgentDiffSetting: Boolean(document.getElementById('agent-diff-max-lines')),
+        hasAgentTimeoutSetting: Boolean(document.getElementById('agent-shell-timeout-seconds')),
         attachMenuClass: document.getElementById('attach-menu')?.className || '',
         settingsModalClass: document.getElementById('settings-modal')?.className || '',
         agentSettingsClass: document.getElementById('section-agent')?.className || '',
@@ -59,6 +61,8 @@ async function captureWindow(width, height, fileName, prepare) {
         workspaceText: document.getElementById('active-chat-workspace')?.textContent || '',
         canvasDisplay: getComputedStyle(document.getElementById('canvas-toggle-btn')).display,
         agentToolRows: document.querySelectorAll('.agent-tool-row-wrapper').length,
+        agentPreviewLines: document.querySelectorAll('.agent-tool-preview-line').length,
+        agentToolCollapsed: document.querySelector('.agent-tool-row.collapsed') !== null,
         bodyWidth: document.body.scrollWidth,
         viewportWidth: window.innerWidth
     })`);
@@ -108,6 +112,7 @@ app.whenReady().then(async () => {
             switchSettingsSection("agent", button);
         });
         const active = await captureWindow(1200, 800, "agent-active.png", function () {
+            localStorage.setItem("agent_diff_max_lines", "10");
             const chat = chats.find(item => item.id === activeChatId);
             chat.agentEnabled = true;
             chat.agentWorkspace = "D:\\workspace\\demo";
@@ -124,20 +129,37 @@ app.whenReady().then(async () => {
                     result: { success: true, path: "package.json", actualStartLine: 1, actualEndLine: 74, returnedLines: 74 },
                     content: "{}",
                     toolId: "smoke-tool"
+                },
+                {
+                    role: "tool",
+                    name: "edit_file",
+                    toolName: "edit_file",
+                    arguments: { path: "package.json", old_text: "old", new_text: "new" },
+                    status: "done",
+                    result: { success: true, path: "package.json", occurrences: 1 },
+                    displayDiff: {
+                        lines: Array.from({ length: 12 }, (_, index) => ({
+                            type: index % 2 ? "add" : "delete",
+                            text: `line-${index + 1}`
+                        }))
+                    },
+                    content: "{}",
+                    toolId: "smoke-edit"
                 }
             ];
             updateAgentUIForChat(chat);
             renderMessages(chat.messages);
+            document.querySelector('.agent-tool-summary.clickable')?.click();
         });
         const result = { main, settings, active, consoleErrors };
         console.log(JSON.stringify(result, null, 2));
-        if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || !settings.state.hasAgentSettings) {
+        if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentTimeoutSetting) {
             process.exitCode = 1;
         }
         if (main.state.bodyWidth > main.state.viewportWidth + 2 || settings.state.bodyWidth > settings.state.viewportWidth + 2) {
             process.exitCode = 1;
         }
-        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.agentToolRows !== 1) {
+        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.agentToolRows !== 2 || active.state.agentPreviewLines !== 11 || !active.state.agentToolCollapsed) {
             process.exitCode = 1;
         }
     } catch (error) {

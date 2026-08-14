@@ -269,15 +269,15 @@
 
 ---
 
-## 六、Agent Tool Calling（V7.0.0 Canary 1）
+## 六、Agent Tool Calling（V7.0.0 Canary 2）
 
 ### 7.1 文件与主链路
 
 | 文件 | 作用 |
 |---|---|
 | `agent-protocol.js` | 固定 Tool Definitions/Core Rules、连续独立 JSON 对象解析、当前时间格式化。浏览器和 Node 测试均可复用。 |
-| `agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、Shell 执行器和命令前缀匹配。 |
-| `agent-ui.js` | Agent 会话绑定、上下文组装、模型请求循环、工具结果 IndexedDB 持久化、命令授权和绿竖线工具状态。 |
+| `agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、行差异生成、Shell 执行器和命令前缀匹配。 |
+| `agent-ui.js` | Agent 会话绑定、上下文组装、模型请求循环、工具结果 IndexedDB 持久化、命令授权、可折叠 diff/命令输出和绿竖线工具状态。 |
 | `alwaysAllowedCommand.txt` | 发布包内置安全命令前缀；用户增项写入 Electron `userData/alwaysAllowedCommand.user.txt`。 |
 | `test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单和 Shell 单元测试。 |
 
@@ -294,7 +294,7 @@
         → finish_task → 显示最终文本并结束
 ```
 
-Agent 工具 JSON 不直接渲染给用户。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/耗时/字节数展示。工具消息不会被上下文压缩删除；普通 Agent 用户请求和最终答复仍沿用自动压缩机制。
+Agent 工具 JSON 不直接渲染给用户。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/耗时/字节数展示。写入/编辑差异与 Shell 输出可以点击工具提示展开或折叠，并按 Agent 设置保留 10、20、50 行或完整显示。工具消息不会被上下文压缩删除；普通 Agent 用户请求和最终答复仍沿用自动压缩机制。
 
 ### 7.3 Electron IPC
 
