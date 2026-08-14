@@ -269,7 +269,7 @@
 
 ---
 
-## 六、Agent Tool Calling（V7.0.0 Canary 3）
+## 六、Agent Tool Calling（V7.0.0 Canary 4）
 
 ### 7.1 文件与主链路
 
@@ -294,7 +294,7 @@
         → finish_task → 显示最终文本并结束
 ```
 
-Agent 工具 JSON 不直接渲染给用户。解析器将单次回复拆成有序正文段和工具段，因此正文、工具提示可以交错显示且不会在末尾重复 JSON。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/毫秒耗时/字节数展示。写入/编辑差异与 Shell 输出可以点击工具提示展开或折叠，并按 Agent 设置保留 10、20、50 行或完整显示。工具消息不会被上下文压缩删除；Agent 自动压缩按已完成的用户任务轮次统计，内部循环调用不计数。
+Agent 工具 JSON 不直接渲染给用户。解析器将单次回复拆成有序正文段和工具段，清理 `<json>` 包装和多余空行；可见 Agent 文本在进入 Markdown/KaTeX 前还会再次剥离工具对象。模型 SSE 事件按 `id` 或 `sequence_number` 去重，因此正文、工具提示可以交错显示且不会在后续任务中重复 JSON。`finish_task` 提示嵌在最终回复正文和模型/复制页脚之间。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/毫秒耗时/字节数展示。写入/编辑差异与 Shell 输出可以点击工具提示展开或折叠，并按 Agent 设置保留 10、20、50 行或完整显示。工具消息不会被上下文压缩删除；Agent 自动压缩按已完成的用户任务轮次统计，内部循环调用不计数。
 
 ### 7.3 Electron IPC
 

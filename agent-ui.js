@@ -427,21 +427,38 @@
         return "";
     }
 
-    function appendAgentToolMessageToUI(message) {
+    function appendAgentToolMessageToUI(message, options = {}) {
         const wrapper = document.getElementById("messages-wrapper");
         if (!wrapper || !message) return null;
         const row = document.createElement("div");
-        row.className = `chat-row agent-tool-row-wrapper`;
+        row.className = options.inline
+            ? "agent-tool-row-wrapper agent-tool-inline"
+            : "chat-row agent-tool-row-wrapper";
         row.dataset.agentToolId = message.toolId || "";
         const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
         row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-detail"></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
         row.querySelector(".agent-tool-summary-text").textContent = formatAgentToolSummary(message);
         row.querySelector(".agent-tool-detail").textContent = formatAgentToolDetail(message);
         renderAgentToolPreview(row, message);
-        wrapper.appendChild(row);
+        const container = options.container || wrapper;
+        if (options.before && options.before.parentNode === container) container.insertBefore(row, options.before);
+        else container.appendChild(row);
         lucide.createIcons();
         wrapper.scrollTop = wrapper.scrollHeight;
         return row;
+    }
+
+    function appendFinishTaskToFinalRow(message, finalRow = null) {
+        const wrapper = document.getElementById("messages-wrapper");
+        const rows = wrapper ? wrapper.querySelectorAll(".agent-final-row") : [];
+        const targetRow = finalRow || rows[rows.length - 1];
+        const contentCol = targetRow?.querySelector(".message-content-col");
+        if (!contentCol) return appendAgentToolMessageToUI(message);
+        return appendAgentToolMessageToUI(message, {
+            inline: true,
+            container: contentCol,
+            before: contentCol.querySelector(".message-footer")
+        });
     }
 
     function updateAgentToolMessageUI(message) {
@@ -516,15 +533,23 @@
         let fullText = "";
         let sseBuffer = "";
         let sawSSE = false;
+        const seenStreamEvents = new Set();
         const consume = block => {
             const event = parseSSEEventBlock(block);
             if (!event.data) return;
             sawSSE = true;
             if (event.data === "[DONE]") return;
             const payload = JSON.parse(event.data);
-            const streamError = getStreamingErrorMessage(payload);
+            const normalizedPayload = !payload.type && event.eventType ? { ...payload, type: event.eventType } : payload;
+            const sequence = normalizedPayload.sequence_number;
+            const eventKey = event.eventId || (sequence !== undefined && sequence !== null
+                ? `${normalizedPayload.type || endpoint}:${sequence}`
+                : "");
+            if (eventKey && seenStreamEvents.has(eventKey)) return;
+            if (eventKey) seenStreamEvents.add(eventKey);
+            const streamError = getStreamingErrorMessage(normalizedPayload);
             if (streamError) throw new Error(streamError);
-            const update = extractStreamingUpdate(payload, endpoint);
+            const update = extractStreamingUpdate(normalizedPayload, endpoint);
             fullText = mergeStreamingText(fullText, update.contentDelta, update.contentSnapshot);
         };
         while (true) {
@@ -561,7 +586,7 @@
     }
 
     function appendAgentVisibleText(chat, text, model, reasoning = "", final = false) {
-        const content = String(text || "").trim();
+        const content = AgentProtocol.stripToolCallsForDisplay(text);
         if (!content) return null;
         const message = {
             role: "assistant",
@@ -575,7 +600,8 @@
         chat.messages.push(message);
         appendMessageToUI("assistant", content, model, final, message.reasoning, [], [], "", {
             agentFinal: final,
-            agentSegment: !final
+            agentSegment: !final,
+            agentMessage: true
         });
         chat.updatedAt = Date.now();
         persistAgentChats();
@@ -732,9 +758,9 @@
                             toolId: `${chat.id}-${Date.now()}-${agentToolSequence += 1}`
                         };
                         chat.messages.push(finishMessage);
-                        appendAgentToolMessageToUI(finishMessage);
-                        await persistAgentToolMessage(chat, finishMessage);
                         if (!finalTextAdded) appendAgentVisibleText(chat, "任务已完成。", model, result.reasoning || "", true);
+                        appendFinishTaskToFinalRow(finishMessage);
+                        await persistAgentToolMessage(chat, finishMessage);
                         chat.updatedAt = Date.now();
                         persistAgentChats();
                         renderChatHistory();

@@ -100,9 +100,13 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
 
     function cleanRemainingText(value) {
         return String(value || "")
+            .replace(/<\/?json\b[^>]*>/gi, "")
+            .replace(/&lt;\/?json\b[^&]*&gt;/gi, "")
             .replace(/```(?:json)?\s*```/gi, "")
             .replace(/^\s*```(?:json)?\s*/i, "")
             .replace(/\s*```(?:json)?\s*$/i, "")
+            .replace(/[ \t]+\n/g, "\n")
+            .replace(/\n{3,}/g, "\n\n")
             .trim();
     }
 
@@ -169,6 +173,7 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
         CORE_AGENT_RULES,
         buildFixedAgentPrompt,
         parseSequentialToolCalls,
+        stripToolCallsForDisplay: text => parseSequentialToolCalls(text).text,
         formatCurrentTime
     };
 });

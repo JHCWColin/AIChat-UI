@@ -11,6 +11,15 @@
 不要在版本标题与下一版本标题之间加入其他级别的标题，也不要省略版本正文；关于页会按此格式自动解析展示。
 -->
 
+## V7.0.0 Canary 4 · 2026-08-14
+
+- Agent 协议解析新增 `<json>`、`</json>` 及其 HTML 转义形式的清理，折叠工具调用附近的多余空行。
+- Agent 可见消息在进入 Markdown、代码高亮和 KaTeX 前统一剥离已识别的 Tool Calling JSON，历史会话重绘时也不会重复显示工具对象。
+- Agent 模型流式响应按 SSE `id` 或 `sequence_number` 去重，修复后续任务中重复事件再次拼接整段 JSON 的问题。
+- `finish_task` 提示嵌入最终 AI 回复内部，固定排列在回复正文之后、模型名称和复制按钮之前。
+- 增加协议与 Electron 界面回归验证，覆盖 JSON 包装清理、工具 JSON 不可见、最终提示 DOM 顺序和中文 Shell 输出。
+- 版本升级到 `V7.0.0 Canary 4`，构建 Windows Portable / Setup 产物。
+
 ## V7.0.0 Canary 3 · 2026-08-14
 
 - Agent 模型回复改为按原始顺序解析正文段与工具段，支持“正文 → 工具 → 正文 → 工具”的交错展示；已识别的 Tool Calling JSON 不再进入可见正文或重复显示。

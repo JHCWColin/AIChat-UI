@@ -2205,6 +2205,11 @@
             margin-top: 0.75rem !important;
         }
 
+        .agent-tool-inline {
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
         .agent-segment-row + .agent-tool-row-wrapper,
         .agent-tool-row-wrapper + .agent-segment-row {
             margin-top: 0.75rem !important;
@@ -3249,7 +3254,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 3</span>
+                            <span id="app-version">V7.0.0 Canary 4</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -5475,18 +5480,50 @@
                 wrapper.appendChild(welcomeDiv);
                 return;
             }
+            const activeChat = chats.find(chat => chat.id === activeChatId);
+            const renderingAgentChat = Boolean(activeChat?.agentEnabled);
+            let pendingFinalRow = null;
+            let deferredFinishMessage = null;
             messages.forEach((msg, idx) => {
                 if (msg?.hidden === true) return;
                 if (msg?.role === 'tool') {
-                    appendAgentToolMessageToUI(msg);
+                    if (msg.toolName === 'finish_task' && pendingFinalRow) {
+                        const contentCol = pendingFinalRow.querySelector('.message-content-col');
+                        appendAgentToolMessageToUI(msg, {
+                            inline: true,
+                            container: contentCol,
+                            before: contentCol?.querySelector('.message-footer')
+                        });
+                    } else if (msg.toolName === 'finish_task') {
+                        const nextVisibleMessage = messages.slice(idx + 1).find(message => message?.hidden !== true);
+                        if (nextVisibleMessage?.role === 'assistant' && nextVisibleMessage.agentFinal === true) {
+                            deferredFinishMessage = msg;
+                        } else {
+                            appendAgentToolMessageToUI(msg);
+                        }
+                    } else {
+                        appendAgentToolMessageToUI(msg);
+                    }
+                    pendingFinalRow = null;
                     return;
                 }
                 const isLast = idx === messages.length - 1;
-                appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
+                const renderedRow = appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
                     .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
                         agentFinal: msg.agentFinal === true,
-                        agentSegment: msg.agentSegment === true
+                        agentSegment: msg.agentSegment === true,
+                        agentMessage: renderingAgentChat && msg.role === 'assistant'
                     });
+                pendingFinalRow = msg.role === 'assistant' && msg.agentFinal === true ? renderedRow : null;
+                if (pendingFinalRow && deferredFinishMessage) {
+                    const contentCol = pendingFinalRow.querySelector('.message-content-col');
+                    appendAgentToolMessageToUI(deferredFinishMessage, {
+                        inline: true,
+                        container: contentCol,
+                        before: contentCol?.querySelector('.message-footer')
+                    });
+                    deferredFinishMessage = null;
+                }
             });
             wrapper.scrollTop = wrapper.scrollHeight;
         }
@@ -5495,11 +5532,16 @@
             generatedImages = [], voiceRecordId = '', messageOptions = {}) {
             const wrapper = document.getElementById('messages-wrapper');
             const isAI = role === 'assistant';
+            const displayContent = isAI && messageOptions.agentMessage && window.AgentProtocol
+                ? AgentProtocol.stripToolCallsForDisplay(content)
+                : String(content || '');
+            if (isAI && messageOptions.agentMessage && content && !displayContent) return null;
             const row = document.createElement('div');
             row.className = `chat-row`;
             if (messageOptions.agentSegment) row.classList.add('agent-segment-row');
+            if (messageOptions.agentFinal) row.classList.add('agent-final-row');
             const contentCol = document.createElement('div');
-            contentCol.className = `flex flex-col w-full`;
+            contentCol.className = `message-content-col flex flex-col w-full`;
             if (isAI && !messageOptions.agentSegment) {
                 const thinkingDiv = document.createElement('div');
                 thinkingDiv.className = 'thinking-text text-gray-400 text-xs mb-1';
@@ -5512,9 +5554,9 @@
             }
             const bubble = document.createElement('div');
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
-            if (content) {
+            if (displayContent) {
                 if (isAI) {
-                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${renderAssistantMarkdown(content)}</div>`;
+                    bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${renderAssistantMarkdown(displayContent)}</div>`;
                     const contentArea = bubble.querySelector('.ai-content-area');
                     if (contentArea) renderMathFormulas(contentArea);
                     bubble.querySelectorAll('pre').forEach(pre => {
@@ -5580,7 +5622,7 @@
             contentCol.appendChild(bubble);
             if (isAI && !messageOptions.agentSegment) {
                 const footer = document.createElement('div');
-                footer.className = "flex items-center gap-2 mt-1.5 px-4 w-full flex-wrap";
+                footer.className = "message-footer flex items-center gap-2 mt-1.5 px-4 w-full flex-wrap";
                 const modelSpan = document.createElement('span');
                 modelSpan.className = "text-[13px] text-gray-500 font-bold font-mono uppercase";
                 modelSpan.innerText = model || document.getElementById('model-select').value;
@@ -5611,7 +5653,7 @@
                     copyMsgBtn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> 复制`;
                     copyMsgBtn.onclick = (e) => {
                         e.stopPropagation();
-                        copyToClipboard(content || '', copyMsgBtn);
+                        copyToClipboard(displayContent || '', copyMsgBtn);
                     };
                     btnGroup.appendChild(copyMsgBtn);
                 }

@@ -11,7 +11,7 @@ const liveWindows = new Set();
 let server = null;
 let baseUrl = "";
 
-ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 3 · 2026-08-14\n\n- Smoke test");
+ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 4 · 2026-08-14\n\n- Smoke test");
 ipcMain.handle("agent:get-command-settings", async () => ({
     defaults: ["git status", "npm run test"],
     additions: ["git push"]
@@ -45,9 +45,20 @@ async function captureWindow(width, height, fileName, prepare) {
     });
     await win.loadURL(`${baseUrl}/index.html`);
     await new Promise(resolve => setTimeout(resolve, 1600));
-    if (prepare) await win.webContents.executeJavaScript(`(${prepare.toString()})()`);
+    if (prepare) {
+        const prepareResult = await win.webContents.executeJavaScript(`(() => {
+            try {
+                return { value: (${prepare.toString()})() };
+            } catch (error) {
+                return { error: String(error && error.message || error), stack: String(error && error.stack || '') };
+            }
+        })()`);
+        if (prepareResult?.error) throw new Error(`${fileName}: ${prepareResult.error}\n${prepareResult.stack}`);
+    }
     await new Promise(resolve => setTimeout(resolve, 250));
-    const state = await win.webContents.executeJavaScript(`({
+    const stateResult = await win.webContents.executeJavaScript(`(() => {
+        try {
+            return { state: ({
         hasProtocol: Boolean(window.AgentProtocol),
         hasAgentEntry: Boolean(document.getElementById('agent-entry-btn')),
         hasCommandMode: Boolean(document.getElementById('agent-command-mode-select')),
@@ -69,6 +80,17 @@ async function captureWindow(width, height, fileName, prepare) {
         agentToolIconSize: parseFloat(getComputedStyle(document.querySelector('.agent-tool-summary svg') || document.body).width),
         agentToolFontSize: parseFloat(getComputedStyle(document.querySelector('.agent-tool-summary') || document.body).fontSize),
         visibleHasToolJson: document.getElementById('messages-wrapper')?.innerText.includes('tool_call') || false,
+        visibleHasJsonWrapper: (() => {
+            const visibleText = (document.getElementById('messages-wrapper')?.innerText || '').toLowerCase();
+            return visibleText.includes('<json>') || visibleText.includes('</json>');
+        })(),
+        finishInsideFinal: Boolean(document.querySelector('.agent-final-row .agent-tool-inline [data-lucide="check-circle-2"]')),
+        finishBeforeFooter: (() => {
+            const contentCol = document.querySelector('.agent-final-row .message-content-col');
+            const finish = contentCol?.querySelector('.agent-tool-inline');
+            const footer = contentCol?.querySelector('.message-footer');
+            return Boolean(finish && footer && (finish.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING));
+        })(),
         agentShowsMilliseconds: document.getElementById('messages-wrapper')?.innerText.includes('1234毫秒') || false,
         agentShowsChineseOutput: document.getElementById('messages-wrapper')?.innerText.includes('中文命令输出') || false,
         agentCompletedTaskTurns: (() => getCompleteConversationTurns({
@@ -87,7 +109,13 @@ async function captureWindow(width, height, fileName, prepare) {
         }).length)(),
         bodyWidth: document.body.scrollWidth,
         viewportWidth: window.innerWidth
-    })`);
+            }) };
+        } catch (error) {
+            return { error: String(error && error.message || error), stack: String(error && error.stack || '') };
+        }
+    })()`);
+    if (stateResult?.error) throw new Error(`${fileName}: ${stateResult.error}\n${stateResult.stack}`);
+    const state = stateResult.state;
     const image = await win.webContents.capturePage();
     const outputPath = path.join(outputRoot, fileName);
     await fs.writeFile(outputPath, image.toPNG());
@@ -143,7 +171,7 @@ app.whenReady().then(async () => {
             chat.messages = [
                 { role: "user", content: "检查 package.json" },
                 { role: "assistant", content: '先读取。\n{"tool_call":{"name":"read_file_range","arguments":{}}}', hidden: true, agentToolResponse: true },
-                { role: "assistant", content: "先读取文件。", agentDisplayOnly: true, agentSegment: true },
+                { role: "assistant", content: "<json>先读取文件。</json>\n\n\n", agentDisplayOnly: true, agentSegment: true },
                 {
                     role: "tool",
                     name: "read_file_range",
@@ -183,7 +211,7 @@ app.whenReady().then(async () => {
                     toolId: "smoke-shell",
                     executionId: "smoke-shell-execution"
                 },
-                { role: "assistant", content: "任务完成。", agentDisplayOnly: true, agentFinal: true },
+                { role: "assistant", content: '任务完成。\n<json>{"tool_call":{"name":"finish_task","arguments":{}}}</json>', agentDisplayOnly: true, agentFinal: true },
                 {
                     role: "tool",
                     name: "finish_task",
@@ -210,7 +238,7 @@ app.whenReady().then(async () => {
         if (main.state.canvasDisplay !== "none" || main.state.inputTopRightRadius === "0px") {
             process.exitCode = 1;
         }
-        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
+        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
             process.exitCode = 1;
         }
     } catch (error) {

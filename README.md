@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_1-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_4-blue)]()
 
 </div>
 
@@ -36,7 +36,7 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
-### V7.0.0 Canary 3
+### V7.0.0 Canary 4
 
 - 新增不可退出的 Agent 会话模式，可从加号菜单绑定一个不可更改的工作区目录。
 - 新增 `read_file_range`、`write_file`、`edit_file`、`run_shell`、`finish_task` 五个 MVP 工具，支持连续多轮 Agent Loop。
@@ -47,6 +47,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - Agent 设置可调整 5 至 3600 秒的命令执行超时；Command Mode 与模型选择器同行，工作区路径与标题同行显示。
 - 模型单次回复中的正文与 Tool Calling 会按出现顺序交错渲染，工具 JSON 不再显示或在末尾重复；Shell 中文输出统一为 UTF-8，耗时使用毫秒。
 - 命令授权在聊天正文中显示，“始终允许”直接采用自动推导的前缀；Agent 自动压缩轮次按已完成用户任务统计。
+- 修复后续 Agent 任务中 Tool Calling JSON 重复渲染、被 KaTeX 处理，以及 `<json>` 包装和多余空行泄漏到正文的问题。
+- Agent 流式响应按 SSE 事件编号去重；`finish_task` 提示固定显示在最终正文与模型/复制页脚之间。
 
 ### V6.3.0 Release
 
@@ -180,8 +182,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI7.0.0-Canary3-Portable.exe`
-- Setup：`AIUI7.0.0-Canary3-Setup.exe`
+- Portable：`AIUI7.0.0-Canary4-Portable.exe`
+- Setup：`AIUI7.0.0-Canary4-Setup.exe`
 
 构建命令：
 
@@ -212,7 +214,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V7.0.0 Canary 3`
+- 当前版本：`V7.0.0 Canary 4`
 - 当前构建标识：`build20260814`
 
 ---

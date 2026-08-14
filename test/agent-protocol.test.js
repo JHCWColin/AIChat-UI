@@ -45,6 +45,27 @@ test("keeps mixed prose and tool calls in their original order", () => {
     assert.doesNotMatch(parsed.text, /tool_call/);
 });
 
+test("removes json tags and empty lines surrounding tool calls", () => {
+    const response = [
+        "<json>",
+        '{"tool_call":{"name":"read_file_range","arguments":{"path":"package.json","start_line":1,"end_line":14}}}',
+        "</json>",
+        "",
+        "<json>",
+        '{"tool_call":{"name":"finish_task","arguments":{}}}',
+        "</json>"
+    ].join("\n");
+    const parsed = parseSequentialToolCalls(response);
+    assert.deepEqual(parsed.calls.map(call => call.name), ["read_file_range", "finish_task"]);
+    assert.equal(parsed.text, "");
+    assert.equal(parsed.segments.filter(segment => segment.type === "text").length, 0);
+});
+
+test("cleans literal and escaped json wrappers from visible prose", () => {
+    assert.equal(parseSequentialToolCalls("<json>任务完成。</json>").text, "任务完成。");
+    assert.equal(parseSequentialToolCalls("&lt;json&gt;任务完成。&lt;/json&gt;").text, "任务完成。");
+});
+
 test("does not treat a JSON array as the requested sequential object protocol", () => {
     const parsed = parseSequentialToolCalls('[{"tool_call":{"name":"finish_task","arguments":{}}}]');
     assert.equal(parsed.calls.length, 0);
