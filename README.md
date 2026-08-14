@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_6-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_7-blue)]()
 
 </div>
 
@@ -35,6 +35,14 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V7.0.0 Canary 7
+
+- 运行中的 AI/Agent 状态改为文字表面的扫描高光，不再为整块提示区域增加背景辉光。
+- Agent reasoning 思考记录在当前模型轮次结束后保留，标题由运行提示切换为“思考了 N 秒”，历史重绘后仍然存在。
+- Agent 最终正文不再重复挂载同一份 reasoning，思考记录与用户可见答案保持独立顺序。
+- 固定 Agent 提示词明确要求：即使任务只需纯文本回答、不调用其他工具，也必须在完整正文后调用一次 `finish_task` 结束循环。
+- 增加持久化思考记录与纯文本 `finish_task` 协议回归验证。
 
 ### V7.0.0 Canary 6
 
@@ -193,8 +201,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI7.0.0-Canary6-Portable.exe`
-- Setup：`AIUI7.0.0-Canary6-Setup.exe`
+- Portable：`AIUI7.0.0-Canary7-Portable.exe`
+- Setup：`AIUI7.0.0-Canary7-Setup.exe`
 
 构建命令：
 
@@ -225,7 +233,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V7.0.0 Canary 6`
+- 当前版本：`V7.0.0 Canary 7`
 - 当前构建标识：`build20260814`
 
 ---

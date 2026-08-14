@@ -25,7 +25,7 @@ Runs a PowerShell command with the bound workspace as its initial working direct
 
 finish_task
 Arguments: {}
-Ends the Agent Loop. It must be the last tool call in the response that completes the task.`;
+Ends the Agent Loop. It must be the last tool call in every response that completes the task, including pure-text answers that need no other tool.`;
 
     const CORE_AGENT_RULES = `Core Agent Rules
 
@@ -40,7 +40,9 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
 9. Tool results remain in context in full. Use them as authoritative execution results.
 10. If a run_shell command is rejected, try a different method and do not repeat the rejected command unchanged.
 11. Complete the task before calling finish_task. Calls before finish_task still execute, and finish_task must be last.
-12. In the final response, write the user-facing result first, then place the finish_task JSON object at the absolute end.`;
+12. A completed task must always call finish_task. This is mandatory even when no local tool is needed and the answer is pure text.
+13. If no other tool is needed, write the complete user-facing answer first, then output exactly one finish_task JSON object so the Agent Loop can stop.
+14. In every final response, place the finish_task JSON object at the absolute end after all user-facing text.`;
 
     function buildFixedAgentPrompt(options = {}) {
         const environment = String(options.environment || "").trim();

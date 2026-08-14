@@ -333,16 +333,20 @@
         return durationMs;
     }
 
-    function appendAgentThinkingRow(text = "Agent 正在规划下一步…") {
+    function appendAgentThinkingRow(text = "Agent 正在考虑下一步决策", options = {}) {
         const wrapper = document.getElementById("messages-wrapper");
         const row = document.createElement("div");
         row.className = "chat-row agent-thinking-row";
-        row.innerHTML = `<div class="agent-tool-row running"><div class="agent-tool-summary"><i data-lucide="bot"></i><span class="agent-tool-summary-text">${escapeHtml(text)}</span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"><div class="thinking-text"></div></div></div></div>`;
+        const running = options.running !== false;
+        row.innerHTML = `<div class="agent-tool-row${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="bot"></i><span class="agent-tool-summary-text">${escapeHtml(text)}</span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"><div class="thinking-text"></div></div></div></div>`;
         const toolRow = row.querySelector(".agent-tool-row");
         const summary = row.querySelector(".agent-tool-summary");
         const thinkingText = row.querySelector(".thinking-text");
+        row.thinkingStartedAt = Number(options.startedAt || Date.now());
+        row.reasoningText = "";
         row.updateReasoning = reasoning => {
             const hasReasoning = Boolean(String(reasoning || ""));
+            row.reasoningText = String(reasoning || "");
             renderThinkingText(thinkingText, reasoning);
             toolRow.classList.toggle("has-preview", hasReasoning);
             summary.classList.toggle("clickable", hasReasoning);
@@ -355,6 +359,20 @@
                 row.dataset.detailInitialized = "true";
             }
             summary.setAttribute("aria-expanded", String(hasReasoning && !toolRow.classList.contains("collapsed")));
+        };
+        row.finishThinking = durationMs => {
+            if (!row.reasoningText) {
+                if (agentActiveStatusRow === row) setAgentActiveStatusRow(null);
+                row.remove();
+                return false;
+            }
+            const seconds = Math.max(0, Math.round(Number(durationMs || 0) / 1000));
+            toolRow.classList.remove("running");
+            row.querySelector(".agent-tool-summary-text").textContent = `思考了${seconds}秒`;
+            const elapsed = row.querySelector(".agent-working-time");
+            if (elapsed) elapsed.textContent = "";
+            if (agentActiveStatusRow === row) setAgentActiveStatusRow(null);
+            return true;
         };
         const toggleReasoning = () => {
             if (!toolRow.classList.contains("has-preview")) return;
@@ -370,10 +388,22 @@
             }
         };
         wrapper.appendChild(row);
+        if (options.reasoning) row.updateReasoning(options.reasoning);
+        if (!running) row.finishThinking(options.durationMs);
         lucide.createIcons();
-        setAgentActiveStatusRow(row);
+        if (running && options.activate !== false) setAgentActiveStatusRow(row);
         wrapper.scrollTop = wrapper.scrollHeight;
         return row;
+    }
+
+    function appendAgentThinkingMessageToUI(message) {
+        if (!message?.reasoning) return null;
+        return appendAgentThinkingRow("", {
+            running: false,
+            activate: false,
+            reasoning: message.reasoning,
+            durationMs: message.thinkingDurationMs
+        });
     }
 
     function appendAgentEndpointFallbackRow(info) {
@@ -732,18 +762,34 @@
         return { text: fullText, reasoning: reasoningText };
     }
 
-    function appendAgentHiddenAssistant(chat, rawText, model, reasoning) {
+    function appendAgentHiddenAssistant(chat, rawText, model, reasoning, options = {}) {
         if (!rawText && !reasoning) return;
-        chat.messages.push({
+        const message = {
             role: "assistant",
             content: String(rawText || ""),
             model,
             reasoning: String(reasoning || ""),
             hidden: true,
-            agentToolResponse: true
-        });
+            agentToolResponse: true,
+            agentThinking: options.agentThinking === true,
+            thinkingDurationMs: Math.max(0, Number(options.thinkingDurationMs || 0))
+        };
+        chat.messages.push(message);
         chat.updatedAt = Date.now();
         persistAgentChats();
+        return message;
+    }
+
+    function completeAgentThinking(chat, model, row, result = {}) {
+        if (!row) return null;
+        const reasoning = String(result.reasoning || row.reasoningText || "");
+        if (reasoning && reasoning !== row.reasoningText) row.updateReasoning(reasoning);
+        const durationMs = Math.max(0, Date.now() - Number(row.thinkingStartedAt || Date.now()));
+        const agentThinking = row.finishThinking(durationMs);
+        return appendAgentHiddenAssistant(chat, result.text || "", model, reasoning, {
+            agentThinking,
+            thinkingDurationMs: durationMs
+        });
     }
 
     function appendAgentVisibleText(chat, text, model, reasoning = "", final = false) {
@@ -879,7 +925,7 @@
                     statusRow: thinkingRow,
                     onReasoning: reasoning => thinkingRow?.updateReasoning?.(reasoning)
                 });
-                if (thinkingRow?.isConnected) thinkingRow.remove();
+                completeAgentThinking(chat, model, thinkingRow, result);
                 thinkingRow = null;
                 if (agentStopRequested) break;
                 const parsed = AgentProtocol.parseSequentialToolCalls(result.text);
@@ -887,11 +933,10 @@
                     throw new Error(`单次模型回复包含 ${parsed.calls.length} 个工具调用，超过 30 个上限，Agent 已终止`);
                 }
                 if (!parsed.calls.length) {
-                    appendAgentHiddenAssistant(chat, result.text, model, result.reasoning);
                     invalidResponses += 1;
                     if (invalidResponses >= 3) {
                         const responseText = parsed.text || "模型连续返回空回复。";
-                        appendAgentVisibleText(chat, `${responseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, result.reasoning || "", true);
+                        appendAgentVisibleText(chat, `${responseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, "", true);
                         break;
                     }
                     await requestAgentProtocolCorrection(chat, model, result.text);
@@ -899,7 +944,6 @@
                     continue;
                 }
                 invalidResponses = 0;
-                appendAgentHiddenAssistant(chat, result.text, model, result.reasoning);
                 const finishSegmentIndex = parsed.segments.findIndex(segment => segment.type === "tool_call" && segment.call?.name === "finish_task");
                 const trailingFinalText = finishSegmentIndex >= 0
                     ? parsed.segments.slice(finishSegmentIndex + 1)
@@ -913,7 +957,7 @@
                     if (segment.type === "text") {
                         const nextSegment = parsed.segments[index + 1];
                         const isFinalText = !trailingFinalText && nextSegment?.type === "tool_call" && nextSegment.call?.name === "finish_task";
-                        appendAgentVisibleText(chat, segment.text, model, result.reasoning || "", isFinalText);
+                        appendAgentVisibleText(chat, segment.text, model, "", isFinalText);
                         if (isFinalText) finalTextAdded = true;
                         continue;
                     }
@@ -932,10 +976,10 @@
                         finishMessage.taskDurationMs = finishAgentTaskTimer(chat, finishMessage);
                         chat.messages.push(finishMessage);
                         if (trailingFinalText) {
-                            appendAgentVisibleText(chat, trailingFinalText, model, result.reasoning || "", true);
+                            appendAgentVisibleText(chat, trailingFinalText, model, "", true);
                             finalTextAdded = true;
                         }
-                        if (!finalTextAdded) appendAgentVisibleText(chat, "任务已完成。", model, result.reasoning || "", true);
+                        if (!finalTextAdded) appendAgentVisibleText(chat, "任务已完成。", model, "", true);
                         appendFinishTaskToFinalRow(finishMessage);
                         await persistAgentToolMessage(chat, finishMessage);
                         chat.updatedAt = Date.now();
@@ -960,7 +1004,7 @@
                 persistAgentChats();
             }
         } finally {
-            if (thinkingRow?.isConnected) thinkingRow.remove();
+            if (thinkingRow) completeAgentThinking(chat, model, thinkingRow, { reasoning: thinkingRow.reasoningText });
             if (agentTaskStartedAt) finishAgentTaskTimer(chat);
             hideVoiceNotification();
             if (agentStopRequested && !chat.messages.some((message, index) => index === chat.messages.length - 1 && message?.role === "assistant" && message?.agentFinal)) {
@@ -1065,6 +1109,7 @@
     window.onAgentCommandModeChange = onAgentCommandModeChange;
     window.resolveAgentYoloWarning = resolveAgentYoloWarning;
     window.appendAgentToolMessageToUI = appendAgentToolMessageToUI;
+    window.appendAgentThinkingMessageToUI = appendAgentThinkingMessageToUI;
     window.populateAgentSettings = populateAgentSettings;
     window.saveAgentCommandSettings = saveAgentCommandSettings;
     window.requestAgentLoop = requestAgentLoop;

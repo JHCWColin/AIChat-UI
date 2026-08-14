@@ -120,6 +120,8 @@ test("fixed prompt keeps tool definitions before agent rules and environment", (
     assert.ok(prompt.indexOf("Tool Definitions") < prompt.indexOf("Core Agent Rules"));
     assert.ok(prompt.indexOf("Core Agent Rules") < prompt.indexOf("User System Prompt"));
     assert.ok(prompt.indexOf("User System Prompt") < prompt.indexOf("Current Environment"));
+    assert.match(prompt, /mandatory even when no local tool is needed and the answer is pure text/i);
+    assert.match(prompt, /output exactly one finish_task JSON object/i);
 });
 
 test("parses more than thirty calls so the Agent Loop can enforce the per-response limit", () => {

@@ -2387,32 +2387,52 @@
             color: #fbbf24;
         }
 
-        @keyframes agent-status-glow {
-            0%, 100% {
-                background: rgba(var(--accent-rgb), 0.025);
-                box-shadow: 0 0 0 rgba(var(--accent-rgb), 0);
-            }
-            50% {
-                background: rgba(var(--accent-rgb), 0.09);
-                box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.2);
-            }
+        @keyframes agent-text-scan {
+            from { background-position: 180% 50%; }
+            to { background-position: -80% 50%; }
         }
 
-        .agent-tool-row.running,
+        .agent-tool-row.running .agent-tool-summary-text,
+        .agent-tool-row.running .ai-thinking-label,
         .ai-pending-text {
-            animation: agent-status-glow 1.8s ease-in-out infinite;
+            --scan-text-base: #d1d5db;
+            --scan-text-highlight: #ffffff;
+            color: transparent !important;
+            background-image: linear-gradient(105deg,
+                var(--scan-text-base) 0%,
+                var(--scan-text-base) 38%,
+                var(--scan-text-highlight) 48%,
+                var(--scan-text-base) 58%,
+                var(--scan-text-base) 100%);
+            background-size: 260% 100%;
+            background-clip: text;
+            -webkit-background-clip: text;
+            animation: agent-text-scan 1.7s linear infinite;
+        }
+
+        body.theme-light .agent-tool-row.running .agent-tool-summary-text,
+        body.theme-light .agent-tool-row.running .ai-thinking-label,
+        body.theme-light .ai-pending-text {
+            --scan-text-base: #4b5563;
+            --scan-text-highlight: #111827;
+        }
+
+        .agent-tool-row.warning.running .agent-tool-summary-text {
+            --scan-text-base: #f59e0b;
+            --scan-text-highlight: #fef3c7;
         }
 
         .ai-pending-text {
-            display: inline-flex;
-            border-radius: 4px;
-            padding: 2px 6px;
+            display: inline-block;
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .agent-tool-row.running,
+            .agent-tool-row.running .agent-tool-summary-text,
+            .agent-tool-row.running .ai-thinking-label,
             .ai-pending-text {
                 animation: none;
+                color: var(--scan-text-base) !important;
+                background: none;
             }
         }
 
@@ -3331,7 +3351,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 6</span>
+                            <span id="app-version">V7.0.0 Canary 7</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -5608,7 +5628,13 @@
             let pendingFinalRow = null;
             let deferredFinishMessage = null;
             messages.forEach((msg, idx) => {
-                if (msg?.hidden === true) return;
+                if (msg?.hidden === true) {
+                    if (msg.agentThinking === true && msg.reasoning && window.appendAgentThinkingMessageToUI) {
+                        appendAgentThinkingMessageToUI(msg);
+                        pendingFinalRow = null;
+                    }
+                    return;
+                }
                 if (msg?.role === 'tool') {
                     if (msg.toolName === 'finish_task' && pendingFinalRow) {
                         const contentCol = pendingFinalRow.querySelector('.message-content-col');

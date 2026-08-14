@@ -11,7 +11,7 @@ const liveWindows = new Set();
 let server = null;
 let baseUrl = "";
 
-ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 6 · 2026-08-15\n\n- Smoke test");
+ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 7 · 2026-08-15\n\n- Smoke test");
 ipcMain.handle("agent:get-command-settings", async () => ({
     defaults: ["git status", "npm run test"],
     additions: ["git push"]
@@ -146,8 +146,14 @@ async function captureWindow(width, height, fileName, prepare) {
             ? (document.getElementById('messages-wrapper')?.innerText || '').includes('现在用中文回答用户的问题')
             : false,
         agentMockReasoningRenderCount: window.__agentReasoningRenderCount || 0,
-        agentMockHasThinkingStrong: Boolean(document.querySelector('.agent-final-row .ai-thinking-status .thinking-text strong')),
-        agentMockThinkingWasLimited: (document.querySelector('.agent-final-row .thinking-text')?.innerText || '').includes('省略2行'),
+        agentMockHasThinkingStrong: Boolean(document.querySelector('.agent-thinking-row .thinking-text strong')),
+        agentMockThinkingWasLimited: (document.querySelector('.agent-thinking-row .thinking-text')?.innerText || '').includes('省略2行'),
+        agentPersistentThinkingRows: document.querySelectorAll('.agent-thinking-row').length,
+        agentThinkingTitlesFinalized: Array.from(document.querySelectorAll('.agent-thinking-row .agent-tool-summary-text')).every(element => {
+            const text = element.textContent || '';
+            return text.startsWith('思考了') && text.endsWith('秒');
+        }),
+        agentThinkingRowsStillRunning: document.querySelector('.agent-thinking-row .agent-tool-row.running') !== null,
         agentFallbackRequests: window.__agentFallbackRequests || [],
         agentSaw501Warning: window.__agentSaw501Warning === true,
         agentFallbackHasProtocolError: window.__agentFallbackHasProtocolError === true,
@@ -399,7 +405,7 @@ app.whenReady().then(async () => {
         if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
             process.exitCode = 1;
         }
-        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentMockReasoningRenderCount < 8 || !mixedProtocol.state.agentMockHasThinkingStrong || !mixedProtocol.state.agentMockThinkingWasLimited || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
+        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentMockReasoningRenderCount < 8 || !mixedProtocol.state.agentMockHasThinkingStrong || !mixedProtocol.state.agentMockThinkingWasLimited || mixedProtocol.state.agentPersistentThinkingRows !== 4 || !mixedProtocol.state.agentThinkingTitlesFinalized || mixedProtocol.state.agentThinkingRowsStillRunning || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
             process.exitCode = 1;
         }
         if (fallback.state.agentFallbackRequests.length !== 2 || !fallback.state.agentFallbackRequests[0].endsWith('/responses') || !fallback.state.agentFallbackRequests[1].endsWith('/chat/completions') || !fallback.state.agentSaw501Warning || fallback.state.agentFallbackHasProtocolError) {
