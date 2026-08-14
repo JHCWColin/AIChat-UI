@@ -16,6 +16,18 @@ const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
 const WebSocket = require("ws");
+const {
+    AgentWorkspaceStore,
+    AgentShellRunner,
+    readFileRange,
+    writeFile: writeAgentFile,
+    editFile: editAgentFile,
+    loadAllowedCommands,
+    saveUserAllowedCommands,
+    findAllowedCommandPrefix,
+    deriveAllowedCommandPrefix,
+    getEnvironmentDescription
+} = require("./agent-tools");
 
 const PRESET_TEXTS_A = ["嗯……", "哦？", "欸？", "哦！"];
 const PRESET_TEXTS_B = ["我想想……", "等一下啊……"];
@@ -37,6 +49,8 @@ let autoUpdateCheckStarted = false;
 let availableUpdateVersion = "";
 let currentVersionConfirmedLatest = false;
 let updateDownloadRequested = false;
+let agentWorkspaceStore = null;
+const agentShellRunner = new AgentShellRunner();
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -52,6 +66,8 @@ function isInstalledWindowsBuild() {
 function formatDisplayVersion(version) {
     const text = String(version || "").trim();
     if (!text) return "";
+    const canaryMatch = text.match(/^(\d+\.\d+\.\d+)-canary\.(\d+)$/i);
+    if (canaryMatch) return `V${canaryMatch[1]} Canary ${canaryMatch[2]}`;
     const match = text.match(/^(\d+\.\d+\.\d+)(?:-release)?$/i);
     return match ? `V${match[1]} Release` : `V${text}`;
 }
@@ -174,6 +190,20 @@ function createWindow(htmlFile = "index.html", options = {}) {
     win.loadFile(htmlFile);
     win.webContents.setWindowOpenHandler(() => ({ action: "allow" }));
     return win;
+}
+
+function getAgentWorkspaceStore() {
+    if (!agentWorkspaceStore) {
+        agentWorkspaceStore = new AgentWorkspaceStore(path.join(app.getPath("userData"), "agent-workspaces.json"));
+    }
+    return agentWorkspaceStore;
+}
+
+function getAgentCommandPaths() {
+    return {
+        defaultFile: path.join(__dirname, "alwaysAllowedCommand.txt"),
+        userFile: path.join(app.getPath("userData"), "alwaysAllowedCommand.user.txt")
+    };
 }
 
 function sanitizeTurns(turns) {
@@ -743,6 +773,113 @@ ipcMain.handle("desktop-work:capture-screenshot", async (event) => {
 ipcMain.handle("app:get-update-log", async (event) => {
     if (!isMainSender(event)) throw new Error("非法的更新日志请求");
     return fs.readFile(path.join(__dirname, "UPDATE.md"), "utf8");
+});
+
+ipcMain.handle("agent:select-workspace", async (event, chatId) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工作区请求");
+    const store = getAgentWorkspaceStore();
+    const existing = await store.get(chatId);
+    if (existing.bound) {
+        return {
+            ...existing,
+            environment: existing.path ? getEnvironmentDescription(existing.path) : ""
+        };
+    }
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: "选择 Agent 工作区",
+        properties: ["openDirectory", "createDirectory"],
+        buttonLabel: "绑定此工作区"
+    });
+    if (result.canceled || !result.filePaths[0]) return { canceled: true };
+    const binding = await store.bind(chatId, result.filePaths[0]);
+    return {
+        ...binding,
+        canceled: false,
+        environment: getEnvironmentDescription(binding.path)
+    };
+});
+
+ipcMain.handle("agent:get-workspace", async (event, chatId) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工作区请求");
+    const binding = await getAgentWorkspaceStore().get(chatId);
+    return {
+        ...binding,
+        environment: binding.path ? getEnvironmentDescription(binding.path) : ""
+    };
+});
+
+ipcMain.handle("agent:remove-workspace", async (event, chatId) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工作区请求");
+    return { removed: await getAgentWorkspaceStore().remove(chatId) };
+});
+
+ipcMain.handle("agent:get-command-settings", async (event) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 命令设置请求");
+    const paths = getAgentCommandPaths();
+    return loadAllowedCommands(paths.defaultFile, paths.userFile);
+});
+
+ipcMain.handle("agent:save-command-additions", async (event, commands) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 命令设置请求");
+    const paths = getAgentCommandPaths();
+    const additions = await saveUserAllowedCommands(paths.userFile, commands);
+    return { success: true, additions };
+});
+
+ipcMain.handle("agent:add-allowed-command", async (event, prefix) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 命令设置请求");
+    const paths = getAgentCommandPaths();
+    const policy = await loadAllowedCommands(paths.defaultFile, paths.userFile);
+    const nextPrefix = String(prefix || "").trim();
+    const additions = await saveUserAllowedCommands(paths.userFile, [...policy.additions, nextPrefix]);
+    return { success: true, additions };
+});
+
+ipcMain.handle("agent:check-command", async (event, command) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 命令请求");
+    const paths = getAgentCommandPaths();
+    const policy = await loadAllowedCommands(paths.defaultFile, paths.userFile);
+    const matchedPrefix = findAllowedCommandPrefix(command, policy.all);
+    return {
+        allowed: Boolean(matchedPrefix),
+        matchedPrefix,
+        suggestedPrefix: deriveAllowedCommandPrefix(command)
+    };
+});
+
+ipcMain.handle("agent:execute-tool", async (event, request) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
+    const source = request && typeof request === "object" ? request : {};
+    const name = String(source.name || "");
+    const args = source.arguments && typeof source.arguments === "object" ? source.arguments : {};
+    const binding = await getAgentWorkspaceStore().get(source.chatId);
+    if (!binding.bound || !binding.exists) {
+        return { success: false, error: "bound workspace is unavailable" };
+    }
+    if (name === "read_file_range") return readFileRange(binding.realPath || binding.path, args);
+    if (name === "write_file") return writeAgentFile(binding.realPath || binding.path, args);
+    if (name === "edit_file") return editAgentFile(binding.realPath || binding.path, args);
+    if (name === "run_shell") {
+        const executionId = String(source.executionId || "").trim();
+        try {
+            return await agentShellRunner.run({
+                executionId,
+                command: args.command,
+                cwd: binding.realPath || binding.path,
+                onProgress: progress => {
+                    if (!event.sender.isDestroyed()) event.sender.send("agent:shell-progress", progress);
+                }
+            });
+        } catch (error) {
+            return { stdout: "", stderr: error.message, exitCode: 1, success: false };
+        }
+    }
+    return { success: false, error: `unknown tool: ${name}` };
+});
+
+ipcMain.handle("agent:cancel-execution", async (event, executionId) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
+    return { canceled: agentShellRunner.cancel(executionId) };
 });
 
 ipcMain.handle("audio-chat:checkpoint", async (event, turns) => {

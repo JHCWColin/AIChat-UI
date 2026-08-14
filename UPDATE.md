@@ -11,6 +11,16 @@
 不要在版本标题与下一版本标题之间加入其他级别的标题，也不要省略版本正文；关于页会按此格式自动解析展示。
 -->
 
+## V7.0.0 Canary 1 · 2026-08-14
+
+- 新增 Agent 模式入口；会话绑定工作区后不可退出、不可更换，并在标题栏显示工作区路径。
+- 新增标准正文 JSON Tool Calling 的连续 Agent Loop，支持单次模型回复最多 30 个工具调用，并以 `finish_task` 结束任务。
+- 新增 `read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task`，文件工具严格限制在工作区内。
+- 新增 Safe Commands Only 与 YOLO Mode；未知 Shell 命令支持拒绝、允许和始终允许，YOLO 切换显示全屏风险警告。
+- 新增 Agent 偏好设置，可管理用户自己的始终允许命令前缀；内置白名单文件只读展示。
+- 工具结果完整写入 Agent 上下文并通过 IndexedDB 保存大结果，不参与自动摘要删除；Agent 运行期间锁定会话切换和删除。
+- 版本升级到 `V7.0.0 Canary 1`，构建 Windows Portable / Setup 产物。
+
 ## V6.3.0 Release · 2026-08-13
 
 - 自动更新检查确认当前版本已是 GitHub Release 最新版本时，在“关于信息”的版本号后以绿色文字显示“当前已是最新版本”。

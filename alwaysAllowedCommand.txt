@@ -1,0 +1,17 @@
+git status
+git diff
+git log
+git show
+git branch
+git rev-parse
+git ls-files
+Get-ChildItem
+Get-Content
+npm run build
+npm run test
+npm start
+pnpm install
+pnpm run build
+node --version
+npm --version
+pnpm --version

@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V6.3.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_1-blue)]()
 
 </div>
 
@@ -30,10 +30,19 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 附件解析：支持图片、`.docx`、`.pptx`、`.xlsx`、`.txt`、`.md` 等文件。
 - 图像生成增强：支持在提示词中写入 `16:9`、`4:3`、`1:1` 等宽高比关键词。
 - `/compact` 上下文压缩：支持自动摘要、手动和独立摘要模型。
+- Agent Tool Calling：绑定工作区后，可通过标准 JSON 工具调用读取、写入、局部编辑文件并运行 Shell 命令。
 
 ---
 
 ## 最近更新
+
+### V7.0.0 Canary 1
+
+- 新增不可退出的 Agent 会话模式，可从加号菜单绑定一个不可更改的工作区目录。
+- 新增 `read_file_range`、`write_file`、`edit_file`、`run_shell`、`finish_task` 五个 MVP 工具，支持连续多轮 Agent Loop。
+- 工具调用 JSON 不直接显示，改为强调色绿竖线、Lucide 图标和实时状态；完整工具结果保留在后续上下文中。
+- 新增 Safe Commands Only / YOLO Mode、一次性授权、始终允许命令前缀与 Agent 设置页。
+- 文件工具执行在主进程并校验工作区边界，局部编辑要求唯一匹配；Shell 默认 PowerShell、120 秒超时并支持取消。
 
 ### V6.3.0 Release
 
@@ -167,8 +176,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI6.3.0-Release-Portable.exe`
-- Setup：`AIUI6.3.0-Release-Setup.exe`
+- Portable：`AIUI7.0.0-Canary1-Portable.exe`
+- Setup：`AIUI7.0.0-Canary1-Setup.exe`
 
 构建命令：
 
@@ -188,6 +197,10 @@ npm run build
 - `voicechat-api.js`：独立语音/协作窗口共用 API 适配层
 - `main.js`：Electron 主进程
 - `preload.js`：Electron 预加载桥接
+- `agent-protocol.js`：Agent Tool Calling 协议常量、连续 JSON 对象解析和固定提示前缀
+- `agent-tools.js`：主进程工作区校验、文件工具、Shell 执行器和命令白名单
+- `agent-ui.js`：Agent Loop、工具结果持久化、授权交互和工具状态渲染
+- `alwaysAllowedCommand.txt`：内置安全命令前缀（用户增项保存在 Electron userData）
 - `package.json`：版本、脚本与构建配置
 - `UPDATE.md`：版本更新记录
 
@@ -195,8 +208,8 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V6.3.0 Release`
-- 当前构建标识：`build20260813`
+- 当前版本：`V7.0.0 Canary 1`
+- 当前构建标识：`build20260814`
 
 ---
 

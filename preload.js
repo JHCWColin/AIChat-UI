@@ -8,6 +8,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getDesktopWorkSession: () => ipcRenderer.invoke("desktop-work:get-session"),
     captureDesktopScreenshot: () => ipcRenderer.invoke("desktop-work:capture-screenshot"),
     getUpdateLog: () => ipcRenderer.invoke("app:get-update-log"),
+    selectAgentWorkspace: (chatId) => ipcRenderer.invoke("agent:select-workspace", chatId),
+    getAgentWorkspace: (chatId) => ipcRenderer.invoke("agent:get-workspace", chatId),
+    removeAgentWorkspace: (chatId) => ipcRenderer.invoke("agent:remove-workspace", chatId),
+    getAgentCommandSettings: () => ipcRenderer.invoke("agent:get-command-settings"),
+    saveAgentCommandAdditions: (commands) => ipcRenderer.invoke("agent:save-command-additions", commands),
+    addAgentAllowedCommand: (prefix) => ipcRenderer.invoke("agent:add-allowed-command", prefix),
+    checkAgentCommand: (command) => ipcRenderer.invoke("agent:check-command", command),
+    executeAgentTool: (request) => ipcRenderer.invoke("agent:execute-tool", request),
+    cancelAgentExecution: (executionId) => ipcRenderer.invoke("agent:cancel-execution", executionId),
+    onAgentShellProgress: (callback) => {
+        const listener = (_event, payload) => callback(payload);
+        ipcRenderer.on("agent:shell-progress", listener);
+        return () => ipcRenderer.removeListener("agent:shell-progress", listener);
+    },
     checkpointAudioChat: (turns) => ipcRenderer.invoke("audio-chat:checkpoint", turns),
     completeAudioChat: (turns) => ipcRenderer.invoke("audio-chat:complete", turns),
     completeDesktopWork: (turns) => ipcRenderer.invoke("desktop-work:complete", turns),

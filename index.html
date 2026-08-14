@@ -20,6 +20,7 @@
     <link rel="stylesheet" href="material-darker.min.css">
     <script src="codemirror.min.js"></script>
     <script src="javascript.min.js"></script>
+    <script src="agent-protocol.js"></script>
     <style>
         :root {
             --accent-primary: #10b981;
@@ -2080,6 +2081,190 @@
             background: rgba(220, 38, 38, 0.8);
         }
         
+        #active-chat-heading {
+            min-width: 0;
+        }
+
+        #active-chat-workspace {
+            display: none;
+            max-width: min(52vw, 640px);
+            margin-top: 2px;
+            overflow: hidden;
+            color: #9ca3af;
+            font-size: 10px;
+            line-height: 1.2;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #active-chat-workspace.visible {
+            display: block;
+        }
+
+        #agent-command-mode-bar {
+            display: none;
+            width: 100%;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        #agent-command-mode-bar.visible {
+            display: flex;
+        }
+
+        #agent-command-mode-select {
+            max-width: 190px;
+            border: 1px solid #4b5563;
+            border-radius: 6px;
+            background: #171717;
+            color: #d1d5db;
+            padding: 5px 28px 5px 8px;
+            font-size: 11px;
+            outline: none;
+        }
+
+        body.theme-light #agent-command-mode-select {
+            border-color: #d1d5db;
+            background: #ffffff;
+            color: #374151;
+        }
+
+        #agent-command-approval {
+            display: none;
+            width: 100%;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--accent-primary);
+            background: rgba(var(--accent-rgb), 0.08);
+            padding: 10px 12px;
+        }
+
+        #agent-command-approval.visible {
+            display: block;
+        }
+
+        .agent-command-code {
+            max-height: 120px;
+            overflow: auto;
+            margin-top: 6px;
+            color: #d1d5db;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        body.theme-light .agent-command-code {
+            color: #374151;
+        }
+
+        .agent-command-prefix {
+            width: 100%;
+            margin-top: 8px;
+            border: 1px solid #4b5563;
+            border-radius: 5px;
+            background: #111827;
+            color: #e5e7eb;
+            padding: 6px 8px;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            outline: none;
+        }
+
+        body.theme-light .agent-command-prefix {
+            border-color: #d1d5db;
+            background: #ffffff;
+            color: #1f2937;
+        }
+
+        .agent-command-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .agent-command-actions button {
+            min-height: 30px;
+            border-radius: 6px;
+            padding: 0 11px;
+            font-size: 12px;
+        }
+
+        .agent-tool-row {
+            width: 100%;
+            border-left: 3px solid var(--accent-primary);
+            padding: 4px 0 4px 12px;
+        }
+
+        .agent-tool-summary {
+            display: flex;
+            min-height: 24px;
+            align-items: center;
+            gap: 8px;
+            color: #d1d5db;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        body.theme-light .agent-tool-summary {
+            color: #4b5563;
+        }
+
+        .agent-tool-summary svg {
+            width: 15px;
+            height: 15px;
+            flex: 0 0 auto;
+            color: var(--accent-primary);
+        }
+
+        .agent-tool-detail {
+            margin-top: 4px;
+            color: #6b7280;
+            font-family: Consolas, monospace;
+            font-size: 10px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .agent-tool-row.failed {
+            border-left-color: #ef4444;
+        }
+
+        .agent-tool-row.failed .agent-tool-summary svg {
+            color: #ef4444;
+        }
+
+        #agent-yolo-warning-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 130;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.72);
+        }
+
+        #agent-yolo-warning-modal.visible {
+            display: flex;
+        }
+
+        #agent-yolo-warning-modal>div {
+            width: min(440px, 100%);
+            border: 1px solid #7f1d1d;
+            border-radius: 8px;
+            background: #18181b;
+            padding: 20px;
+            box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+        }
+
+        body.theme-light #agent-yolo-warning-modal>div {
+            background: #ffffff;
+            color: #111827;
+        }
     </style>
 </head>
 
@@ -2102,7 +2287,9 @@
         <header class="p-3 flex items-center border-b border-gray-800 bg-[#212121] z-10">
             <button onclick="toggleSidebar(true)" class="md:hidden p-2 hover:bg-gray-800 rounded-xl mr-2"><i
                     data-lucide="menu"></i></button>
-            <div id="active-chat-title" class="flex-grow text-center font-medium text-gray-200 truncate px-4">新对话
+            <div id="active-chat-heading" class="flex-grow text-center px-4">
+                <div id="active-chat-title" class="font-medium text-gray-200 truncate">新对话</div>
+                <div id="active-chat-workspace" title=""></div>
             </div>
             <button id="canvas-toggle-btn" onclick="toggleCanvasPanel()" title="切换Canvas面板">
                 <i data-lucide="code-2" class="w-3.5 h-3.5"></i> Canvas
@@ -2117,6 +2304,28 @@
                 <footer id="input-footer" class="p-4 md:pb-8 w-full">
                     <div class="max-w-4xl mx-auto relative flex flex-col items-start">
                         <div id="attachments-preview" class="w-full"></div>
+                        <div id="agent-command-approval" role="alert" aria-live="assertive">
+                            <div class="text-xs font-medium text-gray-300">Agent 请求执行非白名单命令</div>
+                            <div id="agent-command-approval-command" class="agent-command-code"></div>
+                            <input id="agent-command-approval-prefix" class="agent-command-prefix" type="text"
+                                aria-label="始终允许的命令前缀" placeholder="始终允许的命令前缀">
+                            <div class="agent-command-actions">
+                                <button type="button" class="border border-gray-600 text-gray-300 hover:bg-gray-800"
+                                    onclick="resolveAgentCommandApproval('reject')">拒绝</button>
+                                <button type="button" class="border border-gray-600 text-gray-200 hover:bg-gray-800"
+                                    onclick="resolveAgentCommandApproval('allow')">允许</button>
+                                <button type="button" class="text-white"
+                                    style="background:var(--accent-strong)"
+                                    onclick="resolveAgentCommandApproval('always')">始终允许</button>
+                            </div>
+                        </div>
+                        <div id="agent-command-mode-bar">
+                            <label for="agent-command-mode-select" class="text-[11px] text-gray-400">Command Mode</label>
+                            <select id="agent-command-mode-select" onchange="onAgentCommandModeChange(this.value)">
+                                <option value="safe" selected>Safe Commands Only</option>
+                                <option value="yolo">YOLO Mode</option>
+                            </select>
+                        </div>
                         <div id="image-detail-container" class="flex items-center gap-2 mb-1.5 w-full">
                             <span
                                 class="text-[11px] text-gray-400 font-medium whitespace-nowrap select-none">图片精细度</span>
@@ -2258,13 +2467,13 @@
                                 <button onclick="triggerFileInput(); toggleAttachMenu();">
                                     <i data-lucide="paperclip" class="w-4 h-4"></i> 添加附件
                                 </button>
-                                <button onclick="switchToImageGeneration(); toggleAttachMenu();">
+                                <button id="image-generation-btn" onclick="switchToImageGeneration(); toggleAttachMenu();">
                                     <i data-lucide="image-plus" class="w-4 h-4"></i> 图像生成
                                 </button>
                                 <button id="image-edit-btn" onclick="switchToImageEdit(); toggleAttachMenu();">
                                     <i data-lucide="image-up" class="w-4 h-4"></i> 图像编辑
                                 </button>
-                                <button onclick="insertCanvasCommand(); toggleAttachMenu();">
+                                <button id="canvas-entry-btn" onclick="insertCanvasCommand(); toggleAttachMenu();">
                                     <i data-lucide="code-2" class="w-4 h-4"></i> Canvas
                                 </button>
                                 <button id="exit-image-mode-btn" style="display:none;"
@@ -2277,9 +2486,12 @@
                                  <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
                                      <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
                                  </button>
-                                 <button id="desktop-work-entry-btn" onclick="startDesktopWork(); toggleAttachMenu();">
+                                <button id="desktop-work-entry-btn" onclick="startDesktopWork(); toggleAttachMenu();">
                                      <i data-lucide="monitor-up" class="w-4 h-4"></i> 桌面协作
                                  </button>
+                                <button id="agent-entry-btn" onclick="enterAgentMode(); toggleAttachMenu();">
+                                    <i data-lucide="bot" class="w-4 h-4"></i> 进入Agent模式
+                                </button>
                             </div>
                             <textarea id="user-input" rows="1"
                                 placeholder="给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文"
@@ -2368,6 +2580,7 @@
                      <button data-section="desktop-work" onclick="switchSettingsSection('desktop-work', this)">桌面协作</button>
                      <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
                     <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
+                    <button data-section="agent" onclick="switchSettingsSection('agent', this)">Agent</button>
                     <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">开发调试</button>
                     <button data-section="guide" onclick="switchSettingsSection('guide', this)">使用指导</button>
                     <button data-section="about" onclick="switchSettingsSection('about', this)">关于</button>
@@ -2897,6 +3110,20 @@
 
 <p style="margin:0.3em 0;">2026年6月18日<br>开发者JHCWColin</p></div>
                 </div>
+                <div id="section-agent" class="settings-content-section space-y-5">
+                    <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">内置安全命令前缀</label>
+                        <textarea id="agent-default-commands" rows="8" readonly
+                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-xs font-mono text-gray-400 outline-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">用户始终允许的命令前缀</label>
+                        <textarea id="agent-command-additions" rows="8"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-xs font-mono outline-none focus:border-emerald-500 transition-colors"
+                            placeholder="每行一个命令前缀"></textarea>
+                    </div>
+                </div>
                 <div id="section-about" class="settings-content-section space-y-4">
                     <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
                         <i data-lucide="info" class="w-4 h-4"></i>关于信息
@@ -2915,7 +3142,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V6.3.0 Release</span>
+                            <span id="app-version">V7.0.0 Canary 1</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -2958,6 +3185,19 @@
             <div class="compact-confirm-actions">
                 <button type="button" class="compact-cancel" onclick="resolveDangerConfirm(false)">取消</button>
                 <button type="button" class="danger-confirm" onclick="resolveDangerConfirm(true)">清除</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="agent-yolo-warning-modal" role="dialog" aria-modal="true" aria-labelledby="agent-yolo-warning-title">
+        <div>
+            <h3 id="agent-yolo-warning-title" class="text-base font-semibold text-red-400 text-center">启用 YOLO Mode</h3>
+            <p class="mt-3 text-sm leading-relaxed text-gray-300">YOLO Mode 会跳过所有 Shell 命令确认并直接执行。命令可以访问工作区外路径，并可能修改或删除本机数据。</p>
+            <div class="flex justify-end gap-2 mt-5">
+                <button type="button" class="px-4 py-2 rounded-md border border-gray-600 text-sm"
+                    onclick="resolveAgentYoloWarning(false)">取消</button>
+                <button type="button" class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm"
+                    onclick="resolveAgentYoloWarning(true)">仍然启用</button>
             </div>
         </div>
     </div>
@@ -3596,6 +3836,27 @@
             const messages = Array.isArray(chat?.messages) ? chat.messages : [];
             const compactedIndexes = getCompactedMessageIndexes(chat);
             const turns = [];
+            if (chat?.agentEnabled) {
+                for (let index = 0; index < messages.length; index += 1) {
+                    const user = messages[index];
+                    if (user?.role !== 'user' || user.hidden === true) continue;
+                    let nextUserIndex = messages.length;
+                    for (let cursor = index + 1; cursor < messages.length; cursor += 1) {
+                        if (messages[cursor]?.role === 'user' && messages[cursor]?.hidden !== true) {
+                            nextUserIndex = cursor;
+                            break;
+                        }
+                    }
+                    let assistantIndex = -1;
+                    for (let cursor = index + 1; cursor < nextUserIndex; cursor += 1) {
+                        if (messages[cursor]?.role === 'assistant' && messages[cursor]?.agentFinal === true) assistantIndex = cursor;
+                    }
+                    if (assistantIndex < 0 || compactedIndexes.has(index) || compactedIndexes.has(assistantIndex)) continue;
+                    turns.push({ userIndex: index, assistantIndex, messages: [user, messages[assistantIndex]] });
+                    index = nextUserIndex - 1;
+                }
+                return turns;
+            }
             for (let index = 0; index < messages.length - 1; index += 1) {
                 const user = messages[index];
                 const assistant = messages[index + 1];
@@ -3943,7 +4204,9 @@
         }
 
         function buildResponsesInputFromMessages(messages) {
-            const filteredMessages = (Array.isArray(messages) ? messages : []).filter(message => message?.role !== 'system');
+            const sourceMessages = Array.isArray(messages) ? messages : [];
+            const firstSystemIndex = sourceMessages.findIndex(message => message?.role === 'system');
+            const filteredMessages = sourceMessages.filter((_message, index) => index !== firstSystemIndex);
             const hasImageContent = filteredMessages.some(message => {
                 if (Array.isArray(message?.content)) {
                     return message.content.some(part => part?.type === 'image_url' || part?.type === 'input_image');
@@ -3956,7 +4219,7 @@
                     .map(message => {
                         const text = extractResponsesTextContent(message?.content).trim();
                         if (!text) return '';
-                        const label = message?.role === 'assistant' ? 'assistant' : 'user';
+                        const label = message?.role === 'assistant' ? 'assistant' : (message?.role === 'system' ? 'system' : 'user');
                         return `${label}: ${text}`;
                     })
                     .filter(Boolean)
@@ -5106,15 +5369,22 @@
                 return;
             }
             messages.forEach((msg, idx) => {
+                if (msg?.hidden === true) return;
+                if (msg?.role === 'tool') {
+                    appendAgentToolMessageToUI(msg);
+                    return;
+                }
                 const isLast = idx === messages.length - 1;
                 appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
-                    .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '');
+                    .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
+                        agentFinal: msg.agentFinal === true
+                    });
             });
             wrapper.scrollTop = wrapper.scrollHeight;
         }
 
         function appendMessageToUI(role, content, model, showActions = false, reasoning = '', attachments = [],
-            generatedImages = [], voiceRecordId = '') {
+            generatedImages = [], voiceRecordId = '', messageOptions = {}) {
             const wrapper = document.getElementById('messages-wrapper');
             const isAI = role === 'assistant';
             const row = document.createElement('div');
@@ -5207,11 +5477,13 @@
                 modelSpan.innerText = model || document.getElementById('model-select').value;
                 const btnGroup = document.createElement('div');
                 btnGroup.className = "flex items-center gap-1";
-                const retryBtn = document.createElement('span');
-                retryBtn.className = 'action-btn';
-                retryBtn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重试`;
-                retryBtn.onclick = (e) => openRetryMenu(e);
-                btnGroup.appendChild(retryBtn);
+                if (!messageOptions.agentFinal) {
+                    const retryBtn = document.createElement('span');
+                    retryBtn.className = 'action-btn';
+                    retryBtn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重试`;
+                    retryBtn.onclick = (e) => openRetryMenu(e);
+                    btnGroup.appendChild(retryBtn);
+                }
                 if (generatedImages && generatedImages.length > 0) {
                     const downloadBtn = document.createElement('span');
                     downloadBtn.className = 'action-btn';
@@ -5321,6 +5593,7 @@
                 populateDesktopWorkSettings();
                 populateOtherSettings();
                 populateAdvancedSettings();
+                populateAgentSettings();
                 updateSettingsPortraitMode();
             } else {
                 closeAnimatedModal(modal, 'flex', () => {
@@ -5712,6 +5985,7 @@
             const recordToggle = document.getElementById('record-logs-toggle');
             if (recordToggle) recordLogsEnabled = recordToggle.checked;
             localStorage.setItem('record_logs', recordLogsEnabled ? 'true' : 'false');
+            saveAgentCommandSettings();
             if (activeChatId) {
                 const currentChat = chats.find(c => c.id === activeChatId);
                 if (currentChat) renderMessagesWithResolvedRefs(currentChat.messages);
@@ -5794,6 +6068,10 @@
         }
 
         function stopGeneration() {
+            if (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) {
+                stopAgentTask();
+                return;
+            }
             if (abortController) {
                 abortController.abort();
                 abortController = null;
@@ -6005,6 +6283,12 @@
                     canvasBadge.textContent = '[Canvas]';
                     title.appendChild(canvasBadge);
                 }
+                if (chat.agentEnabled) {
+                    const agentBadge = document.createElement('span');
+                    agentBadge.style.cssText = `font-size:0.55rem;color:${getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981'};margin-left:0.25rem;`;
+                    agentBadge.textContent = '[Agent]';
+                    title.appendChild(agentBadge);
+                }
                 const deleteBtn = document.createElement('span');
                 deleteBtn.className = 'delete-chat-btn p-1';
                 deleteBtn.dataset.chatId = chat.id;
@@ -6020,11 +6304,18 @@
             lucide.createIcons();
         }
         async function deleteChat(chatId) {
+            if (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning(chatId)) {
+                showVoiceNotification('Agent 正在运行，不能删除此会话', true, 3000);
+                return;
+            }
             if (!confirm('确定删除此对话？')) return;
             const chat = chats.find(c => c.id === chatId);
             if (!chat) return;
             const index = chats.findIndex(c => c.id === chatId);
             if (index !== -1) chats.splice(index, 1);
+            if (chat.agentEnabled && window.electronAPI?.removeAgentWorkspace) {
+                window.electronAPI.removeAgentWorkspace(chat.id).catch(() => {});
+            }
             localStorage.setItem('ai_chats', JSON.stringify(chats));
             if (activeChatId === chatId) {
                 if (chats.length > 0) switchChat(chats[0].id);
@@ -6034,6 +6325,10 @@
         }
 
         function createNewChat(options = {}) {
+            if (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) {
+                showVoiceNotification('Agent 正在运行，暂时不能新建或切换会话', true, 3000);
+                return activeChatId;
+            }
             const id = Date.now().toString();
             const newChat = {
                 id,
@@ -6042,6 +6337,7 @@
                 updatedAt: Date.now(),
                 canvasEnabled: false,
                 canvasCode: [''],
+                agentEnabled: false,
                 contextCompaction: { version: 1, summaries: [] },
                 ...(options.ephemeralCollaboration ? { ephemeralCollaboration: true } : {})
             };
@@ -6055,10 +6351,19 @@
         }
 
         function switchChat(id) {
-            activeChatId = id;
+            if (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning() && id !== activeChatId) {
+                showVoiceNotification('Agent 正在运行，暂时不能切换会话', true, 3000);
+                return;
+            }
             const chat = chats.find(c => c.id === id);
             if (!chat) return;
+            if (chat.agentEnabled && isImageMode) {
+                showVoiceNotification('请先退出图像生成或编辑状态，再切换到 Agent 会话', true, 3500);
+                return;
+            }
+            activeChatId = id;
             if (chat.canvasEnabled === undefined) chat.canvasEnabled = false;
+            if (chat.agentEnabled === undefined) chat.agentEnabled = false;
             if (!chat.canvasCode || !Array.isArray(chat.canvasCode)) chat.canvasCode = [''];
             ensureContextCompactionState(chat);
             document.getElementById('active-chat-title').innerText = chat.title;
@@ -6068,6 +6373,7 @@
             updateTokenEstimate();
             canvasPanelVisible = chat.canvasEnabled && canvasPanelVisible;
             updateCanvasPanelForChat(chat);
+            if (typeof updateAgentUIForChat === 'function') updateAgentUIForChat(chat);
             processedReplaceCount = 0;
             sessionReplaceBlocks = [];
             if (cmEditor) {
@@ -6086,6 +6392,10 @@
             if (!text && currentAttachments.length === 0) return;
             const model = document.getElementById('model-select').value;
             const chat = chats.find(c => c.id === activeChatId);
+            if (!chat) return;
+            if (chat.agentEnabled && typeof ensureAgentWorkspaceAvailable === 'function' && !(await ensureAgentWorkspaceAvailable(chat))) {
+                return;
+            }
             const compactCommand = text.match(/^\/compact([\s\S]*)$/i);
             if (compactCommand) {
                 resetInputState();
@@ -6093,12 +6403,20 @@
                 return;
             }
             if (isImageMode) {
+                if (chat.agentEnabled) {
+                    showVoiceNotification('Agent 会话不能使用图像生成或编辑模式', true, 3000);
+                    return;
+                }
                 await sendImageMessage(chat, text, model);
                 return;
             }
             let isCanvasCommand = false;
             let actualMessage = text;
             if (text.startsWith('/canvas')) {
+                if (chat.agentEnabled) {
+                    showVoiceNotification('Agent 会话不能进入 Canvas 模式', true, 3000);
+                    return;
+                }
                 isCanvasCommand = true;
                 actualMessage = text.slice(7).trim();
                 if (!actualMessage && currentAttachments.length === 0) {
@@ -6153,7 +6471,8 @@
             renderChatHistory();
             localStorage.setItem('ai_chats', JSON.stringify(chats));
             await performAutomaticCompaction(chat);
-            await requestAI(actualMessage, model, chat, attachmentsToSend);
+            if (chat.agentEnabled) await requestAgentLoop(model, chat);
+            else await requestAI(actualMessage, model, chat, attachmentsToSend);
         }
         function onCodeMirrorChange() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
@@ -6246,6 +6565,10 @@
             const chat = chats.find(item => item.id === requestedChatId);
             if (!chat) {
                 showVoiceNotification('当前对话不存在', true);
+                return;
+            }
+            if (chat.agentEnabled) {
+                showVoiceNotification('Agent 会话不能开启语音聊天或桌面协作', true, 3000);
                 return;
             }
             const context = (chat.messages || [])
@@ -6378,7 +6701,7 @@
                 }
                 if (command.action === 'recent-audio-chat' || command.action === 'recent-desktop-work') {
                     const recent = chats
-                        .filter(chat => Array.isArray(chat.messages) && chat.messages.some(message => message && (message.role === 'user' || message.role === 'assistant')))
+                        .filter(chat => !chat.agentEnabled && Array.isArray(chat.messages) && chat.messages.some(message => message && (message.role === 'user' || message.role === 'assistant')))
                         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
                     if (!recent) {
                         showVoiceNotification('没有可用的最近会话', true, 3000);
@@ -6392,6 +6715,7 @@
 
         function updateAttachMenuButtons() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
+            const isAgentChat = Boolean(chat?.agentEnabled);
             const editBtn = document.getElementById('image-edit-btn');
             if (editBtn) {
                 if (chat && hasImageInChat(chat)) {
@@ -6409,10 +6733,25 @@
                 exitBtn.style.display = isImageMode ? 'flex' : 'none';
             }
             const audioChatBtn = document.getElementById('audio-chat-entry-btn');
-            if (audioChatBtn) audioChatBtn.style.display = window.electronAPI?.isElectron ? 'flex' : 'none';
+            if (audioChatBtn) audioChatBtn.style.display = window.electronAPI?.isElectron && !isAgentChat ? 'flex' : 'none';
+            const desktopWorkBtn = document.getElementById('desktop-work-entry-btn');
+            if (desktopWorkBtn) desktopWorkBtn.style.display = window.electronAPI?.isElectron && !isAgentChat ? 'flex' : 'none';
+            const imageGenerationBtn = document.getElementById('image-generation-btn');
+            if (imageGenerationBtn) imageGenerationBtn.style.display = isAgentChat ? 'none' : 'flex';
+            if (editBtn && isAgentChat) editBtn.style.display = 'none';
+            else if (editBtn) editBtn.style.display = 'flex';
+            const canvasEntryBtn = document.getElementById('canvas-entry-btn');
+            if (canvasEntryBtn) canvasEntryBtn.style.display = isAgentChat ? 'none' : 'flex';
+            const agentEntryBtn = document.getElementById('agent-entry-btn');
+            if (agentEntryBtn) agentEntryBtn.style.display = window.electronAPI?.isElectron && !isAgentChat ? 'flex' : 'none';
         }
 
         function switchToImageGeneration() {
+            const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
+            if (chat?.agentEnabled) {
+                showVoiceNotification('Agent 会话不能进入图像生成模式', true, 3000);
+                return;
+            }
             isImageMode = true;
             imageEditMode = false;
             document.getElementById('model-select').innerHTML = IMAGE_MODELS.map(m =>
@@ -6426,6 +6765,10 @@
 
         function switchToImageEdit() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
+            if (chat?.agentEnabled) {
+                showVoiceNotification('Agent 会话不能进入图像编辑模式', true, 3000);
+                return;
+            }
             if (!chat || !hasImageInChat(chat)) {
                 showVoiceNotification('没有已有图片，不能进行图像编辑', true);
                 return;
@@ -6451,6 +6794,11 @@
         }
 
         function insertCanvasCommand() {
+            const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
+            if (chat?.agentEnabled) {
+                showVoiceNotification('Agent 会话不能进入 Canvas 模式', true, 3000);
+                return;
+            }
             const input = document.getElementById('user-input');
             if (!input) return;
             const current = input.value;
@@ -7444,6 +7792,7 @@
             }
         }
     </script>
+    <script src="agent-ui.js"></script>
 </body>
 
 </html>

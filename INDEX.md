@@ -269,7 +269,40 @@
 
 ---
 
-## 六、备注（给后续 AI 的提醒）
+## 六、Agent Tool Calling（V7.0.0 Canary 1）
+
+### 7.1 文件与主链路
+
+| 文件 | 作用 |
+|---|---|
+| `agent-protocol.js` | 固定 Tool Definitions/Core Rules、连续独立 JSON 对象解析、当前时间格式化。浏览器和 Node 测试均可复用。 |
+| `agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、Shell 执行器和命令前缀匹配。 |
+| `agent-ui.js` | Agent 会话绑定、上下文组装、模型请求循环、工具结果 IndexedDB 持久化、命令授权和绿竖线工具状态。 |
+| `alwaysAllowedCommand.txt` | 发布包内置安全命令前缀；用户增项写入 Electron `userData/alwaysAllowedCommand.user.txt`。 |
+| `test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单和 Shell 单元测试。 |
+
+### 7.2 Agent Loop 顺序
+
+```
+固定 system 前缀（Tool Definitions → Core Rules → 用户提示 → Environment）
+        → 历史消息与完整 Tool Result
+        → Current Time
+        → Latest User Message
+        → 模型连续独立 JSON Tool Call
+        → 主进程执行并追加 role=tool 历史
+        → 再次请求模型
+        → finish_task → 显示最终文本并结束
+```
+
+Agent 工具 JSON 不直接渲染给用户。`read_file_range`、`write_file`、`edit_file`、`run_shell` 和 `finish_task` 使用强调色图标、绿竖线和动态行数/字符数/耗时/字节数展示。工具消息不会被上下文压缩删除；普通 Agent 用户请求和最终答复仍沿用自动压缩机制。
+
+### 7.3 Electron IPC
+
+`preload.js` 暴露 `selectAgentWorkspace`、`getAgentWorkspace`、`executeAgentTool`、`checkAgentCommand`、`saveAgentCommandAdditions` 和 Shell 进度/取消接口；`main.js` 通过 `agent-workspaces.json` 绑定会话与工作区，并在每次文件操作再次校验路径和符号链接边界。
+
+---
+
+## 七、备注（给后续 AI 的提醒）
 
 - 2026-08 已**彻底移除 LeanCloud 云端同步与云端记忆**相关代码：`getLCConfig`、`syncData`、`pushToCloud`、`lcFetch`、`fetchMemoriesFromCloud`、`renderMemoriesToSettings`、`DEFAULT_LC_*`、`lcObjectId` 等符号已不存在于 `index.html`。数据只存本地（localStorage + IndexedDB）。若在别处看到这些符号，说明是旧文档/旧分支。
 - `index.html` 单文件近 7500 行，改前用 `grep -n "函数名" index.html` 确认最新行号，本 md 行号仅作近似参考。
