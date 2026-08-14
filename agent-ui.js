@@ -512,6 +512,7 @@
             temperature: currentTemp,
             messages,
             stream: true,
+            __aiuiStructuredResponsesInput: true,
             ...(maxTokensLimit > 0 ? { max_tokens: maxTokensLimit } : {}),
             ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
             ...(cacheControl ? { cache_control: cacheControl } : {})
@@ -735,12 +736,19 @@
                 }
                 invalidResponses = 0;
                 appendAgentHiddenAssistant(chat, result.text, model, result.reasoning);
+                const finishSegmentIndex = parsed.segments.findIndex(segment => segment.type === "tool_call" && segment.call?.name === "finish_task");
+                const trailingFinalText = finishSegmentIndex >= 0
+                    ? parsed.segments.slice(finishSegmentIndex + 1)
+                        .filter(segment => segment.type === "text")
+                        .map(segment => segment.text)
+                        .join("\n\n")
+                    : "";
                 let finalTextAdded = false;
                 for (let index = 0; index < parsed.segments.length; index += 1) {
                     const segment = parsed.segments[index];
                     if (segment.type === "text") {
                         const nextSegment = parsed.segments[index + 1];
-                        const isFinalText = nextSegment?.type === "tool_call" && nextSegment.call?.name === "finish_task";
+                        const isFinalText = !trailingFinalText && nextSegment?.type === "tool_call" && nextSegment.call?.name === "finish_task";
                         appendAgentVisibleText(chat, segment.text, model, result.reasoning || "", isFinalText);
                         if (isFinalText) finalTextAdded = true;
                         continue;
@@ -758,6 +766,10 @@
                             toolId: `${chat.id}-${Date.now()}-${agentToolSequence += 1}`
                         };
                         chat.messages.push(finishMessage);
+                        if (trailingFinalText) {
+                            appendAgentVisibleText(chat, trailingFinalText, model, result.reasoning || "", true);
+                            finalTextAdded = true;
+                        }
                         if (!finalTextAdded) appendAgentVisibleText(chat, "任务已完成。", model, result.reasoning || "", true);
                         appendFinishTaskToFinalRow(finishMessage);
                         await persistAgentToolMessage(chat, finishMessage);

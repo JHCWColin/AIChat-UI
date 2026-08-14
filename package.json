@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "7.0.0-canary.4",
+  "version": "7.0.0-canary.5",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
@@ -65,12 +65,12 @@
       "artifactName": "AIUI-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "AIUI7.0.0-Canary4-Portable.exe"
+      "artifactName": "AIUI7.0.0-Canary5-Portable.exe"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "AIUI7.0.0-Canary4-Setup.exe"
+      "artifactName": "AIUI7.0.0-Canary5-Setup.exe"
     }
   },
   "dependencies": {

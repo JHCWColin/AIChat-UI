@@ -11,7 +11,7 @@ const liveWindows = new Set();
 let server = null;
 let baseUrl = "";
 
-ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 4 · 2026-08-14\n\n- Smoke test");
+ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 5 · 2026-08-14\n\n- Smoke test");
 ipcMain.handle("agent:get-command-settings", async () => ({
     defaults: ["git status", "npm run test"],
     additions: ["git push"]
@@ -22,6 +22,22 @@ ipcMain.handle("agent:get-workspace", async () => ({
     path: "D:\\workspace\\demo",
     environment: "OS: Windows 11\nShell: PowerShell\nWorkspace: D:\\workspace\\demo\nNode: v24.0.0"
 }));
+ipcMain.handle("agent:execute-tool", async (_event, request) => {
+    const args = request?.arguments || {};
+    const startLine = Number(args.start_line) || 1;
+    const endLine = Number(args.end_line) || startLine;
+    return {
+        success: true,
+        path: String(args.path || "mock.txt"),
+        requestedStartLine: startLine,
+        requestedEndLine: endLine,
+        actualStartLine: startLine,
+        actualEndLine: endLine,
+        returnedLines: Math.max(0, endLine - startLine + 1),
+        totalLines: Math.max(endLine, 250),
+        content: "mock file content"
+    };
+});
 
 async function captureWindow(width, height, fileName, prepare) {
     const win = new BrowserWindow({
@@ -46,9 +62,9 @@ async function captureWindow(width, height, fileName, prepare) {
     await win.loadURL(`${baseUrl}/index.html`);
     await new Promise(resolve => setTimeout(resolve, 1600));
     if (prepare) {
-        const prepareResult = await win.webContents.executeJavaScript(`(() => {
+        const prepareResult = await win.webContents.executeJavaScript(`(async () => {
             try {
-                return { value: (${prepare.toString()})() };
+                return { value: await (${prepare.toString()})() };
             } catch (error) {
                 return { error: String(error && error.message || error), stack: String(error && error.stack || '') };
             }
@@ -107,6 +123,27 @@ async function captureWindow(width, height, fileName, prepare) {
                 { role: 'assistant', content: '完成二', agentFinal: true }
             ]
         }).length)(),
+        agentMockApiCalls: window.__agentMockRequestBodies?.length || 0,
+        agentMockStructuredInput: Array.isArray(window.__agentMockRequestBodies) && window.__agentMockRequestBodies.length > 0
+            ? window.__agentMockRequestBodies.every(body => Array.isArray(body?.input) && body.input.every(message => message && typeof message.role === 'string'))
+            : false,
+        agentMockVisibleClean: (() => {
+            if (!window.__agentMockFinished) return false;
+            const visibleText = document.getElementById('messages-wrapper')?.innerText || '';
+            const normalizedText = visibleText.toLowerCase();
+            const hasForbiddenText = ['toolresult', 'tool result', 'dsml', 'tool_call'].some(fragment => normalizedText.includes(fragment));
+            const hasForbiddenLine = visibleText.split(String.fromCharCode(10)).some(line => {
+                const trimmed = line.trim().toLowerCase();
+                return trimmed === 'user:' || trimmed === '<' || trimmed === '/>' || trimmed === '</>';
+            });
+            return !hasForbiddenText && !hasForbiddenLine;
+        })(),
+        agentMockHasFinalAnswer: window.__agentMockFinished
+            ? (document.getElementById('messages-wrapper')?.innerText || '').includes('这是一个 Node.js + Express 局域网文件共享项目。')
+            : false,
+        agentMockHasInternalNarration: window.__agentMockFinished
+            ? (document.getElementById('messages-wrapper')?.innerText || '').includes('现在用中文回答用户的问题')
+            : false,
         bodyWidth: document.body.scrollWidth,
         viewportWidth: window.innerWidth
             }) };
@@ -227,7 +264,76 @@ app.whenReady().then(async () => {
             renderMessages(chat.messages);
             document.querySelector('.agent-tool-summary.clickable')?.click();
         });
-        const result = { main, settings, active, consoleErrors };
+        const mixedProtocol = await captureWindow(1200, 800, "agent-mixed-protocol.png", async function () {
+            localStorage.setItem("request_endpoint", "/responses");
+            const chat = chats.find(item => item.id === activeChatId);
+            chat.agentEnabled = true;
+            chat.agentWorkspace = "D:\\workspace\\demo";
+            chat.agentEnvironment = "OS: Windows 11\nShell: PowerShell\nWorkspace: D:\\workspace\\demo\nNode: v24.0.0";
+            chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({ environment: chat.agentEnvironment });
+            chat.messages = [{ role: "user", content: "帮我查看一下这个项目的结构" }];
+            updateAgentUIForChat(chat);
+            renderMessages(chat.messages);
+
+            const mockResponses = [
+                [
+                    "</>",
+                    "我来查看项目的主要文件来了解这个项目。",
+                    "<",
+                    '{"tool_call":{"name":"read_file_range","arguments":{"path":"package.json","start_line":1,"end_line":14}}}',
+                    "/> <",
+                    '{"tool_call":{"name":"read_file_range","arguments":{"path":"server.js","start_line":1,"end_line":119}}}',
+                    "/> <",
+                    '{"tool_call":{"name":"read_file_range","arguments":{"path":"start.bat","start_line":1,"end_line":24}}}',
+                    "/> <",
+                    "/>",
+                    "让我再看一下前端页面，以便完整了解项目。",
+                    "<",
+                    '{"tool_call":{"name":"read_file_range","arguments":{"path":"views\\\\index.ejs","start_line":1,"end_line":120}}}',
+                    "/>"
+                ].join("\n"),
+                [
+                    "user:",
+                    "",
+                    "ToolResult:read_file_range",
+                    '{"success":true,"path":"views/index.ejs","content":"mock content\\n</｜｜DSML｜｜>"}',
+                    '<{"tool_call":{"name":"read_file_range","arguments":{"path":"views\\\\index.ejs","start_line":121,"end_line":240}}}/>'
+                ].join("\n"),
+                [
+                    "user:",
+                    "ToolResult:read_file_range",
+                    '{"success":true,"path":"views/index.ejs","content":"more mock content\\n</｜｜DSML｜｜>"}',
+                    '<{"tool_call":"read_file_range","arguments":{"path":"views\\\\index.ejs","start_line":176,"end_line":250}}/>'
+                ].join("\n"),
+                [
+                    "user:",
+                    "ToolResult:read_file_range",
+                    '{"success":true,"path":"views/index.ejs","content":"final mock content\\n</｜｜DSML｜｜>"}',
+                    "好的，我已经完整了解了这个项目。现在用中文回答用户的问题。",
+                    '<{"tool_call":{"name":"finish_task","arguments":{}}}/>',
+                    "这是一个 Node.js + Express 局域网文件共享项目。"
+                ].join("\n")
+            ];
+            const requestBodies = [];
+            let responseIndex = 0;
+            window.fetch = async (_url, options = {}) => {
+                requestBodies.push(JSON.parse(options.body || "{}"));
+                const responseText = mockResponses[responseIndex++] || mockResponses[mockResponses.length - 1];
+                const encoder = new TextEncoder();
+                const stream = new ReadableStream({
+                    start(controller) {
+                        const payload = JSON.stringify({ choices: [{ delta: { content: responseText } }] });
+                        controller.enqueue(encoder.encode(`data: ${payload}\n\ndata: [DONE]\n\n`));
+                        controller.close();
+                    }
+                });
+                return new Response(stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
+            };
+            await requestAgentLoop("deepseek-v4-flash", chat);
+            window.__agentMockRequestBodies = requestBodies;
+            window.__agentMockFinished = true;
+        });
+        const result = { main, settings, active, mixedProtocol, consoleErrors };
         console.log(JSON.stringify(result, null, 2));
         if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || main.state.hasLegacyApprovalPrefixInput || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentTimeoutSetting) {
             process.exitCode = 1;
@@ -239,6 +345,9 @@ app.whenReady().then(async () => {
             process.exitCode = 1;
         }
         if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
+            process.exitCode = 1;
+        }
+        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
             process.exitCode = 1;
         }
     } catch (error) {

@@ -11,6 +11,15 @@
 不要在版本标题与下一版本标题之间加入其他级别的标题，也不要省略版本正文；关于页会按此格式自动解析展示。
 -->
 
+## V7.0.0 Canary 5 · 2026-08-14
+
+- Agent 的 Responses API 请求改用结构化消息数组，保留历史角色边界，不再拼接带 `user:`、`assistant:` 标签的整段提示词。
+- Agent 协议解析新增 `<JSON/>` 外壳、`<｜｜DSML｜｜>` 分隔符和 `{"tool_call":"name","arguments":{}}` 兼容处理。
+- 检测并隐藏模型回显的 `ToolResult`、工具结果 JSON、DSML 特殊标记和内部提示文本，避免它们进入 Markdown、KaTeX 或聊天正文。
+- 兼容 `finish_task` 后返回最终正文的模型，重新排列为“最终正文 → 任务完成提示 → 模型名称/复制按钮”。
+- 新增四轮本地 Agent Loop 回归测试，真实模拟用户报告的 DeepSeek 混合输出；验证 4 次结构化请求、6 次文件读取和最终完成，全程不调用 AI API。
+- 版本升级到 `V7.0.0 Canary 5`，构建 Windows Portable / Setup 产物。
+
 ## V7.0.0 Canary 4 · 2026-08-14
 
 - Agent 协议解析新增 `<json>`、`</json>` 及其 HTML 转义形式的清理，折叠工具调用附近的多余空行。

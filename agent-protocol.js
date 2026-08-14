@@ -99,15 +99,32 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
     }
 
     function cleanRemainingText(value) {
-        return String(value || "")
+        let text = String(value || "")
             .replace(/<\/?json\b[^>]*>/gi, "")
             .replace(/&lt;\/?json\b[^&]*&gt;/gi, "")
+            .replace(/<\/?[|｜]{2}\s*DSML\s*[|｜]{2}>/gi, "")
+            .replace(/&lt;\/?[|｜]{2}\s*DSML\s*[|｜]{2}&gt;/gi, "")
             .replace(/```(?:json)?\s*```/gi, "")
             .replace(/^\s*```(?:json)?\s*/i, "")
-            .replace(/\s*```(?:json)?\s*$/i, "")
+            .replace(/\s*```(?:json)?\s*$/i, "");
+        const echoedToolResult = text.match(/(?:^|\n)[ \t]*(?:user\s*:[ \t]*(?:\n[ \t]*)*)?(?:\[[ \t]*Tool[ \t]+Result[ \t]*:|ToolResult[ \t]*:)/i);
+        if (echoedToolResult) text = text.slice(0, echoedToolResult.index);
+        return text
+            .replace(/(?:^|\n)[ \t]*(?:(?:<\/>|\/>|<|>)[ \t]*)+(?=\n|$)/g, "\n")
             .replace(/[ \t]+\n/g, "\n")
             .replace(/\n{3,}/g, "\n\n")
             .trim();
+    }
+
+    function normalizeToolCall(parsed) {
+        const toolCall = parsed && parsed.tool_call;
+        if (toolCall && typeof toolCall === "object" && typeof toolCall.name === "string") {
+            return { name: toolCall.name, arguments: toolCall.arguments };
+        }
+        if (typeof toolCall === "string") {
+            return { name: toolCall, arguments: parsed.arguments };
+        }
+        return null;
     }
 
     function parseSequentialToolCalls(text) {
@@ -120,8 +137,8 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
             } catch {
                 continue;
             }
-            const toolCall = parsed && parsed.tool_call;
-            if (!toolCall || typeof toolCall !== "object" || typeof toolCall.name !== "string") continue;
+            const toolCall = normalizeToolCall(parsed);
+            if (!toolCall || typeof toolCall.name !== "string") continue;
             const args = toolCall.arguments;
             const call = {
                 name: toolCall.name.trim(),

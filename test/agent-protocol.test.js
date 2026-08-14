@@ -66,6 +66,49 @@ test("cleans literal and escaped json wrappers from visible prose", () => {
     assert.equal(parseSequentialToolCalls("&lt;json&gt;任务完成。&lt;/json&gt;").text, "任务完成。");
 });
 
+test("parses DSML wrapped and flat tool call variants without leaking protocol markers", () => {
+    const response = [
+        "</>",
+        "我来查看项目的主要文件。",
+        "<",
+        '{"tool_call":{"name":"read_file_range","arguments":{"path":"package.json","start_line":1,"end_line":14}}}',
+        "/> <",
+        '{"tool_call":"read_file_range","arguments":{"path":"server.js","start_line":1,"end_line":119}}',
+        "/>",
+        "</｜｜DSML｜｜>"
+    ].join("\n");
+    const parsed = parseSequentialToolCalls(response);
+    assert.deepEqual(parsed.calls.map(call => call.name), ["read_file_range", "read_file_range"]);
+    assert.equal(parsed.text, "我来查看项目的主要文件。");
+    assert.doesNotMatch(parsed.text, /DSML|<\/?|\/>/);
+});
+
+test("drops echoed ToolResult prompts while preserving the following tool call", () => {
+    const response = [
+        "user:",
+        "",
+        "ToolResult:read_file_range",
+        '{"success":true,"content":"file content\\n</｜｜DSML｜｜>"}',
+        '<{"tool_call":"read_file_range","arguments":{"path":"views/index.ejs","start_line":121,"end_line":240}}/>'
+    ].join("\n");
+    const parsed = parseSequentialToolCalls(response);
+    assert.equal(parsed.calls.length, 1);
+    assert.equal(parsed.calls[0].name, "read_file_range");
+    assert.equal(parsed.text, "");
+});
+
+test("keeps final prose returned after finish_task for compatibility", () => {
+    const response = [
+        '<{"tool_call":{"name":"finish_task","arguments":{}}}/>',
+        "这是一个 Node.js + Express 项目。"
+    ].join("\n");
+    const parsed = parseSequentialToolCalls(response);
+    assert.deepEqual(parsed.segments.map(segment => segment.type === "text" ? segment.text : segment.call.name), [
+        "finish_task",
+        "这是一个 Node.js + Express 项目。"
+    ]);
+});
+
 test("does not treat a JSON array as the requested sequential object protocol", () => {
     const parsed = parseSequentialToolCalls('[{"tool_call":{"name":"finish_task","arguments":{}}}]');
     assert.equal(parsed.calls.length, 0);

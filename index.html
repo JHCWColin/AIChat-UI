@@ -3254,7 +3254,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 4</span>
+                            <span id="app-version">V7.0.0 Canary 5</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -4315,7 +4315,7 @@
             return String(contentValue || '');
         }
 
-        function buildResponsesInputFromMessages(messages) {
+        function buildResponsesInputFromMessages(messages, preserveMessageRoles = false) {
             const sourceMessages = Array.isArray(messages) ? messages : [];
             const firstSystemIndex = sourceMessages.findIndex(message => message?.role === 'system');
             const filteredMessages = sourceMessages.filter((_message, index) => index !== firstSystemIndex);
@@ -4326,7 +4326,7 @@
                 return false;
             });
 
-            if (!hasImageContent) {
+            if (!hasImageContent && !preserveMessageRoles) {
                 return filteredMessages
                     .map(message => {
                         const text = extractResponsesTextContent(message?.content).trim();
@@ -4375,13 +4375,17 @@
         }
 
         function buildRequestPayloadForEndpoint(basePayload, endpoint) {
-            if (endpoint !== '/responses') return basePayload;
-            const messages = Array.isArray(basePayload?.messages) ? basePayload.messages : [];
+            const {
+                __aiuiStructuredResponsesInput,
+                ...publicBasePayload
+            } = basePayload || {};
+            if (endpoint !== '/responses') return publicBasePayload;
+            const messages = Array.isArray(publicBasePayload?.messages) ? publicBasePayload.messages : [];
             const systemMessage = messages.find(message => message?.role === 'system');
-            const { messages: _, max_tokens, prompt_cache_key, cache_control, ...rest } = basePayload;
+            const { messages: _, max_tokens, prompt_cache_key, cache_control, ...rest } = publicBasePayload;
             const payload = {
                 ...rest,
-                input: buildResponsesInputFromMessages(messages),
+                input: buildResponsesInputFromMessages(messages, __aiuiStructuredResponsesInput === true),
                 ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {})
             };
             if (systemMessage) {
