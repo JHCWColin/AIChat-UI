@@ -102,14 +102,13 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
         return String(value || "")
             .replace(/```(?:json)?\s*```/gi, "")
             .replace(/^\s*```(?:json)?\s*/i, "")
-            .replace(/\s*```\s*$/i, "")
+            .replace(/\s*```(?:json)?\s*$/i, "")
             .trim();
     }
 
     function parseSequentialToolCalls(text) {
         const source = String(text || "");
-        const calls = [];
-        const ranges = [];
+        const parsedObjects = [];
         for (const candidate of scanJsonObjects(source)) {
             let parsed;
             try {
@@ -120,25 +119,30 @@ Ends the Agent Loop. It must be the last tool call in the response that complete
             const toolCall = parsed && parsed.tool_call;
             if (!toolCall || typeof toolCall !== "object" || typeof toolCall.name !== "string") continue;
             const args = toolCall.arguments;
-            calls.push({
+            const call = {
                 name: toolCall.name.trim(),
                 arguments: args && typeof args === "object" && !Array.isArray(args) ? args : {},
                 raw: candidate.raw
-            });
-            ranges.push([candidate.start, candidate.end]);
+            };
+            parsedObjects.push({ ...candidate, call });
         }
 
         let cursor = 0;
-        let remaining = "";
-        for (const [start, end] of ranges) {
-            remaining += source.slice(cursor, start);
-            cursor = end;
+        const segments = [];
+        for (const candidate of parsedObjects) {
+            const textSegment = cleanRemainingText(source.slice(cursor, candidate.start));
+            if (textSegment) segments.push({ type: "text", text: textSegment });
+            segments.push({ type: "tool_call", call: candidate.call });
+            cursor = candidate.end;
         }
-        remaining += source.slice(cursor);
+        const tail = cleanRemainingText(source.slice(cursor));
+        if (tail) segments.push({ type: "text", text: tail });
+        const calls = parsedObjects.map(candidate => candidate.call);
 
         return {
             calls,
-            text: cleanRemainingText(remaining),
+            segments,
+            text: segments.filter(segment => segment.type === "text").map(segment => segment.text).join("\n\n"),
             hasMalformedToolCall: calls.length === 0 && /"tool_call"\s*:/.test(source)
         };
     }

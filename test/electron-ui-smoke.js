@@ -11,7 +11,7 @@ const liveWindows = new Set();
 let server = null;
 let baseUrl = "";
 
-ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 1 · 2026-08-14\n\n- Smoke test");
+ipcMain.handle("app:get-update-log", async () => "## V7.0.0 Canary 3 · 2026-08-14\n\n- Smoke test");
 ipcMain.handle("agent:get-command-settings", async () => ({
     defaults: ["git status", "npm run test"],
     additions: ["git push"]
@@ -54,15 +54,37 @@ async function captureWindow(width, height, fileName, prepare) {
         hasAgentSettings: Boolean(document.getElementById('section-agent')),
         hasAgentDiffSetting: Boolean(document.getElementById('agent-diff-max-lines')),
         hasAgentTimeoutSetting: Boolean(document.getElementById('agent-shell-timeout-seconds')),
+        hasLegacyApprovalPrefixInput: Boolean(document.getElementById('agent-command-approval-prefix')),
         attachMenuClass: document.getElementById('attach-menu')?.className || '',
         settingsModalClass: document.getElementById('settings-modal')?.className || '',
         agentSettingsClass: document.getElementById('section-agent')?.className || '',
         commandModeVisible: document.getElementById('agent-command-mode-bar')?.classList.contains('visible') || false,
         workspaceText: document.getElementById('active-chat-workspace')?.textContent || '',
         canvasDisplay: getComputedStyle(document.getElementById('canvas-toggle-btn')).display,
+        inputTopRightRadius: getComputedStyle(document.querySelector('.input-area')).borderTopRightRadius,
         agentToolRows: document.querySelectorAll('.agent-tool-row-wrapper').length,
+        agentSegmentRows: document.querySelectorAll('.agent-segment-row').length,
         agentPreviewLines: document.querySelectorAll('.agent-tool-preview-line').length,
         agentToolCollapsed: document.querySelector('.agent-tool-row.collapsed') !== null,
+        agentToolIconSize: parseFloat(getComputedStyle(document.querySelector('.agent-tool-summary svg') || document.body).width),
+        agentToolFontSize: parseFloat(getComputedStyle(document.querySelector('.agent-tool-summary') || document.body).fontSize),
+        visibleHasToolJson: document.getElementById('messages-wrapper')?.innerText.includes('tool_call') || false,
+        agentShowsMilliseconds: document.getElementById('messages-wrapper')?.innerText.includes('1234毫秒') || false,
+        agentShowsChineseOutput: document.getElementById('messages-wrapper')?.innerText.includes('中文命令输出') || false,
+        agentCompletedTaskTurns: (() => getCompleteConversationTurns({
+            agentEnabled: true,
+            contextCompaction: { version: 1, summaries: [] },
+            messages: [
+                { role: 'user', content: '任务一' },
+                { role: 'assistant', content: '{"tool_call":{}}', hidden: true },
+                { role: 'tool', content: '{}' },
+                { role: 'assistant', content: '完成一', agentFinal: true },
+                { role: 'user', content: '任务二' },
+                { role: 'assistant', content: '{"tool_call":{}}', hidden: true },
+                { role: 'tool', content: '{}' },
+                { role: 'assistant', content: '完成二', agentFinal: true }
+            ]
+        }).length)(),
         bodyWidth: document.body.scrollWidth,
         viewportWidth: window.innerWidth
     })`);
@@ -120,6 +142,8 @@ app.whenReady().then(async () => {
             chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({ environment: chat.agentEnvironment });
             chat.messages = [
                 { role: "user", content: "检查 package.json" },
+                { role: "assistant", content: '先读取。\n{"tool_call":{"name":"read_file_range","arguments":{}}}', hidden: true, agentToolResponse: true },
+                { role: "assistant", content: "先读取文件。", agentDisplayOnly: true, agentSegment: true },
                 {
                     role: "tool",
                     name: "read_file_range",
@@ -130,6 +154,7 @@ app.whenReady().then(async () => {
                     content: "{}",
                     toolId: "smoke-tool"
                 },
+                { role: "assistant", content: "然后修改文件。", agentDisplayOnly: true, agentSegment: true },
                 {
                     role: "tool",
                     name: "edit_file",
@@ -145,6 +170,29 @@ app.whenReady().then(async () => {
                     },
                     content: "{}",
                     toolId: "smoke-edit"
+                },
+                { role: "assistant", content: "运行测试。", agentDisplayOnly: true, agentSegment: true },
+                {
+                    role: "tool",
+                    name: "run_shell",
+                    toolName: "run_shell",
+                    arguments: { command: "npm test" },
+                    status: "done",
+                    result: { success: true, stdout: "中文命令输出", stderr: "", exitCode: 0, durationMs: 1234, stdoutBytes: 18, stderrBytes: 0 },
+                    content: "{}",
+                    toolId: "smoke-shell",
+                    executionId: "smoke-shell-execution"
+                },
+                { role: "assistant", content: "任务完成。", agentDisplayOnly: true, agentFinal: true },
+                {
+                    role: "tool",
+                    name: "finish_task",
+                    toolName: "finish_task",
+                    arguments: {},
+                    status: "done",
+                    result: { success: true },
+                    content: "{}",
+                    toolId: "smoke-finish"
                 }
             ];
             updateAgentUIForChat(chat);
@@ -153,13 +201,16 @@ app.whenReady().then(async () => {
         });
         const result = { main, settings, active, consoleErrors };
         console.log(JSON.stringify(result, null, 2));
-        if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentTimeoutSetting) {
+        if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || main.state.hasLegacyApprovalPrefixInput || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentTimeoutSetting) {
             process.exitCode = 1;
         }
         if (main.state.bodyWidth > main.state.viewportWidth + 2 || settings.state.bodyWidth > settings.state.viewportWidth + 2) {
             process.exitCode = 1;
         }
-        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.agentToolRows !== 2 || active.state.agentPreviewLines !== 11 || !active.state.agentToolCollapsed) {
+        if (main.state.canvasDisplay !== "none" || main.state.inputTopRightRadius === "0px") {
+            process.exitCode = 1;
+        }
+        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
             process.exitCode = 1;
         }
     } catch (error) {

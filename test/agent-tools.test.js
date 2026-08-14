@@ -128,3 +128,18 @@ test("run_shell returns stdout, stderr, and exitCode without using an AI API", a
         assert.equal(typeof result.stderr, "string");
     });
 });
+
+test("run_shell preserves Chinese output as UTF-8", { skip: process.platform !== "win32" }, async () => {
+    await withWorkspace(async root => {
+        const runner = new AgentShellRunner();
+        const result = await runner.run({
+            executionId: "test-shell-utf8",
+            command: "Write-Output '中文命令输出'",
+            cwd: root,
+            timeoutMs: 10000
+        });
+        assert.equal(result.exitCode, 0);
+        assert.match(result.stdout, /中文命令输出/);
+        assert.doesNotMatch(result.stdout, /�/);
+    });
+});

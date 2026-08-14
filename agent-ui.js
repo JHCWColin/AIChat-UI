@@ -22,6 +22,8 @@
     let agentTaskChatId = null;
     let agentStopRequested = false;
     let agentApprovalResolver = null;
+    let agentApprovalRow = null;
+    let agentApprovalPrefix = "";
     let agentYoloResolver = null;
     let agentCommandMode = "safe";
     let agentToolSequence = 0;
@@ -138,10 +140,14 @@
         const modeSelect = document.getElementById("agent-command-mode-select");
         if (modeSelect) modeSelect.value = agentCommandMode;
         if (modeBar) modeBar.classList.toggle("visible", Boolean(chat?.agentEnabled));
+        document.body.classList.toggle("agent-mode", Boolean(chat?.agentEnabled));
         const title = document.getElementById("active-chat-title");
         if (title) title.classList.toggle("text-emerald-400", Boolean(chat?.agentEnabled));
         const canvasToggle = document.getElementById("canvas-toggle-btn");
-        if (canvasToggle) canvasToggle.style.display = chat?.agentEnabled ? "none" : "inline-flex";
+        if (canvasToggle) {
+            canvasToggle.style.removeProperty("display");
+            canvasToggle.classList.toggle("visible", Boolean(chat?.canvasEnabled && !chat?.agentEnabled));
+        }
         const input = document.getElementById("user-input");
         if (input) input.placeholder = chat?.agentEnabled ? "向 Agent 描述任务..." : "给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文";
         updateAttachMenuButtons();
@@ -250,29 +256,35 @@
     }
 
     function resolveAgentCommandApproval(decision) {
-        const container = document.getElementById("agent-command-approval");
-        if (container) container.classList.remove("visible");
+        const row = agentApprovalRow;
+        agentApprovalRow = null;
+        if (row) {
+            row.classList.add("leaving");
+            setTimeout(() => row.remove(), 160);
+        }
         const resolver = agentApprovalResolver;
         agentApprovalResolver = null;
         if (resolver) resolver(decision);
     }
 
     function requestAgentCommandApproval(command, suggestedPrefix) {
-        const container = document.getElementById("agent-command-approval");
-        const commandEl = document.getElementById("agent-command-approval-command");
-        const prefixEl = document.getElementById("agent-command-approval-prefix");
-        if (!container || !commandEl || !prefixEl) return Promise.resolve("reject");
+        const wrapper = document.getElementById("messages-wrapper");
+        if (!wrapper) return Promise.resolve("reject");
+        const row = document.createElement("div");
+        row.className = "chat-row agent-tool-row-wrapper agent-command-approval-row";
+        row.setAttribute("role", "alert");
+        row.setAttribute("aria-live", "assertive");
+        row.innerHTML = `<div class="agent-tool-row agent-command-approval-tool"><div class="agent-tool-summary"><i data-lucide="shield-alert"></i><span>Agent 请求运行非白名单命令</span></div><div class="agent-command-code"></div><div class="agent-command-actions"><button type="button" class="border border-gray-600 text-gray-300 hover:bg-gray-800" onclick="resolveAgentCommandApproval('reject')">拒绝</button><button type="button" class="border border-gray-600 text-gray-200 hover:bg-gray-800" onclick="resolveAgentCommandApproval('allow')">允许</button><button type="button" class="text-white" style="background:var(--accent-strong)" onclick="resolveAgentCommandApproval('always')">始终允许</button></div></div>`;
+        const commandEl = row.querySelector(".agent-command-code");
         commandEl.textContent = command;
-        prefixEl.value = suggestedPrefix || "";
-        container.classList.add("visible");
-        prefixEl.focus();
+        agentApprovalPrefix = String(suggestedPrefix || "").trim();
+        agentApprovalRow = row;
+        wrapper.appendChild(row);
+        lucide.createIcons();
+        wrapper.scrollTop = wrapper.scrollHeight;
         return new Promise(resolve => {
             agentApprovalResolver = resolve;
         });
-    }
-
-    function getAgentApprovalPrefix() {
-        return String(document.getElementById("agent-command-approval-prefix")?.value || "").trim();
     }
 
     function appendAgentThinkingRow(text = "Agent 正在规划下一步…") {
@@ -400,10 +412,10 @@
         if (name === "run_shell") {
             const progress = agentShellProgressByExecution.get(message.executionId) || {};
             const result = message.result || {};
-            const seconds = Math.max(0, Math.round(Number(progress.elapsedMs || result.durationMs || 0) / 1000));
+            const milliseconds = Math.max(0, Math.round(Number(progress.elapsedMs || result.durationMs || 0)));
             const bytes = Number(progress.stdoutBytes || 0) + Number(progress.stderrBytes || 0) || Number(result.stdoutBytes || 0) + Number(result.stderrBytes || 0);
-            if (status === "running") return `运行命令，${seconds}秒，${bytes}字节`;
-            return result.exitCode === 0 && !result.timedOut && !result.cancelled ? `运行命令完成，${seconds}秒，${bytes}字节（exitCode 0）` : `运行命令结束，${seconds}秒，${bytes}字节（exitCode ${result.exitCode ?? 1}）`;
+            if (status === "running") return `运行命令，${milliseconds}毫秒，${bytes}字节`;
+            return result.exitCode === 0 && !result.timedOut && !result.cancelled ? `运行命令完成，${milliseconds}毫秒，${bytes}字节（exitCode 0）` : `运行命令结束，${milliseconds}毫秒，${bytes}字节（exitCode ${result.exitCode ?? 1}）`;
         }
         if (name === "finish_task") return "任务完成";
         return status === "running" ? `执行 ${name}` : `${name} 已返回结果`;
@@ -458,6 +470,7 @@
             })
         }];
         for (const message of history) {
+            if (message?.agentDisplayOnly === true) continue;
             if (message?.role === "tool") {
                 const content = message.content || (message.contentRef ? await agentResultStore.get(message.contentRef) : "");
                 result.push({
@@ -547,6 +560,28 @@
         persistAgentChats();
     }
 
+    function appendAgentVisibleText(chat, text, model, reasoning = "", final = false) {
+        const content = String(text || "").trim();
+        if (!content) return null;
+        const message = {
+            role: "assistant",
+            content,
+            model,
+            reasoning: String(reasoning || ""),
+            agentDisplayOnly: true,
+            agentSegment: !final,
+            agentFinal: final
+        };
+        chat.messages.push(message);
+        appendMessageToUI("assistant", content, model, final, message.reasoning, [], [], "", {
+            agentFinal: final,
+            agentSegment: !final
+        });
+        chat.updatedAt = Date.now();
+        persistAgentChats();
+        return message;
+    }
+
     async function executeAgentToolCall(chat, call) {
         const message = {
             role: "tool",
@@ -574,7 +609,7 @@
                     if (decision === "reject") {
                         result = { success: false, rejected: true, error: `[${command}]被用户拒绝，尝试更换方法。` };
                     } else if (decision === "always") {
-                        const prefix = getAgentApprovalPrefix() || policy.suggestedPrefix;
+                        const prefix = agentApprovalPrefix || policy.suggestedPrefix;
                         if (prefix) await window.electronAPI.addAgentAllowedCommand(prefix);
                     }
                 }
@@ -648,12 +683,13 @@
         isGenerating = true;
         document.getElementById("send-btn")?.classList.add("hidden");
         document.getElementById("stop-btn")?.classList.remove("hidden");
-        const thinkingRow = appendAgentThinkingRow();
+        let thinkingRow = appendAgentThinkingRow();
         let invalidResponses = 0;
         try {
             while (!agentStopRequested) {
-                if (thinkingRow && !thinkingRow.isConnected) break;
                 const result = await requestAgentModel(chat, model);
+                if (thinkingRow?.isConnected) thinkingRow.remove();
+                thinkingRow = null;
                 if (agentStopRequested) break;
                 const parsed = AgentProtocol.parseSequentialToolCalls(result.text);
                 if (parsed.calls.length > MAX_TOOL_CALLS_PER_RESPONSE) {
@@ -664,15 +700,26 @@
                     invalidResponses += 1;
                     if (invalidResponses >= 3) {
                         const responseText = parsed.text || "模型连续返回空回复。";
-                        chat.messages.push({ role: "assistant", content: `${responseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, agentFinal: true });
+                        appendAgentVisibleText(chat, `${responseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, result.reasoning || "", true);
                         break;
                     }
                     await requestAgentProtocolCorrection(chat, model, result.text);
+                    thinkingRow = appendAgentThinkingRow();
                     continue;
                 }
                 invalidResponses = 0;
                 appendAgentHiddenAssistant(chat, result.text, model, result.reasoning);
-                for (const call of parsed.calls) {
+                let finalTextAdded = false;
+                for (let index = 0; index < parsed.segments.length; index += 1) {
+                    const segment = parsed.segments[index];
+                    if (segment.type === "text") {
+                        const nextSegment = parsed.segments[index + 1];
+                        const isFinalText = nextSegment?.type === "tool_call" && nextSegment.call?.name === "finish_task";
+                        appendAgentVisibleText(chat, segment.text, model, result.reasoning || "", isFinalText);
+                        if (isFinalText) finalTextAdded = true;
+                        continue;
+                    }
+                    const call = segment.call;
                     if (call.name === "finish_task") {
                         const finishMessage = {
                             role: "tool",
@@ -687,8 +734,7 @@
                         chat.messages.push(finishMessage);
                         appendAgentToolMessageToUI(finishMessage);
                         await persistAgentToolMessage(chat, finishMessage);
-                        const finalText = parsed.text || "任务已完成。";
-                        chat.messages.push({ role: "assistant", content: finalText, model, reasoning: result.reasoning || "", agentFinal: true });
+                        if (!finalTextAdded) appendAgentVisibleText(chat, "任务已完成。", model, result.reasoning || "", true);
                         chat.updatedAt = Date.now();
                         persistAgentChats();
                         renderChatHistory();
@@ -698,6 +744,7 @@
                     if (!(await executeAgentToolCall(chat, call))) return;
                     if (agentStopRequested) return;
                 }
+                thinkingRow = appendAgentThinkingRow();
             }
             if (agentStopRequested) {
                 chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentFinal: true });

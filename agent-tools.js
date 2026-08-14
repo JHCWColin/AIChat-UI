@@ -390,8 +390,9 @@ class AgentShellRunner {
         const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : DEFAULT_SHELL_TIMEOUT_MS;
         const maxOutputBytes = Number(options.maxOutputBytes) > 0 ? Number(options.maxOutputBytes) : DEFAULT_MAX_OUTPUT_BYTES;
         const shellCommand = process.platform === "win32" ? "powershell.exe" : (process.env.SHELL || "/bin/sh");
+        const windowsCommand = `$agentUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $agentUtf8; [Console]::OutputEncoding = $agentUtf8; $OutputEncoding = $agentUtf8; ${command}`;
         const shellArgs = process.platform === "win32"
-            ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command]
+            ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsCommand]
             : ["-lc", command];
 
         return new Promise((resolve, reject) => {

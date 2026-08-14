@@ -24,6 +24,27 @@ test("keeps final prose and removes finish_task JSON", () => {
     assert.equal(parsed.text, "修改完成，构建已通过。");
 });
 
+test("keeps mixed prose and tool calls in their original order", () => {
+    const response = [
+        "先读取文件。",
+        '{"tool_call":{"name":"read_file_range","arguments":{"path":"a.js","start_line":1,"end_line":20}}}',
+        "然后修改唯一匹配。",
+        '{"tool_call":{"name":"edit_file","arguments":{"path":"a.js","old_text":"x","new_text":"y"}}}',
+        "修改完成。",
+        '{"tool_call":{"name":"finish_task","arguments":{}}}'
+    ].join("\n");
+    const parsed = parseSequentialToolCalls(response);
+    assert.deepEqual(parsed.segments.map(segment => segment.type === "text" ? segment.text : segment.call.name), [
+        "先读取文件。",
+        "read_file_range",
+        "然后修改唯一匹配。",
+        "edit_file",
+        "修改完成。",
+        "finish_task"
+    ]);
+    assert.doesNotMatch(parsed.text, /tool_call/);
+});
+
 test("does not treat a JSON array as the requested sequential object protocol", () => {
     const parsed = parseSequentialToolCalls('[{"tool_call":{"name":"finish_task","arguments":{}}}]');
     assert.equal(parsed.calls.length, 0);

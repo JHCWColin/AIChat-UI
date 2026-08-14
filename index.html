@@ -575,6 +575,10 @@
             border-top-left-radius: 0;
         }
 
+        body.agent-mode .input-area {
+            border-top-right-radius: 0;
+        }
+
         pre {
             padding: 1rem;
             border-radius: 0.75rem;
@@ -2147,26 +2151,13 @@
             color: #374151;
         }
 
-        #agent-command-approval {
-            display: none;
-            width: 100%;
-            margin-bottom: 8px;
-            border-left: 3px solid var(--accent-primary);
-            background: rgba(var(--accent-rgb), 0.08);
-            padding: 10px 12px;
-        }
-
-        #agent-command-approval.visible {
-            display: block;
-        }
-
         .agent-command-code {
             max-height: 120px;
             overflow: auto;
             margin-top: 6px;
             color: #d1d5db;
             font-family: Consolas, monospace;
-            font-size: 11px;
+            font-size: 0.75em;
             line-height: 1.5;
             white-space: pre-wrap;
             word-break: break-word;
@@ -2174,25 +2165,6 @@
 
         body.theme-light .agent-command-code {
             color: #374151;
-        }
-
-        .agent-command-prefix {
-            width: 100%;
-            margin-top: 8px;
-            border: 1px solid #4b5563;
-            border-radius: 5px;
-            background: #111827;
-            color: #e5e7eb;
-            padding: 6px 8px;
-            font-family: Consolas, monospace;
-            font-size: 11px;
-            outline: none;
-        }
-
-        body.theme-light .agent-command-prefix {
-            border-color: #d1d5db;
-            background: #ffffff;
-            color: #1f2937;
         }
 
         .agent-command-actions {
@@ -2209,6 +2181,19 @@
             font-size: 12px;
         }
 
+        .agent-command-approval-row {
+            transition: opacity 0.16s ease, transform 0.16s ease;
+        }
+
+        .agent-command-approval-row.leaving {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+
+        .agent-command-approval-tool {
+            background: rgba(var(--accent-rgb), 0.06);
+        }
+
         .agent-tool-row {
             width: 100%;
             border-left: 3px solid var(--accent-primary);
@@ -2217,6 +2202,11 @@
         }
 
         .agent-tool-row-wrapper + .agent-tool-row-wrapper {
+            margin-top: 0.75rem !important;
+        }
+
+        .agent-segment-row + .agent-tool-row-wrapper,
+        .agent-tool-row-wrapper + .agent-segment-row {
             margin-top: 0.75rem !important;
         }
 
@@ -2245,8 +2235,8 @@
         }
 
         .agent-tool-summary svg {
-            width: 15px;
-            height: 15px;
+            width: 1em;
+            height: 1em;
             flex: 0 0 auto;
             color: var(--accent-primary);
         }
@@ -2419,21 +2409,6 @@
                 <footer id="input-footer" class="p-4 md:pb-8 w-full">
                     <div class="max-w-[1000px] mx-auto relative flex flex-col items-start">
                         <div id="attachments-preview" class="w-full"></div>
-                        <div id="agent-command-approval" role="alert" aria-live="assertive">
-                            <div class="text-xs font-medium text-gray-300">Agent 请求执行非白名单命令</div>
-                            <div id="agent-command-approval-command" class="agent-command-code"></div>
-                            <input id="agent-command-approval-prefix" class="agent-command-prefix" type="text"
-                                aria-label="始终允许的命令前缀" placeholder="始终允许的命令前缀">
-                            <div class="agent-command-actions">
-                                <button type="button" class="border border-gray-600 text-gray-300 hover:bg-gray-800"
-                                    onclick="resolveAgentCommandApproval('reject')">拒绝</button>
-                                <button type="button" class="border border-gray-600 text-gray-200 hover:bg-gray-800"
-                                    onclick="resolveAgentCommandApproval('allow')">允许</button>
-                                <button type="button" class="text-white"
-                                    style="background:var(--accent-strong)"
-                                    onclick="resolveAgentCommandApproval('always')">始终允许</button>
-                            </div>
-                        </div>
                         <div id="image-detail-container" class="flex items-center gap-2 mb-1.5 w-full">
                             <span
                                 class="text-[11px] text-gray-400 font-medium whitespace-nowrap select-none">图片精细度</span>
@@ -3274,7 +3249,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 2</span>
+                            <span id="app-version">V7.0.0 Canary 3</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -5509,7 +5484,8 @@
                 const isLast = idx === messages.length - 1;
                 appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
                     .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
-                        agentFinal: msg.agentFinal === true
+                        agentFinal: msg.agentFinal === true,
+                        agentSegment: msg.agentSegment === true
                     });
             });
             wrapper.scrollTop = wrapper.scrollHeight;
@@ -5521,9 +5497,10 @@
             const isAI = role === 'assistant';
             const row = document.createElement('div');
             row.className = `chat-row`;
+            if (messageOptions.agentSegment) row.classList.add('agent-segment-row');
             const contentCol = document.createElement('div');
             contentCol.className = `flex flex-col w-full`;
-            if (isAI) {
+            if (isAI && !messageOptions.agentSegment) {
                 const thinkingDiv = document.createElement('div');
                 thinkingDiv.className = 'thinking-text text-gray-400 text-xs mb-1';
                 if (reasoning) {
@@ -5601,7 +5578,7 @@
                 bubble.appendChild(imgDiv);
             }
             contentCol.appendChild(bubble);
-            if (isAI) {
+            if (isAI && !messageOptions.agentSegment) {
                 const footer = document.createElement('div');
                 footer.className = "flex items-center gap-2 mt-1.5 px-4 w-full flex-wrap";
                 const modelSpan = document.createElement('span');
