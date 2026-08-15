@@ -36,6 +36,11 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
+### V7.0.0 Canary 9
+- 修复 Responses API 的 assistant 内容格式。
+- 支持 JSON 字符串二次解码。
+- 支持 arguments 双层字符串。
+
 ### V7.0.0 Canary 8
 
 - 新增 Tool Call Normalizer 统一解析层，提升不同模型与 API 服务商之间的工具调用兼容性。

@@ -24,6 +24,10 @@
             try {
                 const parsed = JSON.parse(candidate);
                 if (isRecord(parsed)) return parsed;
+                if (typeof parsed === "string" && parsed !== candidate) {
+                    const nested = parseArguments(parsed);
+                    if (isRecord(nested) && Object.keys(nested).length) return nested;
+                }
             } catch (_) { /* try the next candidate */ }
         }
         return {};
@@ -240,6 +244,12 @@
 
     function parseText(text) {
         const source = String(text || "");
+        if (/^\s*"(?:\\.|[^"\\])*"\s*$/.test(source)) {
+            try {
+                const decoded = JSON.parse(source);
+                if (typeof decoded === "string" && decoded !== source) return parseText(decoded);
+            } catch (_) { /* continue with the original text */ }
+        }
         const found = [];
         const add = (call, start, end) => { if (call) found.push({ call, start, end }); };
 

@@ -48,12 +48,18 @@ test("normalizes Gemini functionCall including candidates content parts", () => 
 test("normalizes generic JSON variants and string arguments", () => {
     assert.deepEqual(normalizeToolCalls({ tool: "read_file", args: { path: "test.txt" } }), [expected]);
     assert.deepEqual(normalizeToolCalls({ name: "read_file", arguments: '{"path":"test.txt"}' }), [expected]);
+    assert.deepEqual(normalizeToolCalls({ name: "read_file", arguments: JSON.stringify({ path: "test.txt" }) }), [expected]);
 });
 
 test("extracts JSON tool calls from prose and Markdown fences", () => {
     const parsed = parseAgentResponse('I will read it.\n```json\n{"name":"read_file","arguments":{"path":"test.txt"}}\n```');
     assert.deepEqual(parsed.calls, [expected]);
     assert.equal(parsed.text, "I will read it.");
+});
+
+test("decodes a JSON tool call returned as a JSON string", () => {
+    const encoded = JSON.stringify(JSON.stringify({ tool_call: { name: "read_file", arguments: { path: "test.txt" } } }));
+    assert.deepEqual(parseAgentResponse(encoded).calls, [expected]);
 });
 
 test("normalizes XML and Action style agent output", () => {

@@ -3352,7 +3352,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 8</span>
+                            <span id="app-version">V7.0.0 Canary 9</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -4437,8 +4437,10 @@
             }
 
             return filteredMessages.map(message => {
+                const messageRole = message?.role === 'assistant' ? 'assistant' : 'user';
+                const textPartType = messageRole === 'assistant' ? 'output_text' : 'input_text';
                 const content = (() => {
-                    if (typeof message?.content === 'string') return [{ type: 'input_text', text: message.content }];
+                    if (typeof message?.content === 'string') return [{ type: textPartType, text: message.content }];
                     if (Array.isArray(message?.content)) {
                         return message.content.map(part => {
                             if (part?.type === 'image_url') {
@@ -4453,20 +4455,20 @@
                             if (part?.type === 'input_image' || part?.type === 'input_file') return part;
                             if (part?.type === 'text' && typeof part?.text === 'string') {
                                 return {
-                                    type: 'input_text',
+                                    type: textPartType,
                                     text: part.text
                                 };
                             }
                             return {
-                                type: 'input_text',
+                                type: textPartType,
                                 text: part?.text || ''
                             };
                         });
                     }
-                    return [{ type: 'input_text', text: String(message?.content || '') }];
+                    return [{ type: textPartType, text: String(message?.content || '') }];
                 })();
                 return {
-                    role: message?.role === 'assistant' ? 'assistant' : 'user',
+                    role: messageRole,
                     content
                 };
             });

@@ -336,7 +336,7 @@
     function appendAgentThinkingRow(text = "Agent 正在考虑下一步决策", options = {}) {
         const wrapper = document.getElementById("messages-wrapper");
         const row = document.createElement("div");
-        row.className = "chat-row agent-thinking-row";
+        row.className = "chat-row agent-tool-row-wrapper agent-thinking-row";
         const running = options.running !== false;
         row.innerHTML = `<div class="agent-tool-row${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="bot"></i><span class="agent-tool-summary-text">${escapeHtml(text)}</span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"><div class="thinking-text"></div></div></div></div>`;
         const toolRow = row.querySelector(".agent-tool-row");
