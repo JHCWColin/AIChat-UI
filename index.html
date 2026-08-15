@@ -3352,7 +3352,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 9</span>
+                            <span id="app-version">V7.0.0 Canary 10</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -3469,6 +3469,18 @@
 
         function getAPIKey() {
             return localStorage.getItem('api_key') || DEFAULT_API_KEY;
+        }
+
+        function getPromptCacheKeyForChat(chat = null) {
+            const configured = String(localStorage.getItem('prompt_cache_key') || '').trim();
+            if (configured) return configured;
+            if (!chat || !chat.id) return '';
+            const current = String(chat.promptCacheKey || '').trim();
+            if (current) return current;
+            const generated = `aiui-session-${String(chat.id)}`;
+            chat.promptCacheKey = generated;
+            if (Array.isArray(chats)) localStorage.setItem('ai_chats', JSON.stringify(chats));
+            return generated;
         }
 
         function getBaseURL() {
@@ -4486,7 +4498,8 @@
             const payload = {
                 ...rest,
                 input: buildResponsesInputFromMessages(messages, __aiuiStructuredResponsesInput === true),
-                ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {})
+                ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {}),
+                ...(prompt_cache_key ? { prompt_cache_key } : {})
             };
             if (systemMessage) {
                 const systemText = extractResponsesTextContent(systemMessage.content);
@@ -7837,7 +7850,13 @@
             processedReplaceCount = 0;
             sessionReplaceBlocks = [];
             streamBytesReceived = 0;
-            const systemWithMem = systemPrompt || "";
+            const systemWithMem = typeof chat.promptPrefix === 'string'
+                ? chat.promptPrefix
+                : (systemPrompt || '');
+            if (typeof chat.promptPrefix !== 'string') {
+                chat.promptPrefix = systemWithMem;
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+            }
             try {
                 const chatMessagesCopy = chat.messages.slice();
                 if (sendAttachments.length > 0 && chatMessagesCopy.length > 0) {
@@ -7864,7 +7883,7 @@
                 }
                 const preferredEndpoint = getRequestEndpoint();
                 let endpoint = preferredEndpoint;
-                const promptCacheKey = String(localStorage.getItem('prompt_cache_key') || '').trim();
+                const promptCacheKey = getPromptCacheKeyForChat(chat);
                 const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
                 appendLog('debug', '开始请求 AI 接口');
                 appendLog('trace', `AI 请求 URL: ${getBaseURL()}${endpoint}`);

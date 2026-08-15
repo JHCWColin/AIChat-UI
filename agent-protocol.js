@@ -7,6 +7,8 @@
 
 You can call local tools by returning one or more consecutive standalone JSON objects. Do not wrap tool calls in Markdown fences and do not return a JSON array.
 
+严格按照工具定义来调用，你现在不身处于你的官方cli环境！
+
 read_file_range
 Arguments: {"path":"string","start_line":number,"end_line":number}
 Reads an inclusive 1-based line range from a UTF-8 text file inside the bound workspace.

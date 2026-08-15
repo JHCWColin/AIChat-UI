@@ -188,9 +188,13 @@
             chat.agentWorkspace = binding.path;
             chat.agentEnvironment = binding.environment || "";
             chat.agentSystemPrompt = systemPrompt || "";
+            chat.agentSessionStartedAt = Date.now();
             chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({
                 systemPrompt: chat.agentSystemPrompt,
-                environment: chat.agentEnvironment
+                environment: [
+                    chat.agentEnvironment,
+                    `Session started: ${AgentProtocol.formatCurrentTime(new Date(chat.agentSessionStartedAt))}`
+                ].filter(Boolean).join("\n")
             });
             chat.agentWorkspaceAvailable = true;
             chat.updatedAt = Date.now();
@@ -211,9 +215,13 @@
             if (binding?.path) chat.agentWorkspace = binding.path;
             if (!chat.agentEnvironment && binding?.environment) chat.agentEnvironment = binding.environment;
             if (!chat.agentFixedPrompt && chat.agentEnvironment) {
+                chat.agentSessionStartedAt = chat.agentSessionStartedAt || Date.now();
                 chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({
                     systemPrompt: chat.agentSystemPrompt || systemPrompt,
-                    environment: chat.agentEnvironment
+                    environment: [
+                        chat.agentEnvironment,
+                        `Session started: ${AgentProtocol.formatCurrentTime(new Date(chat.agentSessionStartedAt))}`
+                    ].filter(Boolean).join("\n")
                 });
             }
             setActiveChatTitle(chat);
@@ -619,12 +627,25 @@
         const latestUser = [...(chat.messages || [])].reverse().find(message => message?.role === "user" && message.hidden !== true);
         const compacted = buildCompactedChatMessages(chat);
         const history = compacted.filter(message => message !== latestUser);
+        if (!chat.agentFixedPrompt) {
+            chat.agentSessionStartedAt = chat.agentSessionStartedAt || Date.now();
+            chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({
+                systemPrompt: chat.agentSystemPrompt || systemPrompt,
+                environment: [
+                    chat.agentEnvironment || chat.agentWorkspace || "",
+                    `Session started: ${AgentProtocol.formatCurrentTime(new Date(chat.agentSessionStartedAt))}`
+                ].filter(Boolean).join("\n")
+            });
+            persistAgentChats();
+        }
+        const requiredToolInstruction = "严格按照工具定义来调用，你现在不身处于你的官方cli环境！";
+        if (!chat.agentFixedPrompt.includes(requiredToolInstruction)) {
+            chat.agentFixedPrompt = `${chat.agentFixedPrompt}\n\n${requiredToolInstruction}`;
+            persistAgentChats();
+        }
         const result = [{
             role: "system",
-            content: chat.agentFixedPrompt || AgentProtocol.buildFixedAgentPrompt({
-                systemPrompt: chat.agentSystemPrompt || systemPrompt,
-                environment: chat.agentEnvironment || chat.agentWorkspace || ""
-            })
+            content: chat.agentFixedPrompt
         }];
         for (const message of history) {
             if (message?.agentDisplayOnly === true) continue;
@@ -638,14 +659,15 @@
                 result.push(await buildSingleApiMessage(message, chat, false));
             }
         }
-        result.push({ role: "user", content: AgentProtocol.formatCurrentTime() });
         if (latestUser) result.push(await buildSingleApiMessage(latestUser, chat, true));
         return result;
     }
 
     async function requestAgentModel(chat, model, options = {}) {
         const messages = await buildAgentMessages(chat);
-        const promptCacheKey = String(localStorage.getItem("prompt_cache_key") || "").trim();
+        const promptCacheKey = typeof getPromptCacheKeyForChat === "function"
+            ? getPromptCacheKeyForChat(chat)
+            : String(localStorage.getItem("prompt_cache_key") || "").trim();
         const cacheControl = String(localStorage.getItem("cache_control") || "").trim();
         const basePayload = {
             model,

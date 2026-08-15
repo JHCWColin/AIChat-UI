@@ -171,7 +171,7 @@
 |---|---|---|
 | 2–18 | `extractText(value)` | 统一提取纯文本：兼容 string / 数组（取 `part.text` / `part.output_text`）/ 对象（`text` / `output_text` / `content`） |
 | 20–45 | `buildResponsesInput(messages)` | 把消息数组转成 `/responses` 的 `input`：**无图片** → 拼成 `user:` / `assistant:` 纯文本；**有图片** → 逐 part 转成 `input_text` / `input_image` / `input_file` |
-| 47–60 | `buildPayload(basePayload, endpoint)` | 端点适配：非 `/responses` 原样透传；是 `/responses` 则拆解 `system`→`instructions`、`messages`→`input`、`max_tokens`→`max_output_tokens`，并丢掉 `prompt_cache_key`/`cache_control` |
+| 47–60 | `buildPayload(basePayload, endpoint)` | 端点适配：非 `/responses` 原样透传；是 `/responses` 则拆解 `system`→`instructions`、`messages`→`input`、`max_tokens`→`max_output_tokens`，保留 `prompt_cache_key`，不发送不兼容的顶层 `cache_control` |
 | 62–73 | `extractResponsesOutput(payload)` | 从 `/responses` 完整响应抽最终文本：优先 `output_text`，否则遍历 `output[]` 里 `message`/`assistant` 项的 `content` |
 | 75–93 | `extractUpdate(payload, endpoint)` | 单个 SSE 事件 → `{delta?, snapshot?}`：区分 `/chat/completions` 的 `choices[].delta/message` 与 `/responses` 的 `response.*` 事件类型 |
 | 95–103 | `mergeText(current, delta, snapshot)` | 增量/快照合并：`delta` 追加、`snapshot` 去重与回退（用 `startsWith` 判定完整文本） |

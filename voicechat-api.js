@@ -28,20 +28,24 @@
                 return `${message?.role === 'assistant' ? 'assistant' : 'user'}: ${text}`;
             }).filter(Boolean).join('\n\n');
         }
-        return filtered.map(message => ({
-            role: message?.role === 'assistant' ? 'assistant' : 'user',
-            content: (Array.isArray(message?.content) ? message.content : [{ type: 'text', text: String(message?.content || '') }])
-                .map(part => {
-                    if (part?.type === 'image_url') {
-                        return {
-                            type: 'input_image',
-                            image_url: typeof part.image_url === 'string' ? part.image_url : (part.image_url?.url || '')
-                        };
-                    }
-                    if (part?.type === 'input_image' || part?.type === 'input_file') return part;
-                    return { type: 'input_text', text: extractText(part) };
-                })
-        }));
+        return filtered.map(message => {
+            const role = message?.role === 'assistant' ? 'assistant' : 'user';
+            const textType = role === 'assistant' ? 'output_text' : 'input_text';
+            return {
+                role,
+                content: (Array.isArray(message?.content) ? message.content : [{ type: 'text', text: String(message?.content || '') }])
+                    .map(part => {
+                        if (part?.type === 'image_url') {
+                            return {
+                                type: 'input_image',
+                                image_url: typeof part.image_url === 'string' ? part.image_url : (part.image_url?.url || '')
+                            };
+                        }
+                        if (part?.type === 'input_image' || part?.type === 'input_file') return part;
+                        return { type: textType, text: extractText(part) };
+                    })
+            };
+        });
     }
 
     function buildPayload(basePayload, endpoint) {
@@ -55,7 +59,8 @@
             ...(systemMessage && extractText(systemMessage.content).trim()
                 ? { instructions: extractText(systemMessage.content) }
                 : {}),
-            ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {})
+            ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {}),
+            ...(prompt_cache_key ? { prompt_cache_key } : {})
         };
     }
 

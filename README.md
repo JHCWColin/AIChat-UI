@@ -36,6 +36,15 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
+### V7.0.0 Canary 10
+- Agent 固定提示词现在在会话创建时生成并持久化，包含稳定的会话开始时间。
+- 删除每轮请求中插入的动态时间消息，避免第二次提问时改变已有前缀。
+- 已存在的旧 Agent 会话会在下一次请求时补入该约束，之后保持不变。
+- 普通聊天也会保存会话级 promptPrefix，后续只追加历史消息。
+- 每个会话生成稳定的 prompt_cache_key，不同会话不会共用。
+- /responses 端点现在保留 prompt_cache_key。
+
+
 ### V7.0.0 Canary 9
 - 修复 Responses API 的 assistant 内容格式。
 - 支持 JSON 字符串二次解码。
