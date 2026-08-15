@@ -683,7 +683,11 @@
             const update = extractStreamingUpdate(payload, endpoint);
             const reasoning = String(update.reasoningSnapshot || update.reasoningDelta || "");
             if (reasoning && typeof options.onReasoning === "function") options.onReasoning(reasoning);
-            return { text: extractNonStreamingResponseText(payload, endpoint), reasoning };
+            return {
+                text: extractNonStreamingResponseText(payload, endpoint),
+                reasoning,
+                toolCalls: ToolCallNormalizer.normalizeToolCalls(payload)
+            };
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -691,6 +695,7 @@
         const traceStream = developerModeEnabled && logLevel === "trace";
         let fullText = "";
         let reasoningText = "";
+        const responsePayloads = [];
         let sseBuffer = "";
         let sawSSE = false;
         let streamBytesReceived = 0;
@@ -702,6 +707,7 @@
             if (event.data === "[DONE]") return;
             const payload = JSON.parse(event.data);
             const normalizedPayload = !payload.type && event.eventType ? { ...payload, type: event.eventType } : payload;
+            responsePayloads.push(normalizedPayload);
             const sequence = normalizedPayload.sequence_number;
             const eventKey = event.eventId || (sequence !== undefined && sequence !== null
                 ? `${normalizedPayload.type || endpoint}:${sequence}`
@@ -748,6 +754,7 @@
             if (/^(?:event:|data:|id:)/m.test(sseBuffer)) consume(sseBuffer);
             else if (!sawSSE) {
                 const payload = JSON.parse(sseBuffer.trim());
+                responsePayloads.push(payload);
                 fullText = mergeStreamingText(fullText, "", extractNonStreamingResponseText(payload, endpoint));
                 const update = extractStreamingUpdate(payload, endpoint);
                 reasoningText = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
@@ -759,7 +766,11 @@
             hideVoiceNotification();
             showVoiceNotification(`Agent 流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
         }
-        return { text: fullText, reasoning: reasoningText };
+        return {
+            text: fullText,
+            reasoning: reasoningText,
+            toolCalls: ToolCallNormalizer.normalizeToolCalls(responsePayloads)
+        };
     }
 
     function appendAgentHiddenAssistant(chat, rawText, model, reasoning, options = {}) {
@@ -928,7 +939,7 @@
                 completeAgentThinking(chat, model, thinkingRow, result);
                 thinkingRow = null;
                 if (agentStopRequested) break;
-                const parsed = AgentProtocol.parseSequentialToolCalls(result.text);
+                const parsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls);
                 if (parsed.calls.length > MAX_TOOL_CALLS_PER_RESPONSE) {
                     throw new Error(`单次模型回复包含 ${parsed.calls.length} 个工具调用，超过 30 个上限，Agent 已终止`);
                 }

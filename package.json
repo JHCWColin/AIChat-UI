@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win portable nsis",
-    "test": "node --test test/agent-protocol.test.js test/agent-tools.test.js"
+    "test": "node --test test/agent-protocol.test.js test/agent-tools.test.js test/tool-call-normalizer.test.js"
   },
   "devDependencies": {
     "electron": "^36.9.5",
