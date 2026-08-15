@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_7-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_8-blue)]()
 
 </div>
 
@@ -35,6 +35,17 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V7.0.0 Canary 8
+
+- 新增 Tool Call Normalizer 统一解析层，提升不同模型与 API 服务商之间的工具调用兼容性。
+- 支持自动识别 OpenAI Chat Completions、OpenAI Responses、Claude Tool Use、Gemini Function Calling 等主流工具调用格式。
+- 新增对通用 JSON Tool Call、XML <tool_call> 以及 Action / Action Input 风格输出的兼容处理。
+- 优化工具调用解析流程，降低因返回格式差异导致的 Agent 执行失败问题。
+- 重构 Agent 工具调用数据流，统一工具调用结构后再进入执行阶段。
+- 新增多种异常返回格式的容错处理能力。
+- 优化流式工具调用参数拼接逻辑，提高复杂工具调用场景下的稳定性。
+- 提升第三方兼容接口与中转服务环境下的 Agent 可用性。
 
 ### V7.0.0 Canary 7
 

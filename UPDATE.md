@@ -11,6 +11,17 @@
 不要在版本标题与下一版本标题之间加入其他级别的标题，也不要省略版本正文；关于页会按此格式自动解析展示。
 -->
 
+## V7.0.0 Canary 8 · 2026-08-15
+
+- 新增 Tool Call Normalizer 统一解析层，提升不同模型与 API 服务商之间的工具调用兼容性。
+- 支持自动识别 OpenAI Chat Completions、OpenAI Responses、Claude Tool Use、Gemini Function Calling 等主流工具调用格式。
+- 新增对通用 JSON Tool Call、XML <tool_call> 以及 Action / Action Input 风格输出的兼容处理。
+- 优化工具调用解析流程，降低因返回格式差异导致的 Agent 执行失败问题。
+- 重构 Agent 工具调用数据流，统一工具调用结构后再进入执行阶段。
+- 新增多种异常返回格式的容错处理能力。
+- 优化流式工具调用参数拼接逻辑，提高复杂工具调用场景下的稳定性。
+- 提升第三方兼容接口与中转服务环境下的 Agent 可用性。
+
 ## V7.0.0 Canary 7 · 2026-08-15
 
 - 运行中的 AI/Agent 状态改为文字扫描高光，移除整块提示区域的背景与阴影辉光。
