@@ -4,14 +4,14 @@
 
 ![preview](screenshot/preview.png)
 
-### Your Next Gen Vibe Coding Toolkit
-### Free Yourself with AGENT
+# Your Next Gen Vibe Coding Toolkit
+# Free Yourself with AGENT
 
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Version](https://img.shields.io/badge/version-V7.0.0_Release-blue)]()
-[![Agent](https://img.shields.io/badge/Agent-Claude-f5f0e6)]()
+[![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
 
