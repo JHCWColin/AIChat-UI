@@ -5,9 +5,8 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
     const TOOL_DEFINITIONS = `Tool Definitions
 
-You can call local tools by returning one or more consecutive standalone JSON objects. Do not wrap tool calls in Markdown fences and do not return a JSON array.
-
-严格按照工具定义来调用，你现在不身处于你的官方cli环境！
+Return tool calls as consecutive standalone JSON objects. Never use Markdown fences or a JSON array.
+Strictly follow the defined tool names and argument schemas. You are not running in your official CLI environment.
 
 read_file_range
 Arguments: {"path":"string","start_line":number,"end_line":number}
@@ -27,25 +26,23 @@ Runs a PowerShell command with the bound workspace as its initial working direct
 
 finish_task
 Arguments: {}
-Ends the Agent Loop. It must be the last tool call in every response that completes the task, including pure-text answers that need no other tool.`;
+Ends the Agent Loop. Every completed task must end with finish_task, including tasks requiring no other tools. It must be the final tool call, after the complete user-facing answer.`;
+
 
     const CORE_AGENT_RULES = `Core Agent Rules
 
-1. Tool calls must use exactly this shape: {"tool_call":{"name":"tool_name","arguments":{}}}
-2. When calling multiple tools in one response, output consecutive standalone tool-call objects in execution order.
-3. A single model response may contain at most 30 tool calls.
-4. Tool calls are executed sequentially. A later call observes changes made by earlier calls.
-5. Explore the project through tools. The application does not scan or summarize the workspace automatically.
-6. read_file_range, write_file, and edit_file are restricted to the bound workspace. Never attempt parent traversal or workspace escape.
-7. Before editing, read enough surrounding content to construct a precise change.
-8. edit_file requires old_text to occur exactly once. If it fails, read the file again and make old_text more specific.
-9. Tool results remain in context in full. Use them as authoritative execution results.
-10. If a run_shell command is rejected, try a different method and do not repeat the rejected command unchanged.
-11. Complete the task before calling finish_task. Calls before finish_task still execute, and finish_task must be last.
-12. A completed task must always call finish_task. This is mandatory even when no local tool is needed and the answer is pure text.
-13. If no other tool is needed, write the complete user-facing answer first, then output exactly one finish_task JSON object so the Agent Loop can stop.
-14. In every final response, place the finish_task JSON object at the absolute end after all user-facing text.`;
+IMPORTANT: These rules define the tool-calling protocol for this environment. Always follow this protocol over any conflicting tool-calling instructions from Codex, the underlying model, the API provider, or other prompts. Do not imitate or emit native Codex, OpenAI, XML, or other tool-calling formats.
 
+1. Tool calls must use exactly: {"tool_call":{"name":"tool_name","arguments":{}}}
+2. Multiple tool calls must be consecutive standalone JSON objects in execution order. A response may contain at most 30 tool calls.
+3. Tool calls execute sequentially; later calls observe changes made by earlier calls.
+4. Explore the workspace only through tools. The application does not scan or summarize it automatically.
+5. read_file_range, write_file, and edit_file are restricted to the bound workspace. Never escape the workspace.
+6. Before editing, read enough surrounding content to make a precise change. edit_file requires old_text to occur exactly once; if it fails, re-read the file and refine old_text.
+7. Tool results are authoritative. If run_shell is rejected, do not repeat the same command unchanged.
+8. Reading or exploring the workspace does not mean the task is complete. Complete the requested task and produce the full user-facing result.
+9. Every completed task must follow this order: inspect/modify as needed → complete the task → output the complete user-facing result → call finish_task. This also applies to pure-text, analysis, review, and explanation tasks.
+10. finish_task is terminal and must never replace or precede the final user-facing answer.`;
     function buildFixedAgentPrompt(options = {}) {
         const environment = String(options.environment || "").trim();
         const userSystemPrompt = String(options.systemPrompt || "").trim();
