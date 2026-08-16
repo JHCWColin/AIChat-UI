@@ -269,7 +269,7 @@
 
 ---
 
-## 六、Agent Tool Calling（V7.0.0 Canary 7）
+## 六、Agent Tool Calling（V7.0.0 Release）
 
 ### 7.1 文件与主链路
 

@@ -12,7 +12,8 @@ const {
     findAllowedCommandPrefix,
     deriveAllowedCommandPrefix,
     AgentWorkspaceStore,
-    AgentShellRunner
+    AgentShellRunner,
+    scanWorkspaceTextFiles
 } = require("../agent-tools");
 
 async function withWorkspace(run) {
@@ -111,6 +112,25 @@ test("workspace bindings are immutable until removed", async () => {
         } finally {
             await fs.rm(other, { recursive: true, force: true });
         }
+    });
+});
+
+test("workspace scan finds text instructions, skips generated directories, and limits the preview", async () => {
+    await withWorkspace(async root => {
+        await fs.mkdir(path.join(root, "src"), { recursive: true });
+        await fs.mkdir(path.join(root, "node_modules", "pkg"), { recursive: true });
+        await fs.mkdir(path.join(root, "dist"), { recursive: true });
+        for (let index = 0; index < 7; index += 1) {
+            await fs.writeFile(path.join(root, "src", `file-${index}.md`), "instruction", "utf8");
+        }
+        await fs.writeFile(path.join(root, "node_modules", "pkg", "ignored.md"), "ignored", "utf8");
+        await fs.writeFile(path.join(root, "dist", "ignored.txt"), "ignored", "utf8");
+        await fs.writeFile(path.join(root, "src", "ignored.js"), "ignored", "utf8");
+
+        const result = await scanWorkspaceTextFiles(root);
+        assert.equal(result.totalCount, 7);
+        assert.equal(result.preview.length, 5);
+        assert.ok(result.preview.every(filePath => filePath.startsWith("src/")));
     });
 });
 

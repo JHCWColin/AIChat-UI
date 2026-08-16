@@ -9,7 +9,7 @@
 一个绑定了令牌后即可像大型AI官网那样文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V7.0.0_Canary_8-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.0.0_Release-blue)]()
 
 </div>
 
@@ -36,7 +36,10 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
-### V7.0.0 Canary 10
+### V7.0.0 Release
+- Agent 工作区选择后新增信任确认，自动扫描非依赖目录中的 `.txt` 与 `.md` 文件，并显示最多 5 个风险文件路径。
+- Agent 首次触发自动上下文压缩前会询问用户，可直接改为不压缩、每 10、15 或 20 轮压缩，或保持当前设置。
+- Agent 偏好设置新增内测与 API 分组兼容性警告，所有全屏 Agent 提示统一使用弹入弹出动画。
 - Agent 固定提示词现在在会话创建时生成并持久化，包含稳定的会话开始时间。
 - 删除每轮请求中插入的动态时间消息，避免第二次提问时改变已有前缀。
 - 已存在的旧 Agent 会话会在下一次请求时补入该约束，之后保持不变。
@@ -226,8 +229,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI7.0.0-Canary7-Portable.exe`
-- Setup：`AIUI7.0.0-Canary7-Setup.exe`
+- Portable：`AIUI7.0.0-Release-Portable.exe`
+- Setup：`AIUI7.0.0-Release-Setup.exe`
 
 构建命令：
 
@@ -258,7 +261,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V7.0.0 Canary 7`
+- 当前版本：`V7.0.0 Release`
 - 当前构建标识：`build20260814`
 
 ---

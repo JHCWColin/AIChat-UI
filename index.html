@@ -752,7 +752,10 @@
 
         #settings-modal,
         #compact-confirm-modal,
-        #danger-confirm-modal {
+        #danger-confirm-modal,
+        #agent-yolo-warning-modal,
+        #agent-workspace-trust-modal,
+        #agent-auto-compaction-modal {
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.22s ease;
@@ -760,7 +763,10 @@
 
         #settings-modal > div,
         #compact-confirm-modal > div,
-        #danger-confirm-modal > div {
+        #danger-confirm-modal > div,
+        #agent-yolo-warning-modal > div,
+        #agent-workspace-trust-modal > div,
+        #agent-auto-compaction-modal > div {
             opacity: 0;
             transform: translateY(14px) scale(0.985);
             transition: opacity 0.22s ease, transform 0.22s ease;
@@ -768,21 +774,30 @@
 
         #settings-modal.modal-active,
         #compact-confirm-modal.modal-active,
-        #danger-confirm-modal.modal-active {
+        #danger-confirm-modal.modal-active,
+        #agent-yolo-warning-modal.modal-active,
+        #agent-workspace-trust-modal.modal-active,
+        #agent-auto-compaction-modal.modal-active {
             opacity: 1;
             pointer-events: auto;
         }
 
         #settings-modal.modal-active > div,
         #compact-confirm-modal.modal-active > div,
-        #danger-confirm-modal.modal-active > div {
+        #danger-confirm-modal.modal-active > div,
+        #agent-yolo-warning-modal.modal-active > div,
+        #agent-workspace-trust-modal.modal-active > div,
+        #agent-auto-compaction-modal.modal-active > div {
             opacity: 1;
             transform: translateY(0) scale(1);
         }
 
         #settings-modal.modal-closing,
         #compact-confirm-modal.modal-closing,
-        #danger-confirm-modal.modal-closing {
+        #danger-confirm-modal.modal-closing,
+        #agent-yolo-warning-modal.modal-closing,
+        #agent-workspace-trust-modal.modal-closing,
+        #agent-auto-compaction-modal.modal-closing {
             opacity: 0;
             pointer-events: none;
         }
@@ -2437,32 +2452,100 @@
             }
         }
 
-        #agent-yolo-warning-modal {
+        #agent-yolo-warning-modal,
+        #agent-workspace-trust-modal,
+        #agent-auto-compaction-modal {
             position: fixed;
             inset: 0;
-            z-index: 130;
+            z-index: 300;
             display: none;
             align-items: center;
             justify-content: center;
             padding: 16px;
-            background: rgba(0, 0, 0, 0.72);
+            background: rgba(0, 0, 0, 0.48);
+            backdrop-filter: blur(12px) saturate(130%);
+            -webkit-backdrop-filter: blur(12px) saturate(130%);
         }
 
-        #agent-yolo-warning-modal.visible {
+        #agent-yolo-warning-modal.visible,
+        #agent-workspace-trust-modal.visible,
+        #agent-auto-compaction-modal.visible {
             display: flex;
         }
 
-        #agent-yolo-warning-modal>div {
+        #agent-yolo-warning-modal>div,
+        #agent-workspace-trust-modal>div,
+        #agent-auto-compaction-modal>div {
             width: min(440px, 100%);
             border: 1px solid #7f1d1d;
             border-radius: 8px;
-            background: #18181b;
+            background: rgba(24, 24, 27, 0.94);
             padding: 20px;
             box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
         }
 
-        body.theme-light #agent-yolo-warning-modal>div {
-            background: #ffffff;
+        #agent-workspace-trust-modal>div {
+            width: min(560px, 100%);
+        }
+
+        #agent-auto-compaction-modal>div {
+            width: min(500px, 100%);
+        }
+
+        #agent-auto-compaction-modal .agent-compaction-option {
+            min-height: 42px;
+            padding: 0.65rem 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 0.7rem;
+            background: rgba(255, 255, 255, 0.06);
+            color: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        #agent-auto-compaction-modal .agent-compaction-option:hover {
+            border-color: rgba(239, 68, 68, 0.7);
+            background: rgba(127, 29, 29, 0.18);
+        }
+
+        body.theme-light #agent-auto-compaction-modal .agent-compaction-option {
+            border-color: rgba(0, 0, 0, 0.14);
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        #agent-workspace-trust-path {
+            margin-top: 12px;
+            overflow: hidden;
+            color: #9ca3af;
+            font-family: Consolas, monospace;
+            font-size: 0.75rem;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #agent-workspace-trust-files {
+            max-height: 180px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            overflow-y: auto;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 6px;
+            background: rgba(127, 29, 29, 0.12);
+            color: #f87171;
+            font-family: Consolas, monospace;
+            font-size: 0.75rem;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+        }
+
+        #agent-workspace-trust-files li + li {
+            margin-top: 4px;
+        }
+
+        body.theme-light #agent-yolo-warning-modal>div,
+        body.theme-light #agent-workspace-trust-modal>div,
+        body.theme-light #agent-auto-compaction-modal>div {
+            background: rgba(255, 255, 255, 0.94);
             color: #111827;
         }
     </style>
@@ -3045,7 +3128,7 @@
                                 <input type="text" id="voice-fish-id-input"
                                     class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             </div>
-                            <p class="text-[11px] text-gray-500 mt-2">银色ID可前往FishAudio官网或镜像站进行获取。</p>
+                            <p class="text-[11px] text-gray-500 mt-2">音色ID可前往FishAudio官网或镜像站进行获取。</p>
                         </div>
                         <div>
                             <div class="flex items-center justify-between text-xs text-gray-400 mb-2">
@@ -3299,6 +3382,9 @@
                 </div>
                 <div id="section-agent" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
+                    <p class="text-sm leading-relaxed text-red-400">
+                        内测功能：建议使用默认或干净的 API 分组。Codex CLI、Claude Code 等 Agent 转接分组会优先遵循其原生工具规则，可能大幅降低本应用工具调用准确率。
+                    </p>
                     <div>
                         <label for="agent-diff-max-lines" class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
                         <select id="agent-diff-max-lines"
@@ -3352,7 +3438,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Canary 10</span>
+                            <span id="app-version">V7.0.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -3395,6 +3481,36 @@
             <div class="compact-confirm-actions">
                 <button type="button" class="compact-cancel" onclick="resolveDangerConfirm(false)">取消</button>
                 <button type="button" class="danger-confirm" onclick="resolveDangerConfirm(true)">清除</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="agent-workspace-trust-modal" role="dialog" aria-modal="true" aria-labelledby="agent-workspace-trust-title">
+        <div>
+            <h3 id="agent-workspace-trust-title" class="text-base font-semibold text-red-400 text-center">信任此 Agent 工作区？</h3>
+            <p class="mt-3 text-sm leading-relaxed">继续即表示你信任此工作区。Agent 可能将其中的 Markdown 和纯文本内容作为指令发送给 API，并执行有风险的操作；来源不明请取消。</p>
+            <p id="agent-workspace-trust-path" title=""></p>
+            <ul id="agent-workspace-trust-files" aria-label="工作区文本文件"></ul>
+            <div class="flex justify-end gap-2 mt-5">
+                <button type="button" class="px-4 py-2 rounded-md border border-gray-600 text-sm"
+                    onclick="resolveAgentWorkspaceTrust(false)">取消</button>
+                <button type="button" class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm"
+                    onclick="resolveAgentWorkspaceTrust(true)">信任并进入 Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="agent-auto-compaction-modal" role="dialog" aria-modal="true" aria-labelledby="agent-auto-compaction-title">
+        <div>
+            <h3 id="agent-auto-compaction-title" class="text-base font-semibold text-red-400 text-center">在 Agent 模式中自动压缩？</h3>
+            <p class="mt-3 text-sm leading-relaxed">即将触发自动上下文压缩，但你可能尚未触及上下文长度上限。请选择本次会话后续使用的自动压缩设置。</p>
+            <p id="agent-auto-compaction-current" class="mt-2 text-xs text-gray-400"></p>
+            <div class="grid gap-2 mt-4">
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(0)">不进行自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(10)">每 10 轮对话自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(15)">每 15 轮对话自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(20)">每 20 轮对话自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(null)">不更改当前设置并继续</button>
             </div>
         </div>
     </div>
@@ -4166,13 +4282,31 @@
 
         async function performAutomaticCompaction(chat) {
             if (!chat || autoSummaryInterval === 0) return true;
-            const turns = getCompleteConversationTurns(chat);
-            const batches = Math.floor(turns.length / autoSummaryInterval);
+            let interval = autoSummaryInterval;
+            let turns = getCompleteConversationTurns(chat);
+            let batches = Math.floor(turns.length / interval);
             if (batches <= 0) return true;
+            if (chat.agentEnabled && chat.agentAutoCompactionPromptShown !== true) {
+                const selectedInterval = await showAgentAutoCompactionConfirm(interval);
+                chat.agentAutoCompactionPromptShown = true;
+                chat.updatedAt = Date.now();
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+                if ([0, 10, 15, 20].includes(selectedInterval)) {
+                    autoSummaryInterval = selectedInterval;
+                    localStorage.setItem('auto_summary_interval', String(autoSummaryInterval));
+                    const selectedRadio = document.querySelector(`input[name="auto-summary-interval"][value="${autoSummaryInterval}"]`);
+                    if (selectedRadio) selectedRadio.checked = true;
+                }
+                interval = autoSummaryInterval;
+                if (interval === 0) return true;
+                turns = getCompleteConversationTurns(chat);
+                batches = Math.floor(turns.length / interval);
+                if (batches <= 0) return true;
+            }
             showVoiceNotification(`正在压缩上下文（${batches} 段）`, false, 0, true);
             try {
                 for (let index = 0; index < batches; index += 1) {
-                    const batch = turns.slice(index * autoSummaryInterval, (index + 1) * autoSummaryInterval);
+                    const batch = turns.slice(index * interval, (index + 1) * interval);
                     showVoiceNotification(`正在压缩上下文（${index + 1}/${batches}）`, false, 0, true);
                     await compactConversationTurns(chat, batch, 'auto');
                 }
@@ -4184,6 +4318,29 @@
                 showVoiceNotification(`上下文压缩失败，已使用完整上下文继续：${error.message}`, true, 5000);
                 return false;
             }
+        }
+
+        function showAgentAutoCompactionConfirm(currentInterval) {
+            const modal = document.getElementById('agent-auto-compaction-modal');
+            if (!modal) return Promise.resolve(null);
+            const current = document.getElementById('agent-auto-compaction-current');
+            if (current) {
+                current.textContent = currentInterval === 0
+                    ? '当前设置：不进行自动压缩'
+                    : `当前设置：每 ${currentInterval} 轮对话自动压缩`;
+            }
+            openAnimatedModal(modal, 'visible');
+            return new Promise(resolve => {
+                agentAutoCompactionResolver = resolve;
+            });
+        }
+
+        function resolveAgentAutoCompactionConfirm(interval) {
+            const modal = document.getElementById('agent-auto-compaction-modal');
+            closeAnimatedModal(modal, 'visible');
+            const resolver = agentAutoCompactionResolver;
+            agentAutoCompactionResolver = null;
+            if (resolver) resolver([0, 10, 15, 20].includes(interval) ? interval : null);
         }
 
         function buildCompactedChatMessages(chat) {
@@ -4804,6 +4961,7 @@
         if (localStorage.getItem('auto_summary_interval') === null) localStorage.setItem('auto_summary_interval', '10');
         if (localStorage.getItem('context_compaction_model') === null) localStorage.setItem('context_compaction_model', DEFAULT_CONTEXT_COMPACTION_MODEL);
         let compactionConfirmResolver = null;
+        let agentAutoCompactionResolver = null;
         let canvasPanelVisible = false;
         let processedReplaceCount = 0;
         let sessionReplaceBlocks = [];
@@ -7580,7 +7738,13 @@
                 if (e.key === 'Escape') {
                     const compactModal = document.getElementById('compact-confirm-modal');
                     const dangerModal = document.getElementById('danger-confirm-modal');
-                    if (dangerModal?.classList.contains('modal-active')) resolveDangerConfirm(false);
+                    const workspaceTrustModal = document.getElementById('agent-workspace-trust-modal');
+                    const agentAutoCompactionModal = document.getElementById('agent-auto-compaction-modal');
+                    const yoloModal = document.getElementById('agent-yolo-warning-modal');
+                    if (agentAutoCompactionModal?.classList.contains('modal-active')) resolveAgentAutoCompactionConfirm(null);
+                    else if (workspaceTrustModal?.classList.contains('modal-active')) resolveAgentWorkspaceTrust(false);
+                    else if (yoloModal?.classList.contains('modal-active')) resolveAgentYoloWarning(false);
+                    else if (dangerModal?.classList.contains('modal-active')) resolveDangerConfirm(false);
                     else if (compactModal?.classList.contains('visible')) resolveCompactionConfirm(false);
                     else closeLightbox();
                 }

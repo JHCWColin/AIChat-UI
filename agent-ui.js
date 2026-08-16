@@ -24,6 +24,7 @@
     let agentApprovalResolver = null;
     let agentApprovalRow = null;
     let agentApprovalPrefix = "";
+    let agentWorkspaceTrustResolver = null;
     let agentYoloResolver = null;
     let agentCommandMode = "safe";
     let agentToolSequence = 0;
@@ -181,14 +182,23 @@
             return;
         }
         try {
-            const binding = await window.electronAPI.selectAgentWorkspace(chat.id);
-            if (!binding || binding.canceled) return;
+            const selection = await window.electronAPI.selectAgentWorkspace(chat.id);
+            if (!selection || selection.canceled) return;
+            if (!selection.path || selection.exists === false) throw new Error("工作区不可用");
+            let binding = selection;
+            if (selection.requiresConfirmation) {
+                const trusted = await requestAgentWorkspaceTrust(selection);
+                if (!trusted) return;
+                if (!window.electronAPI?.confirmAgentWorkspace) throw new Error("当前版本不支持确认 Agent 工作区");
+                binding = await window.electronAPI.confirmAgentWorkspace(chat.id, selection.path, selection.selectionId);
+            }
             if (!binding.path || binding.exists === false) throw new Error("工作区不可用");
             chat.agentEnabled = true;
             chat.agentWorkspace = binding.path;
             chat.agentEnvironment = binding.environment || "";
             chat.agentSystemPrompt = systemPrompt || "";
             chat.agentSessionStartedAt = Date.now();
+            chat.agentAutoCompactionPromptShown = false;
             chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({
                 systemPrompt: chat.agentSystemPrompt,
                 environment: [
@@ -234,9 +244,59 @@
         }
     }
 
+    function resolveAgentWorkspaceTrust(confirmed) {
+        const modal = document.getElementById("agent-workspace-trust-modal");
+        if (modal) closeAnimatedModal(modal, "visible");
+        const resolver = agentWorkspaceTrustResolver;
+        agentWorkspaceTrustResolver = null;
+        if (resolver) resolver(Boolean(confirmed));
+    }
+
+    function requestAgentWorkspaceTrust(selection) {
+        const modal = document.getElementById("agent-workspace-trust-modal");
+        if (!modal) return Promise.resolve(false);
+        if (agentWorkspaceTrustResolver) resolveAgentWorkspaceTrust(false);
+
+        const workspacePath = String(selection?.path || "");
+        const pathElement = document.getElementById("agent-workspace-trust-path");
+        if (pathElement) {
+            pathElement.textContent = `工作区：${workspacePath}`;
+            pathElement.title = workspacePath;
+        }
+
+        const fileList = document.getElementById("agent-workspace-trust-files");
+        if (fileList) {
+            fileList.replaceChildren();
+            const preview = Array.isArray(selection?.textFilePreview) ? selection.textFilePreview.slice(0, 5) : [];
+            const totalCount = Math.max(Number(selection?.textFileCount) || 0, preview.length);
+            if (preview.length === 0) {
+                const item = document.createElement("li");
+                item.textContent = "未检测到 .txt 或 .md 文件";
+                fileList.appendChild(item);
+            } else {
+                for (const filePath of preview) {
+                    const item = document.createElement("li");
+                    item.textContent = String(filePath);
+                    fileList.appendChild(item);
+                }
+                const remaining = totalCount - preview.length;
+                if (remaining > 0) {
+                    const item = document.createElement("li");
+                    item.textContent = `剩余${remaining}个……`;
+                    fileList.appendChild(item);
+                }
+            }
+        }
+
+        openAnimatedModal(modal, "visible");
+        return new Promise(resolve => {
+            agentWorkspaceTrustResolver = resolve;
+        });
+    }
+
     function resolveAgentYoloWarning(confirmed) {
         const modal = document.getElementById("agent-yolo-warning-modal");
-        if (modal) modal.classList.remove("visible");
+        if (modal) closeAnimatedModal(modal, "visible");
         const resolver = agentYoloResolver;
         agentYoloResolver = null;
         if (resolver) resolver(Boolean(confirmed));
@@ -245,7 +305,7 @@
     function requestAgentYoloWarning() {
         const modal = document.getElementById("agent-yolo-warning-modal");
         if (!modal) return Promise.resolve(false);
-        modal.classList.add("visible");
+        openAnimatedModal(modal, "visible");
         return new Promise(resolve => {
             agentYoloResolver = resolve;
         });
@@ -1140,6 +1200,7 @@
     window.ensureAgentWorkspaceAvailable = refreshAgentWorkspace;
     window.resolveAgentCommandApproval = resolveAgentCommandApproval;
     window.onAgentCommandModeChange = onAgentCommandModeChange;
+    window.resolveAgentWorkspaceTrust = resolveAgentWorkspaceTrust;
     window.resolveAgentYoloWarning = resolveAgentYoloWarning;
     window.appendAgentToolMessageToUI = appendAgentToolMessageToUI;
     window.appendAgentThinkingMessageToUI = appendAgentThinkingMessageToUI;

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     captureDesktopScreenshot: () => ipcRenderer.invoke("desktop-work:capture-screenshot"),
     getUpdateLog: () => ipcRenderer.invoke("app:get-update-log"),
     selectAgentWorkspace: (chatId) => ipcRenderer.invoke("agent:select-workspace", chatId),
+    confirmAgentWorkspace: (chatId, workspacePath, selectionId) => ipcRenderer.invoke("agent:confirm-workspace", chatId, workspacePath, selectionId),
     getAgentWorkspace: (chatId) => ipcRenderer.invoke("agent:get-workspace", chatId),
     removeAgentWorkspace: (chatId) => ipcRenderer.invoke("agent:remove-workspace", chatId),
     getAgentCommandSettings: () => ipcRenderer.invoke("agent:get-command-settings"),

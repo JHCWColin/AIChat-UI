@@ -26,7 +26,8 @@ const {
     saveUserAllowedCommands,
     findAllowedCommandPrefix,
     deriveAllowedCommandPrefix,
-    getEnvironmentDescription
+    getEnvironmentDescription,
+    scanWorkspaceTextFiles
 } = require("./agent-tools");
 
 const PRESET_TEXTS_A = ["嗯……", "哦？", "欸？", "哦！"];
@@ -50,6 +51,7 @@ let availableUpdateVersion = "";
 let currentVersionConfirmedLatest = false;
 let updateDownloadRequested = false;
 let agentWorkspaceStore = null;
+const pendingAgentWorkspaceSelections = new Map();
 const agentShellRunner = new AgentShellRunner();
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -791,11 +793,51 @@ ipcMain.handle("agent:select-workspace", async (event, chatId) => {
         buttonLabel: "绑定此工作区"
     });
     if (result.canceled || !result.filePaths[0]) return { canceled: true };
-    const binding = await store.bind(chatId, result.filePaths[0]);
+    const workspacePath = await fs.realpath(result.filePaths[0]);
+    const stats = await fs.stat(workspacePath);
+    if (!stats.isDirectory()) throw new Error("工作区必须是目录");
+    const scan = await scanWorkspaceTextFiles(workspacePath);
+    const selectionId = crypto.randomUUID();
+    for (const [pendingId, pending] of pendingAgentWorkspaceSelections) {
+        if (pending.chatId !== String(chatId || "")) continue;
+        clearTimeout(pending.expirationTimer);
+        pendingAgentWorkspaceSelections.delete(pendingId);
+    }
+    const expirationTimer = setTimeout(() => {
+        pendingAgentWorkspaceSelections.delete(selectionId);
+    }, 10 * 60 * 1000);
+    expirationTimer.unref?.();
+    pendingAgentWorkspaceSelections.set(selectionId, {
+        chatId: String(chatId || ""),
+        workspacePath,
+        expirationTimer
+    });
+    return {
+        bound: false,
+        exists: true,
+        path: workspacePath,
+        selectionId,
+        canceled: false,
+        requiresConfirmation: true,
+        environment: getEnvironmentDescription(workspacePath),
+        textFileCount: scan.totalCount,
+        textFilePreview: scan.preview
+    };
+});
+
+ipcMain.handle("agent:confirm-workspace", async (event, chatId, workspacePath, selectionId) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工作区确认请求");
+    const pending = pendingAgentWorkspaceSelections.get(String(selectionId || ""));
+    if (!pending || pending.chatId !== String(chatId || "") || pending.workspacePath !== workspacePath) {
+        throw new Error("工作区选择已失效，请重新选择");
+    }
+    clearTimeout(pending.expirationTimer);
+    pendingAgentWorkspaceSelections.delete(String(selectionId));
+    const binding = await getAgentWorkspaceStore().bind(chatId, workspacePath);
     return {
         ...binding,
-        canceled: false,
-        environment: getEnvironmentDescription(binding.path)
+        confirmed: true,
+        environment: binding.path ? getEnvironmentDescription(binding.path) : ""
     };
 });
 

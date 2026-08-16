@@ -5,6 +5,14 @@ const { spawn } = require("child_process");
 
 const DEFAULT_SHELL_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
+const WORKSPACE_SCAN_EXCLUDED_DIRECTORIES = new Set([
+    ".git",
+    "node_modules",
+    "dist",
+    "build",
+    "out",
+    "coverage"
+]);
 
 function normalizeCommandLine(value) {
     return String(value || "").trim().replace(/\s+/g, " ");
@@ -468,6 +476,35 @@ function getEnvironmentDescription(workspacePath) {
     ].join("\n");
 }
 
+async function scanWorkspaceTextFiles(workspacePath) {
+    const workspaceReal = await fs.realpath(workspacePath);
+    const matches = [];
+
+    async function visit(directory) {
+        const entries = await fs.readdir(directory, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isSymbolicLink()) continue;
+            if (entry.isDirectory() && WORKSPACE_SCAN_EXCLUDED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+            const target = path.join(directory, entry.name);
+            if (entry.isDirectory()) {
+                await visit(target);
+                continue;
+            }
+            if (!entry.isFile()) continue;
+            const extension = path.extname(entry.name).toLowerCase();
+            if (extension !== ".txt" && extension !== ".md") continue;
+            matches.push(path.relative(workspaceReal, target).split(path.sep).join("/"));
+        }
+    }
+
+    await visit(workspaceReal);
+    matches.sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+    return {
+        totalCount: matches.length,
+        preview: matches.slice(0, 5)
+    };
+}
+
 module.exports = {
     DEFAULT_SHELL_TIMEOUT_MS,
     DEFAULT_MAX_OUTPUT_BYTES,
@@ -488,5 +525,6 @@ module.exports = {
     editFile,
     AgentWorkspaceStore,
     AgentShellRunner,
-    getEnvironmentDescription
+    getEnvironmentDescription,
+    scanWorkspaceTextFiles
 };

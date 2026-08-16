@@ -157,6 +157,12 @@ async function captureWindow(width, height, fileName, prepare) {
         agentFallbackRequests: window.__agentFallbackRequests || [],
         agentSaw501Warning: window.__agentSaw501Warning === true,
         agentFallbackHasProtocolError: window.__agentFallbackHasProtocolError === true,
+        agentBetaWarningVisible: (document.getElementById('section-agent')?.innerText || '').includes('内测功能'),
+        workspaceTrustVisible: document.getElementById('agent-workspace-trust-modal')?.classList.contains('modal-active') || false,
+        workspaceTrustItems: document.querySelectorAll('#agent-workspace-trust-files li').length,
+        workspaceTrustHasRemainder: (document.getElementById('agent-workspace-trust-files')?.innerText || '').includes('剩余100个'),
+        agentAutoCompactionVisible: document.getElementById('agent-auto-compaction-modal')?.classList.contains('modal-active') || false,
+        agentAutoCompactionOptions: document.querySelectorAll('#agent-auto-compaction-modal .agent-compaction-option').length,
         bodyWidth: document.body.scrollWidth,
         viewportWidth: window.innerWidth
             }) };
@@ -210,6 +216,21 @@ app.whenReady().then(async () => {
             toggleSettings();
             const button = document.querySelector('[data-section="agent"]');
             switchSettingsSection("agent", button);
+        });
+        const workspaceTrust = await captureWindow(1200, 800, "agent-workspace-trust.png", function () {
+            const pathElement = document.getElementById('agent-workspace-trust-path');
+            pathElement.textContent = '工作区：D:\\workspace\\demo';
+            const list = document.getElementById('agent-workspace-trust-files');
+            list.replaceChildren();
+            ['README.md', 'docs/AGENTS.md', 'notes/setup.txt', 'src/rules.md', 'test/instructions.txt', '剩余100个……'].forEach(text => {
+                const item = document.createElement('li');
+                item.textContent = text;
+                list.appendChild(item);
+            });
+            openAnimatedModal(document.getElementById('agent-workspace-trust-modal'), 'visible');
+        });
+        const autoCompaction = await captureWindow(390, 844, "agent-auto-compaction-mobile.png", function () {
+            showAgentAutoCompactionConfirm(10);
         });
         const active = await captureWindow(1200, 800, "agent-active.png", function () {
             localStorage.setItem("agent_diff_max_lines", "10");
@@ -391,12 +412,15 @@ app.whenReady().then(async () => {
             window.__agentFallbackRequests = requests;
             window.__agentFallbackHasProtocolError = chat.messages.some(message => message?.toolName === 'agent_protocol');
         });
-        const result = { main, settings, active, mixedProtocol, fallback, consoleErrors };
+        const result = { main, settings, workspaceTrust, autoCompaction, active, mixedProtocol, fallback, consoleErrors };
         console.log(JSON.stringify(result, null, 2));
         if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || main.state.hasLegacyApprovalPrefixInput || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentDetailBehaviorSetting || !settings.state.hasAgentTimeoutSetting) {
             process.exitCode = 1;
         }
         if (main.state.bodyWidth > main.state.viewportWidth + 2 || settings.state.bodyWidth > settings.state.viewportWidth + 2) {
+            process.exitCode = 1;
+        }
+        if (!settings.state.agentBetaWarningVisible || !workspaceTrust.state.workspaceTrustVisible || workspaceTrust.state.workspaceTrustItems !== 6 || !workspaceTrust.state.workspaceTrustHasRemainder || workspaceTrust.state.bodyWidth > workspaceTrust.state.viewportWidth + 2 || !autoCompaction.state.agentAutoCompactionVisible || autoCompaction.state.agentAutoCompactionOptions !== 5 || autoCompaction.state.bodyWidth > autoCompaction.state.viewportWidth + 2) {
             process.exitCode = 1;
         }
         if (main.state.canvasDisplay !== "none" || main.state.inputTopRightRadius === "0px") {
