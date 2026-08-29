@@ -3405,6 +3405,17 @@
                     </div>
                     <div>
                         <label for="agent-shell-timeout-seconds" class="block text-sm font-medium mb-2 text-gray-300">命令执行超时（秒）</label>
+                        <label for="agent-view-image-detail" class="block text-sm font-medium mb-2 text-gray-300">Agent image detail</label>
+                        <select id="agent-view-image-detail"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                            <option value="low">Low (fast)</option>
+                            <option value="medium" selected>Medium (balanced)</option>
+                            <option value="high">High (detailed)</option>
+                            <option value="original">Original (lossless)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="agent-shell-timeout-seconds" class="block text-sm font-medium mb-2 text-gray-300">Agent shell timeout (seconds)</label>
                         <input id="agent-shell-timeout-seconds" type="number" min="5" max="3600" step="1"
                             class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                     </div>
@@ -3438,7 +3449,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.1.0 Release</span>
+                            <span id="app-version">V7.2.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -4656,7 +4667,8 @@
                 ...rest,
                 input: buildResponsesInputFromMessages(messages, __aiuiStructuredResponsesInput === true),
                 ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {}),
-                ...(prompt_cache_key ? { prompt_cache_key } : {})
+                ...(prompt_cache_key ? { prompt_cache_key } : {}),
+                ...(cache_control ? { cache_control } : {})
             };
             if (systemMessage) {
                 const systemText = extractResponsesTextContent(systemMessage.content);

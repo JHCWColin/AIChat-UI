@@ -37,6 +37,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
+### V7.2.0 Release 修复缓存命中问题
+
 ### V7.1.0 Release 兼容Codex Claude Gemini的原生格式
 - 当模型不遵循我们的工具调用规则，使用自家的agent工具的工具调用格式，我们也会支持。
 - 全方位提升Agent体验，解决了大部分文本错位，正文被当作报错，连续产生空回复的问题。
@@ -150,8 +152,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI7.1.0-Release-Portable.exe`
-- Setup：`AIUI7.1.0-Release-Setup.exe`
+- Portable：`AIUI7.2.0-Release-Portable.exe`
+- Setup：`AIUI7.2.0-Release-Setup.exe`
 
 构建命令：
 
@@ -166,7 +168,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V7.1.0 Release`
+- 当前版本：`V7.2.0 Release`
 - 当前构建标识：`build20260829`
 
 ---

@@ -1068,10 +1068,13 @@
                 }
             }
         } else if (call.name === "read_file_range" || call.name === "write_file" || call.name === "edit_file" || call.name === "list_dir" || call.name === "grep_files" || call.name === "view_image") {
+            const toolArguments = call.name === "view_image"
+                ? { ...(call.arguments || {}), detail: call.arguments?.detail || localStorage.getItem("agent_view_image_detail") || "medium" }
+                : (call.arguments || {});
             result = await window.electronAPI.executeAgentTool({
                 chatId: chat.id,
                 name: call.name,
-                arguments: call.arguments || {}
+                arguments: toolArguments
             });
         } else if (call.name === "_claude_insert_text") {
             result = await handleClaudeInsertText(chat, call.arguments || {});
@@ -1315,9 +1318,11 @@
         const diffMaxLines = document.getElementById("agent-diff-max-lines");
         const detailBehavior = document.getElementById("agent-detail-default-behavior");
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
+        const imageDetail = document.getElementById("agent-view-image-detail");
         if (diffMaxLines) diffMaxLines.value = String(getAgentDiffMaxLines());
         if (detailBehavior) detailBehavior.value = getAgentDetailDefaultBehavior();
         if (shellTimeout) shellTimeout.value = String(Math.round(getAgentShellTimeoutMs() / 1000));
+        if (imageDetail) imageDetail.value = localStorage.getItem("agent_view_image_detail") || "medium";
         if (!window.electronAPI?.getAgentCommandSettings) return;
         try {
             const settings = await window.electronAPI.getAgentCommandSettings();
@@ -1334,6 +1339,7 @@
         const diffMaxLines = document.getElementById("agent-diff-max-lines");
         const detailBehavior = document.getElementById("agent-detail-default-behavior");
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
+        const imageDetail = document.getElementById("agent-view-image-detail");
         const selectedDiffLimit = Number(diffMaxLines?.value);
         localStorage.setItem("agent_diff_max_lines", String([10, 20, 50, 0].includes(selectedDiffLimit) ? selectedDiffLimit : DEFAULT_AGENT_DIFF_MAX_LINES));
         localStorage.setItem("agent_detail_default_behavior", detailBehavior?.value === "collapsed" ? "collapsed" : "expanded");
@@ -1342,6 +1348,7 @@
             ? Math.min(Math.max(Math.round(requestedSeconds), 5), 3600)
             : DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS;
         localStorage.setItem("agent_shell_timeout_seconds", String(timeoutSeconds));
+        localStorage.setItem("agent_view_image_detail", ["low", "medium", "high", "original"].includes(imageDetail?.value) ? imageDetail.value : "medium");
         if (!window.electronAPI?.saveAgentCommandAdditions) return;
         const additions = document.getElementById("agent-command-additions")?.value || "";
         try {

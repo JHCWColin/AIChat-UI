@@ -906,7 +906,25 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
     if (name === "edit_file") return editAgentFile(binding.realPath || binding.path, args);
     if (name === "list_dir") return listDir(binding.realPath || binding.path, args);
     if (name === "grep_files") return grepFiles(binding.realPath || binding.path, args);
-    if (name === "view_image") return viewImage(binding.realPath || binding.path, args);
+    if (name === "view_image") {
+        const result = await viewImage(binding.realPath || binding.path, args);
+        const detail = String(args.detail || "medium").toLowerCase();
+        if (!result?.success || !result.dataUrl || detail === "original") return result;
+        const maxWidths = { low: 800, medium: 1400, high: 2200 };
+        const maxWidth = maxWidths[detail] || maxWidths.medium;
+        try {
+            const image = nativeImage.createFromDataURL(result.dataUrl);
+            const size = image.getSize();
+            if (size.width > maxWidth) {
+                const resized = image.resize({ width: maxWidth });
+                result.dataUrl = `data:image/png;base64,${resized.toPNG().toString("base64")}`;
+                result.width = maxWidth;
+                result.height = Math.round(size.height * maxWidth / size.width);
+                result.detail = detail;
+            }
+        } catch (_) { /* preserve original result if resize is unavailable */ }
+        return result;
+    }
     if (name === "run_shell") {
         const executionId = String(source.executionId || "").trim();
         const requestedTimeoutMs = Number(source.timeoutMs);
