@@ -8,7 +8,14 @@
         edit_file: "file-pen-line",
         run_shell: "terminal",
         finish_task: "check-circle-2",
-        agent_protocol: "shield-alert"
+        agent_protocol: "shield-alert",
+        list_dir: "folder-tree",
+        grep_files: "search",
+        view_image: "image",
+        update_plan: "list-checks",
+        _claude_insert_text: "file-pen-line",
+        _claude_undo_edit: "undo-2",
+        _codex_apply_patch: "file-pen-line"
     };
     const TOOL_LABELS = {
         read_file_range: "读取",
@@ -16,7 +23,14 @@
         edit_file: "编辑",
         run_shell: "运行",
         finish_task: "完成任务",
-        agent_protocol: "协议提示"
+        agent_protocol: "协议提示",
+        list_dir: "列目录",
+        grep_files: "搜索",
+        view_image: "查看图片",
+        update_plan: "更新计划",
+        _claude_insert_text: "插入文本",
+        _claude_undo_edit: "撤销编辑",
+        _codex_apply_patch: "应用补丁"
     };
 
     let agentTaskChatId = null;
@@ -34,6 +48,8 @@
     let agentTaskTimer = null;
     let agentActiveStatusRow = null;
     const agentShellProgressByExecution = new Map();
+    const agentPlansByChat = new Map();
+    const agentEditHistoryByFile = new Map();
 
     function currentAgentChat() {
         return activeChatId ? chats.find(chat => chat.id === activeChatId) : null;
@@ -543,6 +559,43 @@
             ];
             return truncateAgentDisplayLines(output);
         }
+        if (message.toolName === "list_dir" && message.result?.success) {
+            const entries = Array.isArray(message.result.entries) ? message.result.entries : [];
+            const lines = entries.map(entry => ({
+                type: entry.type === "directory" ? "error" : "output",
+                text: `${entry.type === "directory" ? "[DIR] " : "[FILE]"}${entry.path || entry.name}${entry.type === "file" && entry.size ? ` (${entry.size} bytes)` : ""}`
+            }));
+            if (message.result.hasMore) lines.push({ type: "output", text: `……还有 ${message.result.totalCount - (message.result.offset + entries.length)} 项` });
+            return truncateAgentDisplayLines(lines);
+        }
+        if (message.toolName === "grep_files" && message.result?.success) {
+            const matches = Array.isArray(message.result.matches) ? message.result.matches : [];
+            const lines = matches.map(match => ({
+                type: "output",
+                text: `${match.path}:${match.line}: ${String(match.content || "").slice(0, 200)}`
+            }));
+            if (message.result.truncated) lines.push({ type: "output", text: "……结果已截断" });
+            return truncateAgentDisplayLines(lines);
+        }
+        if (message.toolName === "view_image" && message.result?.success) {
+            const r = message.result;
+            return [
+                { type: "output", text: `路径: ${r.path || ""}` },
+                { type: "output", text: `类型: ${r.mimeType || ""}` },
+                { type: "output", text: `大小: ${r.fileSize ? `${(r.fileSize / 1024).toFixed(1)} KB` : "unknown"}` },
+                ...(r.note ? [{ type: "error", text: r.note }] : [])
+            ];
+        }
+        if (message.toolName === "update_plan" && message.result?.success) {
+            const steps = Array.isArray(message.result.plan) ? message.result.plan : [];
+            const lines = [];
+            if (message.result.explanation) lines.push({ type: "output", text: message.result.explanation });
+            steps.forEach((step, index) => {
+                const marker = step.status === "completed" ? "[x]" : step.status === "in_progress" ? "[>]" : "[ ]";
+                lines.push({ type: step.status === "in_progress" ? "error" : "output", text: `${marker} ${index + 1}. ${step.step}` });
+            });
+            return lines;
+        }
         return [];
     }
 
@@ -564,13 +617,25 @@
         const hadPreview = toolRow.classList.contains("has-preview");
         const wasCollapsed = toolRow.classList.contains("collapsed");
         previewContent.replaceChildren();
+        if (message.toolName === "view_image" && message.result?.success && message.result.dataUrl) {
+            const img = document.createElement("img");
+            img.src = message.result.dataUrl;
+            img.alt = message.result.path || "image";
+            img.className = "agent-tool-preview-image";
+            img.style.maxWidth = "100%";
+            img.style.maxHeight = "400px";
+            img.style.borderRadius = "6px";
+            img.style.marginTop = "8px";
+            previewContent.appendChild(img);
+        }
         for (const line of lines) {
             const element = document.createElement("div");
             element.className = `agent-tool-preview-line ${line.type || "output"}`;
             element.textContent = String(line.text || "");
             previewContent.appendChild(element);
         }
-        const canToggle = lines.length > 0;
+        const hasImage = message.toolName === "view_image" && message.result?.success && message.result.dataUrl;
+        const canToggle = lines.length > 0 || hasImage;
         toolRow.classList.toggle("has-preview", canToggle);
         const shouldCollapse = canToggle && (hadPreview ? wasCollapsed : getAgentDetailDefaultBehavior() === "collapsed");
         toolRow.classList.toggle("collapsed", shouldCollapse);
@@ -617,6 +682,41 @@
             return result.exitCode === 0 && !result.timedOut && !result.cancelled ? `运行命令完成，${milliseconds}毫秒，${bytes}字节（exitCode 0）` : `运行命令结束，${milliseconds}毫秒，${bytes}字节（exitCode ${result.exitCode ?? 1}）`;
         }
         if (name === "finish_task") return "任务完成";
+        if (name === "list_dir") {
+            const pathText = String(args.dir_path || args.path || ".");
+            if (status === "running") return `列目录 ${pathText}`;
+            if (message.result?.success) return `列目录 ${message.result.path || pathText}，共 ${message.result.totalCount ?? 0} 项`;
+            return `列目录 ${pathText} 失败`;
+        }
+        if (name === "grep_files") {
+            const patternText = String(args.pattern || "");
+            if (status === "running") return `搜索 "${patternText}"`;
+            if (message.result?.success) return `搜索 "${patternText}"，${message.result.totalCount ?? 0} 处匹配${message.result.truncated ? "（已截断）" : ""}`;
+            return `搜索 "${patternText}" 失败`;
+        }
+        if (name === "view_image") {
+            const pathText = String(args.path || "图片");
+            if (status === "running") return `查看图片 ${pathText}`;
+            if (message.result?.success) return `查看图片 ${message.result.path || pathText}，${message.result.fileSize ? `${(message.result.fileSize / 1024).toFixed(1)} KB` : ""}`;
+            return `查看图片 ${pathText} 失败`;
+        }
+        if (name === "update_plan") {
+            if (status === "running") return "更新任务计划";
+            if (message.result?.success) {
+                const steps = Array.isArray(message.result.plan) ? message.result.plan : [];
+                const completed = steps.filter(s => s.status === "completed").length;
+                const inProgress = steps.filter(s => s.status === "in_progress").length;
+                return `任务计划已更新，${steps.length} 步（完成 ${completed}，进行中 ${inProgress}）`;
+            }
+            return "更新任务计划失败";
+        }
+        if (name === "_claude_insert_text") {
+            const pathText = String(args.path || "文件");
+            if (status === "running") return `插入文本到 ${pathText} 第 ${args.insert_line ?? "?"} 行`;
+            return message.result?.success ? `插入文本到 ${pathText} 完成` : `插入文本到 ${pathText} 失败`;
+        }
+        if (name === "_claude_undo_edit") return status === "running" ? "撤销编辑" : "撤销编辑不支持";
+        if (name === "_codex_apply_patch") return status === "running" ? "应用补丁" : "补丁格式不支持";
         return status === "running" ? `执行 ${name}` : `${name} 已返回结果`;
     }
 
@@ -768,7 +868,7 @@
             return {
                 text: extractNonStreamingResponseText(payload, endpoint),
                 reasoning,
-                toolCalls: ToolCallNormalizer.normalizeToolCalls(payload)
+                toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(payload))
             };
         }
         const reader = response.body.getReader();
@@ -851,7 +951,7 @@
         return {
             text: fullText,
             reasoning: reasoningText,
-            toolCalls: ToolCallNormalizer.normalizeToolCalls(responsePayloads)
+            toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(responsePayloads))
         };
     }
 
@@ -861,7 +961,7 @@
             role: "assistant",
             content: String(rawText || ""),
             model,
-            reasoning: String(reasoning || ""),
+            reasoning: ToolCallNormalizer.stripReasoningSections(String(reasoning || "")),
             hidden: true,
             agentToolResponse: true,
             agentThinking: options.agentThinking === true,
@@ -875,7 +975,7 @@
 
     function completeAgentThinking(chat, model, row, result = {}) {
         if (!row) return null;
-        const reasoning = String(result.reasoning || row.reasoningText || "");
+        const reasoning = ToolCallNormalizer.stripReasoningSections(String(result.reasoning || row.reasoningText || ""));
         if (reasoning && reasoning !== row.reasoningText) row.updateReasoning(reasoning);
         const durationMs = Math.max(0, Date.now() - Number(row.thinkingStartedAt || Date.now()));
         const agentThinking = row.finishThinking(durationMs);
@@ -886,13 +986,17 @@
     }
 
     function appendAgentVisibleText(chat, text, model, reasoning = "", final = false) {
-        const content = AgentProtocol.stripToolCallsForDisplay(text);
+        if (ToolCallNormalizer.hasMalformedToolCall && ToolCallNormalizer.hasMalformedToolCall(text)) return null;
+        let content = AgentProtocol.stripToolCallsForDisplay(text);
+        // Protocol-loop diagnostics are internal state, not user-facing正文.
+        // Keep any model正文 before the diagnostic and render it normally.
+        content = content.replace(/\n\s*Agent[^\n]*finish_task[^\n]*(?:\n|$)/gi, "\n").trim();
         if (!content) return null;
         const message = {
             role: "assistant",
             content,
             model,
-            reasoning: String(reasoning || ""),
+            reasoning: ToolCallNormalizer.stripReasoningSections(String(reasoning || "")),
             agentDisplayOnly: true,
             agentSegment: !final,
             agentFinal: final
@@ -924,7 +1028,9 @@
         persistAgentChats();
 
         let result;
-        if (call.name === "run_shell") {
+        if (call.name === "update_plan") {
+            result = handleUpdatePlan(chat, call.arguments || {});
+        } else if (call.name === "run_shell") {
             const command = String(call.arguments?.command || "");
             if (!command.trim()) result = { success: false, error: "command is required" };
             else if (agentCommandMode !== "yolo") {
@@ -961,12 +1067,18 @@
                     agentCurrentExecutionId = "";
                 }
             }
-        } else if (call.name === "read_file_range" || call.name === "write_file" || call.name === "edit_file") {
+        } else if (call.name === "read_file_range" || call.name === "write_file" || call.name === "edit_file" || call.name === "list_dir" || call.name === "grep_files" || call.name === "view_image") {
             result = await window.electronAPI.executeAgentTool({
                 chatId: chat.id,
                 name: call.name,
                 arguments: call.arguments || {}
             });
+        } else if (call.name === "_claude_insert_text") {
+            result = await handleClaudeInsertText(chat, call.arguments || {});
+        } else if (call.name === "_claude_undo_edit") {
+            result = { success: false, error: "undo_edit is not supported in this environment. Use edit_file to manually revert the previous change by swapping old_text and new_text." };
+        } else if (call.name === "_codex_apply_patch") {
+            result = { success: false, error: "apply_patch freeform syntax is not supported in this environment. Use edit_file for precise string replacements or write_file for full file overwrites." };
         } else {
             result = { success: false, error: `unknown tool: ${call.name}` };
         }
@@ -984,19 +1096,81 @@
         return true;
     }
 
+    function handleUpdatePlan(chat, args) {
+        const plan = Array.isArray(args.plan) ? args.plan : [];
+        const explanation = String(args.explanation || "");
+        const sanitized = plan.map(item => ({
+            step: String(item?.step || ""),
+            status: ["pending", "in_progress", "completed"].includes(item?.status) ? item.status : "pending"
+        })).filter(item => item.step);
+        const inProgressCount = sanitized.filter(item => item.status === "in_progress").length;
+        if (inProgressCount > 1) {
+            return { success: false, error: `at most one plan step may be in_progress, got ${inProgressCount}` };
+        }
+        agentPlansByChat.set(chat.id, { explanation, steps: sanitized, updatedAt: Date.now() });
+        return { success: true, explanation, plan: sanitized, stepCount: sanitized.length };
+    }
+
+    async function handleClaudeInsertText(chat, args) {
+        const filePath = String(args.path || "");
+        const insertLine = Number(args.insert_line) || 0;
+        const insertText = String(args.insert_text || "");
+        if (!filePath) return { success: false, error: "path is required" };
+        try {
+            const readResult = await window.electronAPI.executeAgentTool({
+                chatId: chat.id,
+                name: "read_file_range",
+                arguments: { path: filePath, start_line: 1, end_line: 1000000 }
+            });
+            if (!readResult?.success) return readResult;
+            const content = String(readResult.content || "");
+            const lines = content.split(/\r?\n/);
+            const insertIndex = Math.max(0, Math.min(insertLine, lines.length));
+            const before = lines.slice(0, insertIndex).join("\n");
+            const after = lines.slice(insertIndex).join("\n");
+            const newContent = before + (before ? "\n" : "") + insertText + (after ? "\n" : "") + after;
+            return await window.electronAPI.executeAgentTool({
+                chatId: chat.id,
+                name: "write_file",
+                arguments: { path: filePath, content: newContent }
+            });
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    function getAgentPlanLines(chat) {
+        const plan = agentPlansByChat.get(chat.id);
+        if (!plan || !Array.isArray(plan.steps)) return [];
+        const lines = [];
+        if (plan.explanation) lines.push({ type: "output", text: plan.explanation });
+        plan.steps.forEach((step, index) => {
+            const marker = step.status === "completed" ? "[x]" : step.status === "in_progress" ? "[>]" : "[ ]";
+            lines.push({ type: step.status === "completed" ? "output" : step.status === "in_progress" ? "error" : "output", text: `${marker} ${index + 1}. ${step.step}` });
+        });
+        return lines;
+    }
+
     async function requestAgentProtocolCorrection(chat, model, rawText) {
+        const evidence = typeof ToolCallNormalizer.extractToolCallEvidence === "function"
+            ? ToolCallNormalizer.extractToolCallEvidence(rawText)
+            : String(rawText || "").trim().slice(0, 2000);
+        const errorText = [
+            "模型没有返回有效的工具调用 JSON。请继续执行任务，并按协议返回工具调用对象。",
+            evidence ? `本次错误的工具调用具体内容：\n${evidence}` : "本次响应中未找到可识别的工具调用内容。"
+        ].join("\n\n");
         chat.messages.push({
             role: "tool",
             name: "agent_protocol",
             toolName: "agent_protocol",
             arguments: {},
-            status: "error",
-            result: { success: false, error: "模型没有返回有效的工具调用 JSON。请继续执行任务，并按协议返回工具调用对象。" },
-            content: "模型没有返回有效的工具调用 JSON。请继续执行任务，并按协议返回工具调用对象。",
+            hidden: true,
+            status: "done",
+            result: { success: true, protocolCorrection: true, error: errorText },
+            content: errorText,
             toolId: `${chat.id}-${Date.now()}-${agentToolSequence += 1}`
         });
         const message = chat.messages[chat.messages.length - 1];
-        appendAgentToolMessageToUI(message);
         await persistAgentToolMessage(chat, message);
     }
 
@@ -1016,22 +1190,33 @@
             while (!agentStopRequested) {
                 const result = await requestAgentModel(chat, model, {
                     statusRow: thinkingRow,
-                    onReasoning: reasoning => thinkingRow?.updateReasoning?.(reasoning)
+                    onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
                 });
                 completeAgentThinking(chat, model, thinkingRow, result);
                 thinkingRow = null;
                 if (agentStopRequested) break;
-                const parsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls);
+                const rawParsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls);
+                const parsed = {
+                    ...rawParsed,
+                    calls: ToolCallNormalizer.canonicalizeToolCalls(rawParsed.calls),
+                    segments: rawParsed.segments.map(segment =>
+                        segment.type === "tool_call" ? { ...segment, call: ToolCallNormalizer.canonicalizeToolCall(segment.call) } : segment
+                    )
+                };
                 if (parsed.calls.length > MAX_TOOL_CALLS_PER_RESPONSE) {
                     throw new Error(`单次模型回复包含 ${parsed.calls.length} 个工具调用，超过 30 个上限，Agent 已终止`);
                 }
                 if (!parsed.calls.length) {
                     invalidResponses += 1;
+                    const responseText = parsed.hasMalformedToolCall
+                        ? ""
+                        : String(parsed.text || "").trim();
                     if (invalidResponses >= 3) {
                         const responseText = parsed.text || "模型连续返回空回复。";
                         appendAgentVisibleText(chat, `${responseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, "", true);
                         break;
                     }
+                    if (responseText && invalidResponses < 3) appendAgentVisibleText(chat, responseText, model, "", false);
                     await requestAgentProtocolCorrection(chat, model, result.text);
                     thinkingRow = appendAgentThinkingRow();
                     continue;

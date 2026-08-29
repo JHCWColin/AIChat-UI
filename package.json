@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
@@ -70,12 +70,12 @@
       "artifactName": "AIUI-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "AIUI7.0.0-Release-Portable.exe"
+      "artifactName": "AIUI7.1.0-Release-Portable.exe"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "AIUI7.0.0-Release-Setup.exe"
+      "artifactName": "AIUI7.1.0-Release-Setup.exe"
     }
   },
   "dependencies": {

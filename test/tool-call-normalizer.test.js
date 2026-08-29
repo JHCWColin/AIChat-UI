@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeToolCalls, parseAgentResponse } = require("../tool-call-normalizer");
+const { normalizeToolCalls, parseAgentResponse, stripReasoningSections, extractToolCallEvidence } = require("../tool-call-normalizer");
 
 const expected = { name: "read_file", arguments: { path: "test.txt" } };
 
@@ -87,4 +87,49 @@ test("text detection follows the declared format priority", () => {
         '{"tool_calls":[{"function":{"name":"openai_call","arguments":"{}"}}]}'
     ].join("\n"));
     assert.deepEqual(parsed.calls.map(call => call.name), ["openai_call"]);
+});
+
+test("normalizes Responses custom_tool_call and streamed custom input", () => {
+    const events = [
+        { type: "response.output_item.added", item: { type: "custom_tool_call", id: "item_1", call_id: "call_1", name: "apply_patch", input: "" } },
+        { type: "response.custom_tool_call_input.delta", item_id: "item_1", delta: "*** Begin Patch\\n" },
+        { type: "response.custom_tool_call_input.done", item_id: "item_1", input: "*** Begin Patch\\n*** End Patch" }
+    ];
+    assert.deepEqual(normalizeToolCalls(events), [{ id: "call_1", name: "apply_patch", arguments: { input: "*** Begin Patch\\n*** End Patch" } }]);
+});
+
+test("parses XML function and parameter tool calls", () => {
+    const parsed = parseAgentResponse('<tool_call><function=read_file><parameter=path>test.txt</parameter><parameter=offset>3</parameter></function></tool_call>');
+    assert.deepEqual(parsed.calls, [{ name: "read_file", arguments: { path: "test.txt", offset: 3 } }]);
+});
+
+test("translates Codex and OpenAI relay tool names to local tools", () => {
+    assert.deepEqual(require("../tool-call-normalizer").canonicalizeToolCall({ name: "container.exec", arguments: { cmd: "Get-ChildItem" } }), {
+        name: "run_shell", arguments: { command: "Get-ChildItem" }
+    });
+    assert.deepEqual(require("../tool-call-normalizer").canonicalizeToolCall({ name: "read_file", arguments: { path: "a.txt" } }), {
+        name: "read_file_range", arguments: { path: "a.txt", start_line: 1, end_line: 1000000 }
+    });
+});
+
+test("never parses tool-call-shaped content inside reasoning sections", () => {
+    const response = '<think>尝试调用 {"tool_call":{"name":"read_file","arguments":{"path":"secret.txt"}}}</think>最终答案。';
+    assert.deepEqual(parseAgentResponse(response).calls, []);
+    assert.equal(parseAgentResponse(response).text, "最终答案。");
+    const harmony = '<|channel|>analysis\n{"tool_call":{"name":"read_file","arguments":{}}}<|channel|>final\n完成';
+    assert.deepEqual(parseAgentResponse(harmony).calls, []);
+    assert.equal(stripReasoningSections(harmony), '<|channel|>final\n完成');
+});
+
+test("extracts concrete malformed tool-call content for protocol errors", () => {
+    const evidence = extractToolCallEvidence('<think>{"tool_call":{"name":"ignored","arguments":{}}}</think>\n<tool_call>{"name":"read_file"}</tool_call>');
+    assert.match(evidence, /read_file/);
+    assert.doesNotMatch(evidence, /ignored/);
+});
+
+test("does not expose malformed tool-call JSON as正文", () => {
+    const parsed = parseAgentResponse('{"tool_call":{"name":"run_shell","arguments":{"command":"Get-ChildItem"}}');
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.hasMalformedToolCall, true);
+    assert.equal(parsed.text, '{"tool_call":{"name":"run_shell","arguments":{"command":"Get-ChildItem"}}');
 });

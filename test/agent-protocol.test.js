@@ -133,3 +133,9 @@ test("parses more than thirty calls so the Agent Loop can enforce the per-respon
 test("formats current time at the dynamic suffix", () => {
     assert.equal(formatCurrentTime(new Date("2026-08-15T02:00:00.000Z")), "Current Time: 2026-08-15 10:00:00 Asia/Shanghai");
 });
+
+test("does not parse tool-call-shaped reasoning as executable protocol output", () => {
+    const parsed = parseSequentialToolCalls('<think>{"tool_call":{"name":"read_file_range","arguments":{}}}</think>完成');
+    assert.equal(parsed.calls.length, 0);
+    assert.equal(parsed.text, "完成");
+});

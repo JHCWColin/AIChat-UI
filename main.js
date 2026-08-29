@@ -22,6 +22,9 @@ const {
     readFileRange,
     writeFile: writeAgentFile,
     editFile: editAgentFile,
+    listDir,
+    grepFiles,
+    viewImage,
     loadAllowedCommands,
     saveUserAllowedCommands,
     findAllowedCommandPrefix,
@@ -901,6 +904,9 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
     if (name === "read_file_range") return readFileRange(binding.realPath || binding.path, args);
     if (name === "write_file") return writeAgentFile(binding.realPath || binding.path, args);
     if (name === "edit_file") return editAgentFile(binding.realPath || binding.path, args);
+    if (name === "list_dir") return listDir(binding.realPath || binding.path, args);
+    if (name === "grep_files") return grepFiles(binding.realPath || binding.path, args);
+    if (name === "view_image") return viewImage(binding.realPath || binding.path, args);
     if (name === "run_shell") {
         const executionId = String(source.executionId || "").trim();
         const requestedTimeoutMs = Number(source.timeoutMs);

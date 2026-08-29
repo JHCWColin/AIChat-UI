@@ -505,6 +505,202 @@ async function scanWorkspaceTextFiles(workspacePath) {
     };
 }
 
+async function listDir(workspacePath, args = {}) {
+    try {
+        const dirPath = String(args.dir_path || args.path || ".").trim();
+        const offset = Math.max(0, Number(args.offset) || 0);
+        const limit = Number(args.limit) > 0 ? Number(args.limit) : 0;
+        const maxDepth = Math.max(1, Math.min(10, Number(args.depth) || 1));
+        const { workspaceReal, targetPath } = await resolveWorkspacePath(workspacePath, dirPath, { allowMissing: false });
+        const stat = await fs.stat(targetPath);
+        if (!stat.isDirectory()) return { success: false, error: `not a directory: ${dirPath}` };
+        const allEntries = [];
+        async function visit(directory, currentDepth) {
+            let entries;
+            try {
+                entries = await fs.readdir(directory, { withFileTypes: true });
+            } catch (error) {
+                return;
+            }
+            entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+            for (const entry of entries) {
+                if (entry.isSymbolicLink()) continue;
+                if (WORKSPACE_SCAN_EXCLUDED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+                const fullPath = path.join(directory, entry.name);
+                const relativePath = path.relative(workspaceReal, fullPath).split(path.sep).join("/");
+                let entryStat;
+                try {
+                    entryStat = await fs.stat(fullPath);
+                } catch {
+                    continue;
+                }
+                allEntries.push({
+                    name: entry.name,
+                    path: relativePath || entry.name,
+                    type: entryStat.isDirectory() ? "directory" : "file",
+                    size: entryStat.isFile() ? entryStat.size : 0,
+                    modifiedAt: entryStat.mtime?.toISOString?.() || ""
+                });
+                if (entryStat.isDirectory() && currentDepth < maxDepth) {
+                    await visit(fullPath, currentDepth + 1);
+                }
+            }
+        }
+        await visit(targetPath, 1);
+        const totalCount = allEntries.length;
+        const paginated = limit > 0 ? allEntries.slice(offset, offset + limit) : allEntries.slice(offset);
+        return {
+            success: true,
+            path: path.relative(workspaceReal, targetPath) || ".",
+            entries: paginated,
+            totalCount,
+            offset,
+            limit: limit || totalCount,
+            hasMore: limit > 0 && offset + limit < totalCount
+        };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function grepFiles(workspacePath, args = {}) {
+    try {
+        const pattern = String(args.pattern || "").trim();
+        if (!pattern) return { success: false, error: "pattern is required" };
+        const includeGlob = String(args.include || "").trim();
+        const searchPath = String(args.path || ".").trim();
+        const limit = Math.max(1, Math.min(1000, Number(args.limit) || 100));
+        let regex;
+        try {
+            regex = new RegExp(pattern, "i");
+        } catch (error) {
+            return { success: false, error: `invalid regex pattern: ${error.message}` };
+        }
+        const { workspaceReal, targetPath } = await resolveWorkspacePath(workspacePath, searchPath, { allowMissing: false });
+        const matches = [];
+        let truncated = false;
+        const includeMatch = includeGlob
+            ? new RegExp("^" + includeGlob.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i")
+            : null;
+        async function visit(directory) {
+            if (matches.length >= limit) { truncated = true; return; }
+            let entries;
+            try {
+                entries = await fs.readdir(directory, { withFileTypes: true });
+            } catch {
+                return;
+            }
+            for (const entry of entries) {
+                if (matches.length >= limit) { truncated = true; break; }
+                if (entry.isSymbolicLink()) continue;
+                if (WORKSPACE_SCAN_EXCLUDED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+                const fullPath = path.join(directory, entry.name);
+                if (entry.isDirectory()) {
+                    await visit(fullPath);
+                    continue;
+                }
+                if (!entry.isFile()) continue;
+                if (includeMatch && !includeMatch.test(entry.name)) continue;
+                let content;
+                try {
+                    const fileStat = await fs.stat(fullPath);
+                    if (fileStat.size > 2 * 1024 * 1024) continue;
+                    content = await fs.readFile(fullPath, "utf8");
+                } catch {
+                    continue;
+                }
+                const lines = content.split(/\r?\n/);
+                for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+                    if (matches.length >= limit) { truncated = true; break; }
+                    if (regex.test(lines[lineIndex])) {
+                        matches.push({
+                            path: path.relative(workspaceReal, fullPath).split(path.sep).join("/"),
+                            line: lineIndex + 1,
+                            content: lines[lineIndex].slice(0, 500)
+                        });
+                    }
+                }
+            }
+        }
+        const startStat = await fs.stat(targetPath);
+        if (startStat.isFile()) {
+            const content = await fs.readFile(targetPath, "utf8");
+            const lines = content.split(/\r?\n/);
+            for (let lineIndex = 0; lineIndex < lines.length && matches.length < limit; lineIndex += 1) {
+                if (regex.test(lines[lineIndex])) {
+                    matches.push({
+                        path: path.relative(workspaceReal, targetPath).split(path.sep).join("/"),
+                        line: lineIndex + 1,
+                        content: lines[lineIndex].slice(0, 500)
+                    });
+                }
+            }
+        } else {
+            await visit(targetPath);
+        }
+        return {
+            success: true,
+            pattern,
+            matches,
+            totalCount: matches.length,
+            truncated
+        };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+const IMAGE_MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon"
+};
+const MAX_IMAGE_DATA_URL_BYTES = 8 * 1024 * 1024;
+
+async function viewImage(workspacePath, args = {}) {
+    try {
+        const imagePath = String(args.path || args.file_path || "").trim();
+        if (!imagePath) return { success: false, error: "path is required" };
+        const { workspaceReal, targetPath } = await resolveWorkspacePath(workspacePath, imagePath, { allowMissing: false });
+        const stat = await fs.stat(targetPath);
+        if (!stat.isFile()) return { success: false, error: `not a file: ${imagePath}` };
+        const extension = path.extname(targetPath).toLowerCase();
+        const mimeType = IMAGE_MIME_TYPES[extension] || "application/octet-stream";
+        if (!mimeType.startsWith("image/")) {
+            return { success: false, error: `not a supported image format: ${extension || "unknown"}` };
+        }
+        const relativePath = path.relative(workspaceReal, targetPath).split(path.sep).join("/");
+        if (stat.size > MAX_IMAGE_DATA_URL_BYTES) {
+            return {
+                success: true,
+                path: relativePath,
+                mimeType,
+                fileSize: stat.size,
+                modifiedAt: stat.mtime?.toISOString?.() || "",
+                dataUrl: "",
+                note: `image exceeds ${Math.round(MAX_IMAGE_DATA_URL_BYTES / 1024 / 1024)}MB, data URL omitted`
+            };
+        }
+        const buffer = await fs.readFile(targetPath);
+        const dataUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
+        return {
+            success: true,
+            path: relativePath,
+            mimeType,
+            fileSize: stat.size,
+            modifiedAt: stat.mtime?.toISOString?.() || "",
+            dataUrl
+        };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
 module.exports = {
     DEFAULT_SHELL_TIMEOUT_MS,
     DEFAULT_MAX_OUTPUT_BYTES,
@@ -523,6 +719,9 @@ module.exports = {
     readFileRange,
     writeFile,
     editFile,
+    listDir,
+    grepFiles,
+    viewImage,
     AgentWorkspaceStore,
     AgentShellRunner,
     getEnvironmentDescription,

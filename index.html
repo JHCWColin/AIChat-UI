@@ -3438,7 +3438,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.0.0 Release</span>
+                            <span id="app-version">V7.1.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
@@ -5324,7 +5324,9 @@
         function renderThinkingText(element, text) {
             if (!element) return;
             element.replaceChildren();
-            const rawSource = String(text || '');
+            const rawSource = window.ToolCallNormalizer && typeof window.ToolCallNormalizer.stripReasoningSections === 'function'
+                ? window.ToolCallNormalizer.stripReasoningSections(text)
+                : String(text || '');
             const status = element.closest('.ai-thinking-status');
             element.style.display = rawSource ? 'block' : 'none';
             if (status) {
