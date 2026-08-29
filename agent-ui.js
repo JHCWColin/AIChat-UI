@@ -1,5 +1,7 @@
 (function () {
     const MAX_TOOL_CALLS_PER_RESPONSE = 30;
+    const MAX_CONSECUTIVE_EMPTY_RESPONSES = 10;
+    const MAX_CONSECUTIVE_INVALID_RESPONSES = 3;
     const DEFAULT_AGENT_DIFF_MAX_LINES = 10;
     const DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS = 120;
     const TOOL_ICONS = {
@@ -1189,6 +1191,7 @@
         document.getElementById("stop-btn")?.classList.remove("hidden");
         let thinkingRow = appendAgentThinkingRow();
         let invalidResponses = 0;
+        let emptyResponses = 0;
         try {
             while (!agentStopRequested) {
                 const result = await requestAgentModel(chat, model, {
@@ -1210,21 +1213,33 @@
                     throw new Error(`单次模型回复包含 ${parsed.calls.length} 个工具调用，超过 30 个上限，Agent 已终止`);
                 }
                 if (!parsed.calls.length) {
-                    invalidResponses += 1;
                     const responseText = parsed.hasMalformedToolCall
                         ? ""
                         : String(parsed.text || "").trim();
-                    if (invalidResponses >= 3) {
-                        const responseText = parsed.text || "模型连续返回空回复。";
-                        appendAgentVisibleText(chat, `${responseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, "", true);
+                    const isEmptyResponse = !parsed.hasMalformedToolCall && !responseText;
+                    if (isEmptyResponse) {
+                        emptyResponses += 1;
+                        invalidResponses = 0;
+                        if (emptyResponses >= MAX_CONSECUTIVE_EMPTY_RESPONSES) {
+                            appendAgentVisibleText(chat, `模型连续 ${MAX_CONSECUTIVE_EMPTY_RESPONSES} 次返回空回复，Agent 重试失败，循环已终止。`, model, "", true);
+                            break;
+                        }
+                    } else {
+                        emptyResponses = 0;
+                        invalidResponses += 1;
+                    }
+                    if (invalidResponses >= MAX_CONSECUTIVE_INVALID_RESPONSES) {
+                        const finalResponseText = parsed.text || "模型连续返回无效回复。";
+                        appendAgentVisibleText(chat, `${finalResponseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, "", true);
                         break;
                     }
-                    if (responseText && invalidResponses < 3) appendAgentVisibleText(chat, responseText, model, "", false);
+                    if (responseText && invalidResponses < MAX_CONSECUTIVE_INVALID_RESPONSES) appendAgentVisibleText(chat, responseText, model, "", false);
                     await requestAgentProtocolCorrection(chat, model, result.text);
                     thinkingRow = appendAgentThinkingRow();
                     continue;
                 }
                 invalidResponses = 0;
+                emptyResponses = 0;
                 const finishSegmentIndex = parsed.segments.findIndex(segment => segment.type === "tool_call" && segment.call?.name === "finish_task");
                 const trailingFinalText = finishSegmentIndex >= 0
                     ? parsed.segments.slice(finishSegmentIndex + 1)
