@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V7.0.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.4.0_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -36,6 +36,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V7.3.0 Release 增强中日韩解析能力
 
 ### V7.3.0 Release 修改Agent核心提示词
 
@@ -154,8 +156,8 @@ npm start
 
 项目当前使用 `electron-builder` 生成以下 Windows 产物：
 
-- Portable：`AIUI7.3.0-Release-Portable.exe`
-- Setup：`AIUI7.3.0-Release-Setup.exe`
+- Portable：`AIUI7.4.0-Release-Portable.exe`
+- Setup：`AIUI7.4.0-Release-Setup.exe`
 
 构建命令：
 
@@ -170,7 +172,7 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V7.3.0 Release`
+- 当前版本：`V7.4.0 Release`
 - 当前构建标识：`build20260829`
 
 ---

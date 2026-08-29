@@ -1160,9 +1160,19 @@
         const evidence = typeof ToolCallNormalizer.extractToolCallEvidence === "function"
             ? ToolCallNormalizer.extractToolCallEvidence(rawText)
             : String(rawText || "").trim().slice(0, 2000);
+        const diagnostics = typeof ToolCallNormalizer.diagnoseToolCallResponse === "function"
+            ? ToolCallNormalizer.diagnoseToolCallResponse(rawText)
+            : {
+                issue: evidence ? "malformed_or_unsupported_tool_call" : "no_tool_call",
+                location: evidence ? "tool-call fragment" : "response",
+                suggestion: "Return a complete standalone JSON tool call using the exact local tool name and argument schema."
+            };
         const errorText = [
-            "模型没有返回有效的工具调用 JSON。请继续执行任务，并按协议返回工具调用对象。",
-            evidence ? `本次错误的工具调用具体内容：\n${evidence}` : "本次响应中未找到可识别的工具调用内容。"
+            "Agent 协议诊断：模型返回内容未能执行。请根据以下诊断修复后重试。",
+            `错误类型：${diagnostics.issue}`,
+            `错误位置：${diagnostics.location}`,
+            `修复建议：${diagnostics.suggestion}`,
+            evidence ? `本次错误的工具调用具体内容：\n${evidence}` : `本次模型原始响应（未检测到工具标记）：\n${String(rawText || "").trim().slice(0, 4000) || "（空响应）"}`
         ].join("\n\n");
         chat.messages.push({
             role: "tool",
@@ -1171,7 +1181,7 @@
             arguments: {},
             hidden: true,
             status: "done",
-            result: { success: true, protocolCorrection: true, error: errorText },
+            result: { success: true, protocolCorrection: true, error: errorText, diagnostics, evidence },
             content: errorText,
             toolId: `${chat.id}-${Date.now()}-${agentToolSequence += 1}`
         });

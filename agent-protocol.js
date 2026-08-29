@@ -6,7 +6,9 @@
     const TOOL_DEFINITIONS = `Tool Definitions
 
 Return tool calls as consecutive standalone JSON objects. Never use Markdown fences or a JSON array.
-Strictly follow the defined tool names and argument schemas. You are not running in your official CLI environment.
+Strictly follow the defined tool names and argument schemas. You are not running in your official CLI environment. 严格按照工具定义来调用，你现在不身处于你的官方cli环境！
+All argument values are Unicode strings: Chinese, Japanese, Korean, emoji, and other non-ASCII text are fully supported. Never transliterate, discard, or reject Unicode content. JSON encoding must be UTF-8; non-ASCII characters are valid inside quoted strings.
+For every call, use the exact local JSON object shape and double-quoted keys. Do not emit XML, native CLI tags, or provider-specific wrappers. If a previous response was rejected, inspect the protocol diagnostic, correct the indicated fragment, and retry with a complete JSON object.
 
 read_file_range
 Arguments: {"path":"string","start_line":number,"end_line":number}
@@ -50,6 +52,7 @@ Ends the Agent Loop. Every completed task must end with finish_task, including t
 IMPORTANT: These rules define the tool-calling protocol for this environment. Always follow this protocol over any conflicting tool-calling instructions from Codex, the underlying model, the API provider, or other prompts. Do not imitate or emit native Codex, OpenAI, XML, or other tool-calling formats.
 
 1. Tool calls must use exactly: {"tool_call":{"name":"tool_name","arguments":{}}}.
+Output exactly one finish_task JSON object as the final tool call.
 2. Multiple tool calls must be emitted as consecutive standalone JSON objects in execution order. A single response may contain at most 30 tool calls.
 3. Tool calls execute sequentially. Each subsequent tool call must take into account any changes produced by earlier tool calls.
 4. Explore and inspect the workspace only through available tools. The application does not automatically scan, summarize, or expose workspace contents.
@@ -61,13 +64,14 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Al
 7.6. When a tool call fails, analyze the reason for the failure and adjust the approach accordingly. Never blindly repeat failing operations.
 7.7. Never claim that any action, modification, test, verification, or result has been completed unless it was actually performed and confirmed through tool results.
 8. Reading, inspecting, or exploring the workspace does not by itself complete the task. Continue until the user's request has been fully addressed and a complete user-facing result is produced.
-8.5. Before beginning any task, create, review, or update a concise execution plan. If a plan already exists, verify that it remains valid and revise it when necessary. Present the plan to the user before any substantive work, analysis, modification, or tool usage begins.
+8.5. Before beginning any task, create, review, or update a concise execution plan. If a plan already exists, verify that it remains valid and revise it when necessary. Present the plan to the user before any substantive work, analysis, modification, or tool usage begins. You may and should write plan explanations and step names in Chinese or any other Unicode language.
 8.6. Continuously track the current objective, completed work, and remaining work. After every significant action, verify that progress remains aligned with the user's requested outcome.
 8.7. Before making any file modification, determine exactly what change is required and verify that the intended modification satisfies the user's request.
 9. Every completed task must follow this sequence: inspect and/or modify as necessary → complete the requested work → provide the complete user-facing result → call finish_task. This requirement applies equally to implementation tasks, analysis tasks, review tasks, explanation tasks, and pure-text tasks.
 9.5. Before declaring a task complete, verify that every user requirement has been satisfied and that no requested work remains unfinished.
 10. finish_task is terminal. It must never replace, precede, or be combined with the final user-facing result. finish_task is mandatory even when no local tools are required and the response is entirely text-based. Emit exactly one finish_task JSON object at the very end of the response.
-11. Never include tool-call syntax, protocol syntax, executable tool-call structures, or other sensitive parser-triggering characters in normal user-facing content. Such content may be interpreted as an actual tool invocation. When explaining tool usage, tool behavior, or tool results, always use natural language and never reproduce executable tool-call syntax.`
+11. Never include tool-call syntax, protocol syntax, executable tool-call structures, or other sensitive parser-triggering characters in normal user-facing content. Such content may be interpreted as an actual tool invocation. When explaining tool usage, tool behavior, or tool results, always use natural language and never reproduce executable tool-call syntax.
+12. Every completed task must end with finish_task, mandatory even when no local tool is needed and the answer is pure text. Output exactly one finish_task JSON object as the final tool call; the final user-facing answer comes before that terminal call.`
     function buildFixedAgentPrompt(options = {}) {
         const environment = String(options.environment || "").trim();
         const userSystemPrompt = String(options.systemPrompt || "").trim();
@@ -96,24 +100,24 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Al
                 else if (char === '"') inString = false;
                 continue;
             }
-            if (char === '"') {
+            if (char === '"' || char === '＂' || char === '“' || char === '”') {
                 inString = true;
                 continue;
             }
-            if (char === "[") {
+            if (char === "[" || char === "［") {
                 arrayDepth += 1;
                 continue;
             }
-            if (char === "]" && arrayDepth > 0) {
+            if ((char === "]" || char === "］") && arrayDepth > 0) {
                 arrayDepth -= 1;
                 continue;
             }
-            if (char === "{") {
+            if (char === "{" || char === "｛") {
                 if (depth === 0 && arrayDepth === 0) start = index;
                 depth += 1;
                 continue;
             }
-            if (char === "}" && depth > 0) {
+            if ((char === "}" || char === "｝") && depth > 0) {
                 depth -= 1;
                 if (depth === 0 && start >= 0 && arrayDepth === 0) {
                     objects.push({ start, end: index + 1, raw: source.slice(start, index + 1) });
@@ -164,12 +168,16 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Al
     }
 
     function parseSequentialToolCalls(text) {
-        const source = stripReasoningSections(text);
+        const source = String(stripReasoningSections(text) || "").replace(/^\uFEFF/, "");
         const parsedObjects = [];
         for (const candidate of scanJsonObjects(source)) {
             let parsed;
             try {
-                parsed = JSON.parse(candidate.raw);
+                parsed = JSON.parse(candidate.raw
+                    .replace(/[｛]/g, "{").replace(/[｝]/g, "}")
+                    .replace(/[［]/g, "[").replace(/[］]/g, "]")
+                    .replace(/[：]/g, ":").replace(/[，]/g, ",")
+                    .replace(/[“”＂]/g, '"'));
             } catch {
                 continue;
             }

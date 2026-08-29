@@ -24,7 +24,8 @@
         const candidates = [source, ...scanJsonValues(source).map(item => item.raw)];
         for (const candidate of candidates) {
             try {
-                const parsed = JSON.parse(candidate);
+                const parsed = parseJsonValue(candidate);
+                if (parsed === null) continue;
                 if (isRecord(parsed)) return parsed;
                 if (typeof parsed === "string" && parsed !== candidate) {
                     const nested = parseArguments(parsed);
@@ -40,6 +41,23 @@
             .replace(/&quot;/gi, '"').replace(/&#34;/g, '"')
             .replace(/&apos;|&#39;/gi, "'").replace(/&lt;/gi, "<")
             .replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
+    }
+
+    function normalizeJsonPunctuation(value) {
+        return String(value || "")
+            .replace(/[｛]/g, "{").replace(/[｝]/g, "}")
+            .replace(/[［]/g, "[").replace(/[］]/g, "]")
+            .replace(/[：]/g, ":").replace(/[，]/g, ",")
+            .replace(/[“”＂]/g, '"');
+    }
+
+    function parseJsonValue(value) {
+        const source = String(value || "").replace(/^\uFEFF/, "").trim();
+        try { return JSON.parse(source); } catch (_) {
+            const normalized = normalizeJsonPunctuation(source);
+            if (normalized === source) return null;
+            try { return JSON.parse(normalized); } catch (_) { return null; }
+        }
     }
 
     function parseXmlArguments(source) {
@@ -84,11 +102,11 @@
                 else if (char === '"') inString = false;
                 continue;
             }
-            if (char === '"') { inString = true; continue; }
-            if (char === "{" || char === "[") {
+            if (char === '"' || char === '＂' || char === '“' || char === '”') { inString = true; continue; }
+            if (char === "{" || char === "[" || char === "｛" || char === "［") {
                 if (depth === 0) start = index;
                 depth += 1;
-            } else if ((char === "}" || char === "]") && depth > 0) {
+            } else if ((char === "}" || char === "]" || char === "｝" || char === "］") && depth > 0) {
                 depth -= 1;
                 if (depth === 0 && start >= 0) {
                     values.push({ start, end: index + 1, raw: source.slice(start, index + 1) });
@@ -350,7 +368,7 @@
     }
 
     function extractToolCallEvidence(value, maxLength = 2000) {
-        const source = stripReasoningSections(value).trim();
+        const source = normalizeJsonPunctuation(stripReasoningSections(value)).trim();
         if (!source) return "";
         const candidates = [];
         for (const item of scanJsonValues(source)) {
@@ -365,15 +383,43 @@
     }
 
     function hasMalformedToolCall(value) {
-        const source = stripReasoningSections(value);
+        const source = normalizeJsonPunctuation(stripReasoningSections(value));
         return /(?:"tool_call"\s*:|"tool_calls"\s*:|"function_call"\s*:|<tool_call\b|<function\s*=|<tool\s*=|(?:^|\n)\s*(?:to|recipient)\s*[=:])/i.test(source);
+    }
+
+    function diagnoseToolCallResponse(value) {
+        const source = normalizeJsonPunctuation(stripReasoningSections(value)).replace(/^\uFEFF/, "").trim();
+        const evidence = extractToolCallEvidence(source, 4000);
+        const markers = hasMalformedToolCall(source);
+        let issue = "no_tool_call";
+        let location = "response";
+        let suggestion = "Return one standalone JSON object per tool call using the required tool_call wrapper; include finish_task as the final call.";
+        if (!source) {
+            issue = "empty_response";
+            suggestion = "Return a tool call now. If the task is already complete, return finish_task.";
+        } else if (markers) {
+            issue = "malformed_or_unsupported_tool_call";
+            location = evidence ? "tool-call fragment" : "response";
+            suggestion = "Use JSON syntax, double quotes, and the exact local tool name. Unicode values such as Chinese are allowed inside strings.";
+            const open = (source.match(/{/g) || []).length;
+            const close = (source.match(/}/g) || []).length;
+            if (open !== close) {
+                issue = "unbalanced_json_braces";
+                suggestion = "Close every JSON object and ensure the arguments object is complete before sending the call.";
+            }
+        } else if (source) {
+            issue = "missing_tool_call";
+            suggestion = "Do not send prose alone. Encode the intended action as a standalone tool_call JSON object, then end with finish_task when done.";
+        }
+        return { issue, location, suggestion, evidence, sourceLength: source.length };
     }
 
     function parseText(text) {
         const source = stripReasoningSections(text);
         if (/^\s*"(?:\\.|[^"\\])*"\s*$/.test(source)) {
             try {
-                const decoded = JSON.parse(source);
+                const decoded = parseJsonValue(source);
+                if (decoded === null) throw new Error("invalid JSON");
                 if (typeof decoded === "string" && decoded !== source) return parseText(decoded);
             } catch (_) { /* continue with the original text */ }
         }
@@ -384,7 +430,8 @@
         let structuredPriority = Infinity;
         for (const candidate of scanJsonValues(source)) {
             let parsed;
-            try { parsed = JSON.parse(candidate.raw); } catch (_) { continue; }
+            parsed = parseJsonValue(candidate.raw);
+            if (parsed === null) continue;
             const classified = classifyStructured(parsed);
             if (!classified.calls.length) continue;
             structuredPriority = Math.min(structuredPriority, classified.priority);
@@ -466,7 +513,8 @@
         const tail = cleanText(source.slice(cursor));
         if (tail) segments.push({ type: "text", text: tail });
         const visibleText = segments.filter(item => item.type === "text").map(item => item.text).join("\n\n");
-        return { calls: emittedCalls, segments, text: visibleText, hasMalformedToolCall: emittedCalls.length === 0 && hasMalformedToolCall(source) };
+        const malformed = emittedCalls.length === 0 && hasMalformedToolCall(source);
+        return { calls: emittedCalls, segments, text: visibleText, hasMalformedToolCall: malformed, diagnostics: diagnoseToolCallResponse(source) };
     }
 
     const FALLBACK_END_LINE = 1000000;
@@ -570,7 +618,7 @@
         const calls = Array.isArray(structuredCalls) && structuredCalls.length ? structuredCalls : parseText(text).calls;
         if (Array.isArray(structuredCalls) && structuredCalls.length) {
             const prose = String(text || "").trim();
-            return { calls, segments: [...(prose ? [{ type: "text", text: prose }] : []), ...calls.map(call => ({ type: "tool_call", call }))], text: prose };
+            return { calls, segments: [...(prose ? [{ type: "text", text: prose }] : []), ...calls.map(call => ({ type: "tool_call", call }))], text: prose, diagnostics: diagnoseToolCallResponse(prose) };
         }
         return parseText(text);
     }
@@ -584,6 +632,7 @@
         parseArguments,
         stripReasoningSections,
         extractToolCallEvidence,
+        diagnoseToolCallResponse,
         hasMalformedToolCall,
         translateToolName,
         canonicalizeToolCall,

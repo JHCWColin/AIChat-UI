@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeToolCalls, parseAgentResponse, stripReasoningSections, extractToolCallEvidence } = require("../tool-call-normalizer");
+const { normalizeToolCalls, parseAgentResponse, stripReasoningSections, extractToolCallEvidence, diagnoseToolCallResponse } = require("../tool-call-normalizer");
 
 const expected = { name: "read_file", arguments: { path: "test.txt" } };
 
@@ -132,4 +132,26 @@ test("does not expose malformed tool-call JSON as正文", () => {
     assert.deepEqual(parsed.calls, []);
     assert.equal(parsed.hasMalformedToolCall, true);
     assert.equal(parsed.text, '{"tool_call":{"name":"run_shell","arguments":{"command":"Get-ChildItem"}}');
+});
+
+test("preserves Unicode arguments including Chinese plan text", () => {
+    const parsed = parseAgentResponse('{"tool_call":{"name":"update_plan","arguments":{"explanation":"修复中文工具调用","plan":[{"step":"读取配置文件","status":"in_progress"}]}}}');
+    assert.deepEqual(parsed.calls[0].arguments, {
+        explanation: "修复中文工具调用",
+        plan: [{ step: "读取配置文件", status: "in_progress" }]
+    });
+});
+
+test("accepts full-width JSON punctuation around Unicode arguments", () => {
+    const parsed = parseAgentResponse('前缀\n｛"tool_call"：｛"name"："update_plan"，"arguments"：｛"explanation"："中文计划"｝｝｝');
+    assert.equal(parsed.calls[0].name, "update_plan");
+    assert.equal(parsed.calls[0].arguments.explanation, "中文计划");
+});
+
+test("returns actionable diagnostics for malformed tool calls", () => {
+    const diagnostics = diagnoseToolCallResponse('{"tool_call":{"name":"update_plan","arguments":{"explanation":"中文"}');
+    assert.equal(diagnostics.issue, "unbalanced_json_braces");
+    assert.match(diagnostics.location, /tool-call/);
+    assert.match(diagnostics.suggestion, /Close|complete/i);
+    assert.match(diagnostics.evidence, /中文/);
 });
