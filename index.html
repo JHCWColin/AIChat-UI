@@ -728,29 +728,35 @@
             }
         }
 
-        #settings-modal {
+        #settings-modal,
+        #setup-guide-modal {
             background-color: rgba(0, 0, 0, 0.4);
             display: none;
             backdrop-filter: blur(8px);
         }
 
-        body.theme-light #settings-modal {
+        body.theme-light #settings-modal,
+        body.theme-light #setup-guide-modal {
             background-color: rgba(0, 0, 0, 0.15) !important;
         }
 
-        body.theme-light #settings-modal>div header {
+        body.theme-light #settings-modal>div header,
+        body.theme-light #setup-guide-modal>div header {
             border-bottom-color: rgba(0, 0, 0, 0.1) !important;
         }
 
-        body.theme-light #settings-modal>div .border-t {
+        body.theme-light #settings-modal>div .border-t,
+        body.theme-light #setup-guide-modal>div .border-t {
             border-color: rgba(0, 0, 0, 0.1) !important;
         }
 
-        #settings-modal.flex {
+        #settings-modal.flex,
+        #setup-guide-modal.flex {
             display: flex;
         }
 
         #settings-modal,
+        #setup-guide-modal,
         #compact-confirm-modal,
         #danger-confirm-modal,
         #agent-yolo-warning-modal,
@@ -762,6 +768,7 @@
         }
 
         #settings-modal > div,
+        #setup-guide-modal > div,
         #compact-confirm-modal > div,
         #danger-confirm-modal > div,
         #agent-yolo-warning-modal > div,
@@ -773,6 +780,7 @@
         }
 
         #settings-modal.modal-active,
+        #setup-guide-modal.modal-active,
         #compact-confirm-modal.modal-active,
         #danger-confirm-modal.modal-active,
         #agent-yolo-warning-modal.modal-active,
@@ -783,6 +791,7 @@
         }
 
         #settings-modal.modal-active > div,
+        #setup-guide-modal.modal-active > div,
         #compact-confirm-modal.modal-active > div,
         #danger-confirm-modal.modal-active > div,
         #agent-yolo-warning-modal.modal-active > div,
@@ -793,6 +802,7 @@
         }
 
         #settings-modal.modal-closing,
+        #setup-guide-modal.modal-closing,
         #compact-confirm-modal.modal-closing,
         #danger-confirm-modal.modal-closing,
         #agent-yolo-warning-modal.modal-closing,
@@ -802,7 +812,8 @@
             pointer-events: none;
         }
 
-        #settings-modal.portrait-layout {
+        #settings-modal.portrait-layout,
+        #setup-guide-modal.portrait-layout {
             padding: 0 !important;
         }
 
@@ -2843,9 +2854,9 @@
         </div>
     </div>
     <div id="setup-guide-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4">
-        <div class="bg-[#2f2f2f] w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden text-white flex flex-col max-h-[90vh]">
-            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">← 返回</button><h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button></header>
-            <div id="setup-guide-content" class="p-5 overflow-y-auto"></div>
+        <div class="w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex flex-col">
+            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button onclick="setupGuideBack()" class="px-3 py-2 rounded-xl hover:bg-gray-800">← 返回</button><h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button></header>
+            <div id="setup-guide-content" class="setup-guide-content p-5"></div>
             <footer class="flex justify-end gap-3 p-4 border-t border-gray-700"><button id="setup-guide-prev" onclick="setupGuidePrev()" class="px-4 py-2 rounded-xl border border-gray-700">上一页</button><button id="setup-guide-next" onclick="setupGuideNext()" class="px-4 py-2 rounded-xl bg-emerald-600">下一页</button></footer>
         </div>
     </div>
@@ -3401,7 +3412,10 @@
                 <div id="section-agent" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
                     <p id="settings-lock-agent" class="hidden text-sm text-red-400">正在执行 Agent Loop，部分设置项暂不可更改。</p>
-                    <label class="flex items-center gap-2 text-sm text-gray-300"><input id="agent-auto-scroll" type="checkbox" class="accent-emerald-500"> 自动滚动到末尾</label>
+                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex flex-col pr-3"><span class="text-sm font-medium text-gray-200">自动滚动到末尾</span><span class="text-[11px] text-gray-500 mt-0.5">每次生成新的工具调用提示或纯文本时滚动到底部。</span></div>
+                        <label class="cloud-toggle shrink-0"><input id="agent-auto-scroll" type="checkbox"><span class="slider"></span></label>
+                    </div>
                     <p class="text-sm leading-relaxed text-red-400">
                         内测功能：建议使用默认或干净的 API 分组。Codex CLI、Claude Code 等 Agent 转接分组会优先遵循其原生工具规则，可能大幅降低本应用工具调用准确率。
                     </p>
@@ -4355,6 +4369,120 @@
             } finally {
                 contextCompactionRunning = false;
                 updateSettingsLocks();
+            }
+        }
+
+        #setup-guide-modal > div {
+            height: min(720px, calc(100vh - 2rem));
+            max-height: calc(100vh - 2rem);
+            align-items: stretch;
+            background: rgba(30, 30, 35, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            backdrop-filter: blur(40px) saturate(150%);
+            -webkit-backdrop-filter: blur(40px) saturate(150%);
+        }
+
+        body.theme-light #setup-guide-modal > div {
+            background: rgba(255, 255, 255, 0.78);
+            border-color: rgba(255, 255, 255, 0.72);
+            color: #111827;
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+        }
+
+        #setup-guide-modal input:not([type="checkbox"]),
+        #setup-guide-modal select,
+        #setup-guide-modal textarea {
+            color: inherit;
+            background: rgba(23, 23, 23, 0.72);
+            border: 1px solid rgba(107, 114, 128, 0.65);
+            outline: none;
+        }
+
+        body.theme-light #setup-guide-modal input:not([type="checkbox"]),
+        body.theme-light #setup-guide-modal select,
+        body.theme-light #setup-guide-modal textarea {
+            background: rgba(255, 255, 255, 0.72);
+            color: #111827;
+            border-color: rgba(0, 0, 0, 0.16);
+        }
+
+        #setup-guide-modal .theme-btn,
+        #setup-guide-modal .font-btn,
+        #setup-guide-modal .accent-color-btn,
+        #setup-guide-modal .code-size-btn,
+        #setup-guide-modal .layout-btn {
+            padding: 0.65rem 0.9rem;
+            border: 1px solid rgba(107, 114, 128, 0.65);
+            background: rgba(255, 255, 255, 0.08);
+            color: #e5e7eb;
+            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+
+        #setup-guide-modal .theme-btn:hover,
+        #setup-guide-modal .font-btn:hover,
+        #setup-guide-modal .accent-color-btn:hover,
+        #setup-guide-modal .code-size-btn:hover,
+        #setup-guide-modal .layout-btn:hover { transform: translateY(-1px); border-color: var(--accent-primary); }
+
+        #setup-guide-modal .theme-btn.active,
+        #setup-guide-modal .font-btn.active,
+        #setup-guide-modal .accent-color-btn.active,
+        #setup-guide-modal .code-size-btn.active,
+        #setup-guide-modal .layout-btn.active { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent-primary); color: var(--accent-primary); }
+
+        body.theme-light #setup-guide-modal .theme-btn,
+        body.theme-light #setup-guide-modal .font-btn,
+        body.theme-light #setup-guide-modal .accent-color-btn,
+        body.theme-light #setup-guide-modal .code-size-btn,
+        body.theme-light #setup-guide-modal .layout-btn { background: rgba(255, 255, 255, 0.58); color: #374151; }
+
+        #setup-guide-modal .setup-guide-content {
+            min-width: 0;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        #setup-guide-modal .setup-guide-page {
+            animation: setup-guide-page-in 0.28s ease both;
+        }
+
+        @keyframes setup-guide-page-in {
+            from { opacity: 0; transform: translateX(28px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        #setup-guide-modal .setup-guide-gif {
+            width: 100%;
+            max-height: 180px;
+            object-fit: contain;
+            border-radius: 0.75rem;
+            background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.18), rgba(56, 189, 248, 0.12));
+            border: 1px solid rgba(var(--accent-rgb), 0.24);
+        }
+
+        #setup-guide-modal.portrait-layout > div {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            max-height: none !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+        }
+
+        #setup-guide-modal.portrait-layout .setup-guide-content {
+            padding: 1rem;
+        }
+
+        @media (max-aspect-ratio: 1/1), (orientation: portrait) {
+            #setup-guide-modal > div {
+                width: 100vw !important;
+                height: 100vh !important;
+                max-width: none !important;
+                max-height: none !important;
+                border-radius: 0 !important;
+                margin: 0 !important;
             }
         }
 
@@ -6186,6 +6314,8 @@
             if (modal && modal.classList.contains('flex')) {
                 updateSettingsPortraitMode();
             }
+            const guide = document.getElementById('setup-guide-modal');
+            if (guide && guide.classList.contains('flex')) guide.classList.toggle('portrait-layout', window.matchMedia('(max-aspect-ratio: 1/1), (orientation: portrait)').matches);
         });
 
         function populateVoiceModel() {
@@ -6599,23 +6729,50 @@
             ['Agent', '配置 Agent 详情、超时、图像细节和允许命令。', 'guide/8.gif'],
             ['其他设置', '调整数学渲染、自动更新与开发者选项。', 'guide/9.gif']
         ];
+        function guideToggle(id, checked, label, hint = '') {
+            return `<div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700"><div class="flex flex-col pr-3"><span class="text-sm font-medium text-gray-200">${label}</span>${hint ? `<span class="text-[11px] text-gray-500 mt-0.5">${hint}</span>` : ''}</div><label class="cloud-toggle shrink-0"><input id="${id}" type="checkbox" ${checked ? 'checked' : ''}><span class="slider"></span></label></div>`;
+        }
         function renderSetupGuidePage() {
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
-            c.innerHTML = `<img src="${page[2]}" class="w-full max-h-56 object-contain rounded-xl mb-4" onerror="this.style.display='none'"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3><p class="text-sm text-gray-300 mb-4">${page[1]}</p>`;
-            const sectionMap = ['about','api','appearance','ai-chat','coding','voice-chat','desktop-work','agent','other'];
-            const source = document.getElementById(`section-${sectionMap[setupGuidePage]}`);
-            if (source) source.querySelectorAll('input,select,textarea').forEach(el => { const clone = el.closest('label,div')?.cloneNode(true); if (clone) c.appendChild(clone); });
+            const blocks = [
+                `<p class="text-sm text-gray-300 mb-4">${page[1]}</p>`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V7.5.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint()==='/responses'?'active':''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint()==='/chat/completions'?'active':''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
+                setupGuidePage === 2 ? `<div class="flex gap-2"><button type="button" class="theme-btn rounded-xl" onclick="setTheme('light')">浅色</button><button type="button" class="theme-btn rounded-xl" onclick="setTheme('dark')">深色</button></div><div class="accent-color-grid">${['green','sky','amber','rose','claude'].map(x=>`<button type="button" class="accent-color-btn rounded-xl" onclick="setAccentColor('${x}')">${x}</button>`).join('')}</div><div class="grid grid-cols-2 gap-2">${['small','medium','large','extra-large','huge'].map(x=>`<button type="button" class="font-btn rounded-xl" onclick="setFontSize('${x}',this)">${x}</button>`).join('')}</div><div class="grid grid-cols-3 gap-2">${[1,2,3,4,5,6].map(x=>`<button type="button" class="rounded-xl border border-gray-700 p-2" onclick="setBackgroundImage(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"></button>`).join('')}</div>` : '',
+                setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
+                setupGuidePage === 4 ? `<div class="flex gap-2"><button type="button" class="layout-btn rounded-xl" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" class="layout-btn rounded-xl" onclick="setLayoutMode('split',this)">分栏布局</button></div><div class="flex gap-2"><button type="button" class="code-size-btn rounded-xl" onclick="setCanvasFontSize('small',this)">小</button><button type="button" class="code-size-btn rounded-xl" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" class="code-size-btn rounded-xl" onclick="setCanvasFontSize('large',this)">大</button></div>` : '',
+                setupGuidePage === 5 ? `<label class="block text-sm text-gray-300">语音对话模型<input id="guide-voice-model" value="${escapeHtml(localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL)}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label>` : '',
+                setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
+                setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
+                setupGuidePage === 8 ? `<label class="block text-sm text-gray-300">语音转文字模型<select id="guide-voice-transcribe" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="whisper-1">whisper-1</option><option value="whisper-base">whisper-base</option><option value="whisper-large">whisper-large</option></select></label>${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新')}` : '',
+                `</div>`
+            ].join('');
+            c.innerHTML = `<div class="setup-guide-page"><img src="${page[2]}" class="setup-guide-gif" alt="" onerror="this.remove()"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3>${blocks}</div>`;
+            if (setupGuidePage === 3) { const i=document.getElementById('guide-summary-interval'); if(i)i.value=String(autoSummaryInterval); const s=document.getElementById('guide-summary-model'); if(s){ renderModelOptions(s,textModelList.length?textModelList:loadModelList()); s.value=localStorage.getItem('context_compaction_model')||DEFAULT_CONTEXT_COMPACTION_MODEL; } }
+            if (setupGuidePage === 6) { const q=document.getElementById('guide-desktop-quality'); if(q)q.value=localStorage.getItem('desktop_image_quality')||'balanced'; }
+            if (setupGuidePage === 7) { const d=document.getElementById('guide-agent-diff'); if(d)d.value=localStorage.getItem('agent_diff_max_lines')||'10'; const b=document.getElementById('guide-agent-detail'); if(b)b.value=localStorage.getItem('agent_detail_default_behavior')||'expanded'; const t=document.getElementById('guide-agent-timeout'); if(t)t.value=localStorage.getItem('agent_shell_timeout_seconds')||'120'; const im=document.getElementById('guide-agent-image'); if(im)im.value=localStorage.getItem('agent_view_image_detail')||'medium'; }
+            if (setupGuidePage === 8) { const v=document.getElementById('guide-voice-transcribe'); if(v)v.value=localStorage.getItem('voice_model')||'whisper-1'; }
             document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
             document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
         }
+        function guideSetEndpoint(value, btn) { document.querySelectorAll('#setup-guide-content .theme-btn').forEach(b => b.classList.remove('active')); btn?.classList.add('active'); window._guideEndpoint = value; }
+        function syncSetupGuidePage() {
+            if (setupGuidePage === 1) { const b=document.getElementById('guide-base-url')?.value.trim(); const k=document.getElementById('guide-api-key')?.value.trim(); const mt=Number(document.getElementById('guide-max-tokens')?.value||0); if(b) localStorage.setItem('base_url',b); if(k) localStorage.setItem('api_key',k); localStorage.setItem('max_tokens_limit',String(Number.isFinite(mt)?Math.max(0,mt):0)); maxTokensLimit=Math.max(0,mt)||0; if(window._guideEndpoint) localStorage.setItem('request_endpoint',window._guideEndpoint); }
+            if (setupGuidePage === 3) { const i=document.getElementById('guide-summary-interval')?.value; const m=document.getElementById('guide-summary-model')?.value; if(i) { autoSummaryInterval=Number(i); localStorage.setItem('auto_summary_interval',i); } if(m) localStorage.setItem('context_compaction_model',m); }
+            if (setupGuidePage === 5) { const v=document.getElementById('guide-voice-model')?.value.trim(); if(v) localStorage.setItem('voice_chat_model',v); }
+            if (setupGuidePage === 6) { const s=document.getElementById('guide-desktop-shortcut')?.value.trim(); const q=document.getElementById('guide-desktop-quality')?.value; if(s) localStorage.setItem('desktop_shortcut',s); if(q) localStorage.setItem('desktop_image_quality',q); localStorage.setItem('desktop_auto_screenshot',document.getElementById('guide-desktop-auto')?.checked?'true':'false'); }
+            if (setupGuidePage === 7) { ['guide-agent-diff','guide-agent-detail','guide-agent-timeout','guide-agent-image'].forEach((id,i)=>{const v=document.getElementById(id)?.value;if(v) localStorage.setItem(['agent_diff_max_lines','agent_detail_default_behavior','agent_shell_timeout_seconds','agent_view_image_detail'][i],v);}); localStorage.setItem('agent_auto_scroll',document.getElementById('guide-agent-scroll')?.checked?'true':'false'); }
+            if (setupGuidePage === 8) { localStorage.setItem('voice_model',document.getElementById('guide-voice-transcribe')?.value||'whisper-1'); mathRenderingEnabled=Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled=Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled',mathRenderingEnabled?'true':'false'); localStorage.setItem('auto_update_enabled',autoUpdateEnabled?'true':'false'); }
+        }
+        function setupGuideBack() { if (setupGuidePage === 0) closeSetupGuide(); else setupGuidePrev(); }
         function openSetupGuide() {
             if (isGenerating || (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) || contextCompactionRunning) { showVoiceNotification('当前正在执行任务，暂不可进入配置指引。', true, 3000); return; }
-            setupGuidePage = 0; renderSetupGuidePage(); const modal = document.getElementById('setup-guide-modal'); modal?.classList.remove('hidden'); openAnimatedModal(modal, 'flex');
+            setupGuidePage = 0; renderSetupGuidePage(); const modal = document.getElementById('setup-guide-modal'); modal?.classList.remove('hidden'); modal?.classList.remove('portrait-layout'); if (window.matchMedia('(max-aspect-ratio: 1/1), (orientation: portrait)').matches) modal?.classList.add('portrait-layout'); openAnimatedModal(modal, 'flex');
         }
         function closeSetupGuide() { const modal = document.getElementById('setup-guide-modal'); closeAnimatedModal(modal, 'flex', () => modal?.classList.add('hidden')); }
-        function setupGuidePrev() { if (setupGuidePage > 0) { setupGuidePage -= 1; renderSetupGuidePage(); } }
-        function setupGuideNext() { if (setupGuidePage < setupGuidePages.length - 1) { setupGuidePage += 1; renderSetupGuidePage(); } else closeSetupGuide(); }
+        function setupGuidePrev() { syncSetupGuidePage(); if (setupGuidePage > 0) { setupGuidePage -= 1; renderSetupGuidePage(); } }
+        function setupGuideNext() { syncSetupGuidePage(); if (setupGuidePage < setupGuidePages.length - 1) { setupGuidePage += 1; renderSetupGuidePage(); } else { closeSetupGuide(); } }
 
         function updateBackgroundImage() {
             const bgNum = selectedBackgroundImage;
