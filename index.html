@@ -2559,18 +2559,26 @@
             background: rgba(255, 255, 255, 0.94);
             color: #111827;
         }
-        #setup-guide-modal > div { height: min(720px, calc(100vh - 2rem)); max-height: calc(100vh - 2rem); align-items: stretch; background: rgba(30,30,35,.78); border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; backdrop-filter: blur(40px) saturate(150%); -webkit-backdrop-filter: blur(40px) saturate(150%); }
+        #setup-guide-modal > div { height: min(720px, calc(100vh - 2rem)); max-height: calc(100vh - 2rem); align-items: stretch; background: rgba(47,47,47,.78); border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; box-shadow: 0 24px 80px rgba(0,0,0,.42); backdrop-filter: blur(40px) saturate(150%); -webkit-backdrop-filter: blur(40px) saturate(150%); }
         body.theme-light #setup-guide-modal > div { background: rgba(255,255,255,.78); border-color: rgba(255,255,255,.72); color: #111827; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); }
         #setup-guide-modal input:not([type="checkbox"]), #setup-guide-modal select, #setup-guide-modal textarea { color: inherit; background: rgba(23,23,23,.72); border: 1px solid rgba(107,114,128,.65); outline: none; }
         body.theme-light #setup-guide-modal input:not([type="checkbox"]), body.theme-light #setup-guide-modal select, body.theme-light #setup-guide-modal textarea { background: rgba(255,255,255,.72); color: #111827; border-color: rgba(0,0,0,.16); }
         #setup-guide-modal .theme-btn, #setup-guide-modal .font-btn, #setup-guide-modal .accent-color-btn, #setup-guide-modal .code-size-btn, #setup-guide-modal .layout-btn { padding: .65rem .9rem; border: 1px solid rgba(107,114,128,.65); background: rgba(255,255,255,.08); color: #e5e7eb; transition: background .2s ease, border-color .2s ease, transform .2s ease; }
         #setup-guide-modal .theme-btn:hover, #setup-guide-modal .font-btn:hover, #setup-guide-modal .accent-color-btn:hover, #setup-guide-modal .code-size-btn:hover, #setup-guide-modal .layout-btn:hover { transform: translateY(-1px); border-color: var(--accent-primary); }
-        #setup-guide-modal .theme-btn.active, #setup-guide-modal .font-btn.active, #setup-guide-modal .accent-color-btn.active, #setup-guide-modal .code-size-btn.active, #setup-guide-modal .layout-btn.active { background: rgba(var(--accent-rgb),.2); border-color: var(--accent-primary); color: var(--accent-primary); }
+        #setup-guide-modal .theme-btn.active, #setup-guide-modal .font-btn.active, #setup-guide-modal .accent-color-btn.active, #setup-guide-modal .code-size-btn.active, #setup-guide-modal .layout-btn.active, #setup-guide-modal [data-guide-bg].active { background: rgba(var(--accent-rgb),.2); border-color: var(--accent-primary) !important; color: var(--accent-primary); box-shadow: 0 0 0 1px rgba(var(--accent-rgb),.22), 0 8px 24px rgba(var(--accent-rgb),.12); }
         body.theme-light #setup-guide-modal .theme-btn, body.theme-light #setup-guide-modal .font-btn, body.theme-light #setup-guide-modal .accent-color-btn, body.theme-light #setup-guide-modal .code-size-btn, body.theme-light #setup-guide-modal .layout-btn { background: rgba(255,255,255,.58); color: #374151; }
-        #setup-guide-modal .setup-guide-content { min-width: 0; min-height: 0; overflow-y: auto; }
+        #setup-guide-modal .setup-guide-content { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+        #setup-guide-content { scrollbar-width: none; -ms-overflow-style: none; overflow-x: hidden; }
+        #setup-guide-content::-webkit-scrollbar { width: 0; height: 0; display: none; }
         #setup-guide-modal .setup-guide-page { animation: setup-guide-page-in .28s ease both; }
         @keyframes setup-guide-page-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
         #setup-guide-modal .setup-guide-gif { width: 100%; max-height: 180px; object-fit: contain; border-radius: .75rem; background: linear-gradient(135deg, rgba(var(--accent-rgb),.18), rgba(56,189,248,.12)); border: 1px solid rgba(var(--accent-rgb),.24); }
+        #setup-guide-modal .setup-guide-section-title { font-size: .75rem; font-weight: 700; color: var(--accent-primary); letter-spacing: .08em; text-transform: uppercase; margin: .85rem 0 .45rem; }
+        #setup-guide-modal .setup-guide-description { color: #9ca3af; font-size: .86rem; line-height: 1.75; margin-bottom: 1rem; }
+        #queued-agent-messages { scrollbar-width: none; -ms-overflow-style: none; overflow-x: hidden; }
+        #queued-agent-messages::-webkit-scrollbar { display: none; width: 0; height: 0; }
+        .agent-reconnect-status { color: #f87171; background: linear-gradient(90deg, #f87171 0%, #fff 45%, #f87171 90%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; animation: agent-reconnect-scan 1.35s linear infinite; font-weight: 600; }
+        @keyframes agent-reconnect-scan { from { background-position: 180% 0; } to { background-position: -80% 0; } }
         #setup-guide-modal.portrait-layout > div { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; }
         @media (max-aspect-ratio: 1/1), (orientation: portrait) { #setup-guide-modal > div { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; } }
     </style>
@@ -2869,7 +2877,7 @@
     </div>
     <div id="setup-guide-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4">
         <div class="w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex flex-col">
-            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button onclick="setupGuideBack()" class="px-3 py-2 rounded-xl hover:bg-gray-800">← 返回</button><h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button></header>
+            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button aria-label="返回" onclick="setupGuideBack()" class="px-3 py-2 rounded-xl hover:bg-gray-800">←</button><h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button aria-label="关闭" onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button></header>
             <div id="setup-guide-content" class="setup-guide-content p-5"></div>
             <footer class="flex justify-end gap-3 p-4 border-t border-gray-700"><button id="setup-guide-prev" onclick="setupGuidePrev()" class="px-4 py-2 rounded-xl border border-gray-700">上一页</button><button id="setup-guide-next" onclick="setupGuideNext()" class="px-4 py-2 rounded-xl bg-emerald-600">下一页</button></footer>
         </div>
@@ -5047,6 +5055,7 @@
         let contextCompactionRunning = false;
         let queuedAgentMessages = [];
         window.queuedAgentMessages = queuedAgentMessages;
+        window.agentReconnectNotice = '';
 
         const LOG_LEVEL_PRIORITIES = {
             trace: 0,
@@ -6619,15 +6628,15 @@
 
         let setupGuidePage = 0;
         const setupGuidePages = [
-            ['应用简介', 'AIChat-UI 是支持多模型、Canvas、语音和 Agent 的本地桌面 AI 工具。', 'guide/1.gif'],
-            ['API 配置', '填写 Base URL、API Key，并选择 Responses 或 Chat Completions。', 'guide/2.gif'],
-            ['外观', '选择主题、背景和字体大小。', 'guide/3.gif'],
-            ['上下文压缩', '选择自动压缩频次与摘要模型。', 'guide/4.gif'],
-            ['编码模式', '配置 Canvas 页面布局与代码字号。', 'guide/5.gif'],
-            ['语音聊天', '选择语音聊天使用的模型。', 'guide/6.gif'],
-            ['桌面协作', '设置传图按钮、清晰度与自动截图。', 'guide/7.gif'],
-            ['Agent', '配置 Agent 详情、超时、图像细节和允许命令。', 'guide/8.gif'],
-            ['其他设置', '调整数学渲染、自动更新与开发者选项。', 'guide/9.gif']
+            ['应用简介', 'AIChat-UI 是一个本地优先的桌面 AI 工作台，支持多模型对话、Canvas 编码、语音聊天、桌面协作和 Agent Loop。所有会话与偏好默认保存在本机，适合个人开发与实验。', 'guide/1.gif'],
+            ['API 配置', '在这里填写服务商提供的 Base URL 与 API Key，并选择优先使用 Responses 还是 Chat Completions。最大 Token 限制可控制单次请求的预算；本页设置只有点击保存后才会写入并生效。', 'guide/2.gif'],
+            ['外观', '外观设置会立即应用到当前窗口：选择浅色或深色主题、强调色、界面字号和背景图片。按钮的高亮状态表示当前正在使用的选项。', 'guide/3.gif'],
+            ['上下文压缩', '当会话轮数较多时，应用可以按指定频次生成摘要，减少后续请求携带的上下文长度。你可以关闭自动压缩，或选择 10、15、20 轮以及摘要所用模型。', 'guide/4.gif'],
+            ['编码模式', 'Canvas 用于持续编辑代码或文档。经典布局让输入框横跨底部，分栏布局则把编辑器固定在右侧；代码字号只影响 Canvas 编辑器。', 'guide/5.gif'],
+            ['语音聊天', '语音聊天会使用这里指定的对话模型生成回复，语音识别和语音合成仍按语音聊天页面中的凭据工作。建议选择响应速度快、支持流式输出的模型。', 'guide/6.gif'],
+            ['桌面协作', '桌面协作可以在语音输入后附带当前显示器截图。你可以设置全局传图快捷键、截图清晰度，并决定是否在没有手动截图时自动传图。', 'guide/7.gif'],
+            ['Agent', 'Agent 设置控制工具调用信息的展示、Shell 超时、图片查看细节以及自动滚动行为。命令前缀仍需在偏好设置 Agent 页面单独维护。', 'guide/8.gif'],
+            ['其他设置', '其他设置集中管理语音转文字默认模型、LaTeX 数学公式渲染和启动时的自动更新检查。每项旁边的说明会帮助你了解关闭后的影响。', 'guide/9.gif']
         ];
         function guideToggle(id, checked, label, hint = '') {
             return `<div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700"><div class="flex flex-col pr-3"><span class="text-sm font-medium text-gray-200">${label}</span>${hint ? `<span class="text-[11px] text-gray-500 mt-0.5">${hint}</span>` : ''}</div><label class="cloud-toggle shrink-0"><input id="${id}" type="checkbox" ${checked ? 'checked' : ''}><span class="slider"></span></label></div>`;
@@ -6636,16 +6645,16 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<p class="text-sm text-gray-300 mb-4">${page[1]}</p>`,
+                `<p class="setup-guide-description">${page[1]}</p>`,
                 `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V7.5.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint()==='/responses'?'active':''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint()==='/chat/completions'?'active':''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
-                setupGuidePage === 2 ? `<div class="flex gap-2"><button type="button" class="theme-btn rounded-xl" onclick="setTheme('light')">浅色</button><button type="button" class="theme-btn rounded-xl" onclick="setTheme('dark')">深色</button></div><div class="accent-color-grid">${['green','sky','amber','rose','claude'].map(x=>`<button type="button" class="accent-color-btn rounded-xl" onclick="setAccentColor('${x}')">${x}</button>`).join('')}</div><div class="grid grid-cols-2 gap-2">${['small','medium','large','extra-large','huge'].map(x=>`<button type="button" class="font-btn rounded-xl" onclick="setFontSize('${x}',this)">${x}</button>`).join('')}</div><div class="grid grid-cols-3 gap-2">${[1,2,3,4,5,6].map(x=>`<button type="button" class="rounded-xl border border-gray-700 p-2" onclick="setBackgroundImage(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"></button>`).join('')}</div>` : '',
+                setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green','Green'],['sky','Sky'],['amber','Amber'],['rose','Rose'],['claude','Claude']].map(([x,label])=>`<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor===x?'active':''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x==='green'?'#10b981':x==='sky'?'#38bdf8':x==='amber'?'#f59e0b':x==='rose'?'#fb7185':'#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small','小'],['medium','中'],['large','大'],['extra-large','特大'],['huge','巨大']].map(([x,label])=>`<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize===x?'active':''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[1,2,3,4,5,6].map(x=>`<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage===x?'active border-emerald-500':'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"><span class="block text-[11px] text-gray-400 mt-1">背景 ${x}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
-                setupGuidePage === 4 ? `<div class="flex gap-2"><button type="button" class="layout-btn rounded-xl" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" class="layout-btn rounded-xl" onclick="setLayoutMode('split',this)">分栏布局</button></div><div class="flex gap-2"><button type="button" class="code-size-btn rounded-xl" onclick="setCanvasFontSize('small',this)">小</button><button type="button" class="code-size-btn rounded-xl" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" class="code-size-btn rounded-xl" onclick="setCanvasFontSize('large',this)">大</button></div>` : '',
+                setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode==='classic'?'active':''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode==='split'?'active':''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize==='small'?'active':''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize==='medium'?'active':''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize==='large'?'active':''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
                 setupGuidePage === 5 ? `<label class="block text-sm text-gray-300">语音对话模型<input id="guide-voice-model" value="${escapeHtml(localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL)}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label>` : '',
                 setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
                 setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
-                setupGuidePage === 8 ? `<label class="block text-sm text-gray-300">语音转文字模型<select id="guide-voice-transcribe" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="whisper-1">whisper-1</option><option value="whisper-base">whisper-base</option><option value="whisper-large">whisper-large</option></select></label>${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新')}` : '',
+                setupGuidePage === 8 ? `<label class="block text-sm text-gray-300">语音转文字模型<select id="guide-voice-transcribe" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="whisper-1">whisper-1</option><option value="whisper-base">whisper-base</option><option value="whisper-large">whisper-large</option></select><span class="block text-[11px] text-gray-500 mt-2">录音结束后使用此模型把语音识别为文字，模型越大通常越准确但速度更慢。</span></label>${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染', '开启后将数学公式、化学方程式渲染为排版结果；关闭后按原始文本显示。')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新', '仅 Setup 安装版会在启动时检查 GitHub Release；Portable 版本不会主动检查。')}` : '',
                 `</div>`
             ].join('');
             c.innerHTML = `<div class="setup-guide-page"><img src="${page[2]}" class="setup-guide-gif" alt="" onerror="this.remove()"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3>${blocks}</div>`;
@@ -6657,6 +6666,10 @@
             document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
         }
         function guideSetEndpoint(value, btn) { document.querySelectorAll('#setup-guide-content .theme-btn').forEach(b => b.classList.remove('active')); btn?.classList.add('active'); window._guideEndpoint = value; }
+        function guideSetTheme(value, btn) { setTheme(value); document.querySelectorAll('[data-guide-theme]').forEach(b=>b.classList.toggle('active',b.dataset.guideTheme===value)); }
+        function guideSetAccent(value, btn) { setAccentColor(value); document.querySelectorAll('[data-guide-accent]').forEach(b=>b.classList.toggle('active',b.dataset.guideAccent===value)); }
+        function guideSetFont(value, btn) { setFontSize(value, btn); document.querySelectorAll('[data-guide-font]').forEach(b=>b.classList.toggle('active',b.dataset.guideFont===value)); }
+        function guideSetBackground(value, btn) { selectedBackgroundImage=value; setBackgroundImage(value, btn); document.querySelectorAll('[data-guide-bg]').forEach(b=>{ const active=Number(b.dataset.guideBg)===value; b.classList.toggle('active',active); b.classList.toggle('border-emerald-500',active); b.classList.toggle('border-gray-700',!active); }); }
         function syncSetupGuidePage() {
             if (setupGuidePage === 1) { const b=document.getElementById('guide-base-url')?.value.trim(); const k=document.getElementById('guide-api-key')?.value.trim(); const mt=Number(document.getElementById('guide-max-tokens')?.value||0); if(b) localStorage.setItem('base_url',b); if(k) localStorage.setItem('api_key',k); localStorage.setItem('max_tokens_limit',String(Number.isFinite(mt)?Math.max(0,mt):0)); maxTokensLimit=Math.max(0,mt)||0; if(window._guideEndpoint) localStorage.setItem('request_endpoint',window._guideEndpoint); }
             if (setupGuidePage === 3) { const i=document.getElementById('guide-summary-interval')?.value; const m=document.getElementById('guide-summary-model')?.value; if(i) { autoSummaryInterval=Number(i); localStorage.setItem('auto_summary_interval',i); } if(m) localStorage.setItem('context_compaction_model',m); }
@@ -7162,9 +7175,12 @@
         }
         function renderQueuedAgentMessages() {
             const el = document.getElementById('queued-agent-messages'); if (!el) return;
-            el.classList.toggle('hidden', queuedAgentMessages.length === 0);
-            el.innerHTML = queuedAgentMessages.map(text => `<div>↳ ${sanitizeHtml(text)}（将在下次插入时插入）</div>`).join('');
+            const queuedHtml = queuedAgentMessages.map(text => `<div>↳ ${sanitizeHtml(text)}（将在下次插入时插入）</div>`).join('');
+            const reconnectHtml = window.agentReconnectNotice ? `<div class="agent-reconnect-status">${sanitizeHtml(window.agentReconnectNotice)}</div>` : '';
+            el.classList.toggle('hidden', queuedAgentMessages.length === 0 && !window.agentReconnectNotice);
+            el.innerHTML = queuedHtml + reconnectHtml;
         }
+        window.renderQueuedAgentMessages = renderQueuedAgentMessages;
         function onCodeMirrorChange() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
             if (chat && chat.canvasEnabled && cmEditor) {

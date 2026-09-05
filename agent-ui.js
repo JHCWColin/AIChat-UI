@@ -1228,11 +1228,20 @@
                     statusRow: thinkingRow,
                     onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
                         });
+                        window.agentReconnectNotice = "";
+                        if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
                         break;
                     } catch (error) {
                         if (!/network|failed to fetch|fetch/i.test(String(error?.message || ''))) throw error;
-                        if (attempt >= 6) throw new Error('连接已断开');
-                        showVoiceNotification(`尝试重新连接……${attempt}/6`, true, 0, true);
+                        if (attempt >= 6) {
+                            window.agentReconnectNotice = '连接已断开';
+                            showVoiceNotification(window.agentReconnectNotice, true, 0, true);
+                            if (typeof window.renderQueuedAgentMessages === 'function') window.renderQueuedAgentMessages();
+                            throw new Error('连接已断开');
+                        }
+                        window.agentReconnectNotice = `尝试重新连接……${attempt}/6`;
+                        showVoiceNotification(window.agentReconnectNotice, true, 0, true);
+                        if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
                         await new Promise(resolve => setTimeout(resolve, 5000));
                     }
                 }
@@ -1255,6 +1264,22 @@
                     const responseText = parsed.hasMalformedToolCall
                         ? ""
                         : String(parsed.text || "").trim();
+                    if (responseText && !parsed.hasMalformedToolCall) {
+                        appendAgentVisibleText(chat, responseText, model, "", true);
+                        const finishMessage = {
+                            role: "tool",
+                            name: "finish_task",
+                            toolName: "finish_task",
+                            arguments: {},
+                            status: "done",
+                            result: { success: true, implicit: true },
+                            content: JSON.stringify({ success: true, implicit: true }),
+                            toolId: `${chat.id}-${Date.now()}-${agentToolSequence += 1}`
+                        };
+                        chat.messages.push(finishMessage);
+                        await persistAgentToolMessage(chat, finishMessage);
+                        break;
+                    }
                     const isEmptyResponse = !parsed.hasMalformedToolCall && !responseText;
                     if (isEmptyResponse) {
                         emptyResponses += 1;
@@ -1342,6 +1367,10 @@
             if (thinkingRow) completeAgentThinking(chat, model, thinkingRow, { reasoning: thinkingRow.reasoningText });
             if (agentTaskStartedAt) finishAgentTaskTimer(chat);
             hideVoiceNotification();
+            if (window.agentReconnectNotice !== '连接已断开') {
+                window.agentReconnectNotice = "";
+                if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
+            }
             if (agentStopRequested && !chat.messages.some((message, index) => index === chat.messages.length - 1 && message?.role === "assistant" && message?.agentFinal)) {
                 chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentFinal: true });
                 persistAgentChats();
@@ -1355,6 +1384,9 @@
             renderChatHistory();
             await renderMessagesWithResolvedRefs(chat.messages);
             updateAgentUIForChat(chat);
+            if (!agentStopRequested && Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
+                setTimeout(() => requestAgentLoop(model, chat), 0);
+            }
         }
     }
 
