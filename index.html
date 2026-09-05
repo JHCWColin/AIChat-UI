@@ -2559,6 +2559,20 @@
             background: rgba(255, 255, 255, 0.94);
             color: #111827;
         }
+        #setup-guide-modal > div { height: min(720px, calc(100vh - 2rem)); max-height: calc(100vh - 2rem); align-items: stretch; background: rgba(30,30,35,.78); border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; backdrop-filter: blur(40px) saturate(150%); -webkit-backdrop-filter: blur(40px) saturate(150%); }
+        body.theme-light #setup-guide-modal > div { background: rgba(255,255,255,.78); border-color: rgba(255,255,255,.72); color: #111827; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); }
+        #setup-guide-modal input:not([type="checkbox"]), #setup-guide-modal select, #setup-guide-modal textarea { color: inherit; background: rgba(23,23,23,.72); border: 1px solid rgba(107,114,128,.65); outline: none; }
+        body.theme-light #setup-guide-modal input:not([type="checkbox"]), body.theme-light #setup-guide-modal select, body.theme-light #setup-guide-modal textarea { background: rgba(255,255,255,.72); color: #111827; border-color: rgba(0,0,0,.16); }
+        #setup-guide-modal .theme-btn, #setup-guide-modal .font-btn, #setup-guide-modal .accent-color-btn, #setup-guide-modal .code-size-btn, #setup-guide-modal .layout-btn { padding: .65rem .9rem; border: 1px solid rgba(107,114,128,.65); background: rgba(255,255,255,.08); color: #e5e7eb; transition: background .2s ease, border-color .2s ease, transform .2s ease; }
+        #setup-guide-modal .theme-btn:hover, #setup-guide-modal .font-btn:hover, #setup-guide-modal .accent-color-btn:hover, #setup-guide-modal .code-size-btn:hover, #setup-guide-modal .layout-btn:hover { transform: translateY(-1px); border-color: var(--accent-primary); }
+        #setup-guide-modal .theme-btn.active, #setup-guide-modal .font-btn.active, #setup-guide-modal .accent-color-btn.active, #setup-guide-modal .code-size-btn.active, #setup-guide-modal .layout-btn.active { background: rgba(var(--accent-rgb),.2); border-color: var(--accent-primary); color: var(--accent-primary); }
+        body.theme-light #setup-guide-modal .theme-btn, body.theme-light #setup-guide-modal .font-btn, body.theme-light #setup-guide-modal .accent-color-btn, body.theme-light #setup-guide-modal .code-size-btn, body.theme-light #setup-guide-modal .layout-btn { background: rgba(255,255,255,.58); color: #374151; }
+        #setup-guide-modal .setup-guide-content { min-width: 0; min-height: 0; overflow-y: auto; }
+        #setup-guide-modal .setup-guide-page { animation: setup-guide-page-in .28s ease both; }
+        @keyframes setup-guide-page-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+        #setup-guide-modal .setup-guide-gif { width: 100%; max-height: 180px; object-fit: contain; border-radius: .75rem; background: linear-gradient(135deg, rgba(var(--accent-rgb),.18), rgba(56,189,248,.12)); border: 1px solid rgba(var(--accent-rgb),.24); }
+        #setup-guide-modal.portrait-layout > div { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; }
+        @media (max-aspect-ratio: 1/1), (orientation: portrait) { #setup-guide-modal > div { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; } }
     </style>
 </head>
 
@@ -4369,120 +4383,6 @@
             } finally {
                 contextCompactionRunning = false;
                 updateSettingsLocks();
-            }
-        }
-
-        #setup-guide-modal > div {
-            height: min(720px, calc(100vh - 2rem));
-            max-height: calc(100vh - 2rem);
-            align-items: stretch;
-            background: rgba(30, 30, 35, 0.78);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 0.75rem;
-            backdrop-filter: blur(40px) saturate(150%);
-            -webkit-backdrop-filter: blur(40px) saturate(150%);
-        }
-
-        body.theme-light #setup-guide-modal > div {
-            background: rgba(255, 255, 255, 0.78);
-            border-color: rgba(255, 255, 255, 0.72);
-            color: #111827;
-            backdrop-filter: blur(24px) saturate(180%);
-            -webkit-backdrop-filter: blur(24px) saturate(180%);
-        }
-
-        #setup-guide-modal input:not([type="checkbox"]),
-        #setup-guide-modal select,
-        #setup-guide-modal textarea {
-            color: inherit;
-            background: rgba(23, 23, 23, 0.72);
-            border: 1px solid rgba(107, 114, 128, 0.65);
-            outline: none;
-        }
-
-        body.theme-light #setup-guide-modal input:not([type="checkbox"]),
-        body.theme-light #setup-guide-modal select,
-        body.theme-light #setup-guide-modal textarea {
-            background: rgba(255, 255, 255, 0.72);
-            color: #111827;
-            border-color: rgba(0, 0, 0, 0.16);
-        }
-
-        #setup-guide-modal .theme-btn,
-        #setup-guide-modal .font-btn,
-        #setup-guide-modal .accent-color-btn,
-        #setup-guide-modal .code-size-btn,
-        #setup-guide-modal .layout-btn {
-            padding: 0.65rem 0.9rem;
-            border: 1px solid rgba(107, 114, 128, 0.65);
-            background: rgba(255, 255, 255, 0.08);
-            color: #e5e7eb;
-            transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-        }
-
-        #setup-guide-modal .theme-btn:hover,
-        #setup-guide-modal .font-btn:hover,
-        #setup-guide-modal .accent-color-btn:hover,
-        #setup-guide-modal .code-size-btn:hover,
-        #setup-guide-modal .layout-btn:hover { transform: translateY(-1px); border-color: var(--accent-primary); }
-
-        #setup-guide-modal .theme-btn.active,
-        #setup-guide-modal .font-btn.active,
-        #setup-guide-modal .accent-color-btn.active,
-        #setup-guide-modal .code-size-btn.active,
-        #setup-guide-modal .layout-btn.active { background: rgba(var(--accent-rgb), 0.2); border-color: var(--accent-primary); color: var(--accent-primary); }
-
-        body.theme-light #setup-guide-modal .theme-btn,
-        body.theme-light #setup-guide-modal .font-btn,
-        body.theme-light #setup-guide-modal .accent-color-btn,
-        body.theme-light #setup-guide-modal .code-size-btn,
-        body.theme-light #setup-guide-modal .layout-btn { background: rgba(255, 255, 255, 0.58); color: #374151; }
-
-        #setup-guide-modal .setup-guide-content {
-            min-width: 0;
-            min-height: 0;
-            overflow-y: auto;
-        }
-
-        #setup-guide-modal .setup-guide-page {
-            animation: setup-guide-page-in 0.28s ease both;
-        }
-
-        @keyframes setup-guide-page-in {
-            from { opacity: 0; transform: translateX(28px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        #setup-guide-modal .setup-guide-gif {
-            width: 100%;
-            max-height: 180px;
-            object-fit: contain;
-            border-radius: 0.75rem;
-            background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.18), rgba(56, 189, 248, 0.12));
-            border: 1px solid rgba(var(--accent-rgb), 0.24);
-        }
-
-        #setup-guide-modal.portrait-layout > div {
-            width: 100vw !important;
-            height: 100vh !important;
-            max-width: none !important;
-            max-height: none !important;
-            margin: 0 !important;
-            border-radius: 0 !important;
-        }
-
-        #setup-guide-modal.portrait-layout .setup-guide-content {
-            padding: 1rem;
-        }
-
-        @media (max-aspect-ratio: 1/1), (orientation: portrait) {
-            #setup-guide-modal > div {
-                width: 100vw !important;
-                height: 100vh !important;
-                max-width: none !important;
-                max-height: none !important;
-                border-radius: 0 !important;
-                margin: 0 !important;
             }
         }
 
