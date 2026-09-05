@@ -2560,6 +2560,10 @@
         </button>
         <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
         <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
+            <button onclick="openSetupGuide()"
+                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
+                <i data-lucide="book-open" class="w-5 h-5"></i><span class="text-sm">配置指引</span>
+            </button>
             <button onclick="toggleSettings()"
                 class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
                 <i data-lucide="settings" class="w-5 h-5"></i><span class="text-sm">设置</span>
@@ -2586,6 +2590,7 @@
                 </div>
                 <footer id="input-footer" class="p-4 md:pb-8 w-full">
                     <div class="max-w-[1000px] mx-auto relative flex flex-col items-start">
+                        <div id="queued-agent-messages" class="w-full hidden mb-2 text-xs text-gray-400"></div>
                         <div id="attachments-preview" class="w-full"></div>
                         <div id="image-detail-container" class="flex items-center gap-2 mb-1.5 w-full">
                             <span
@@ -2837,6 +2842,13 @@
             </div>
         </div>
     </div>
+    <div id="setup-guide-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4">
+        <div class="bg-[#2f2f2f] w-full max-w-3xl rounded-xl shadow-2xl overflow-hidden text-white flex flex-col max-h-[90vh]">
+            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">← 返回</button><h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button></header>
+            <div id="setup-guide-content" class="p-5 overflow-y-auto"></div>
+            <footer class="flex justify-end gap-3 p-4 border-t border-gray-700"><button id="setup-guide-prev" onclick="setupGuidePrev()" class="px-4 py-2 rounded-xl border border-gray-700">上一页</button><button id="setup-guide-next" onclick="setupGuideNext()" class="px-4 py-2 rounded-xl bg-emerald-600">下一页</button></footer>
+        </div>
+    </div>
 
     <div id="settings-modal" class="fixed inset-0 z-[100] items-center justify-center p-4">
         <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex">
@@ -2904,7 +2916,7 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-gray-300">上下文压缩模型</label>
-                        <select id="context-compaction-model-select"
+                        <select id="context-compaction-model-select" onchange="onContextSettingChange()"
                             class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"></select>
                         <p class="text-[11px] text-gray-500 mt-2">建议选择价格较低、响应较快的模型；摘要助手越便宜，整体使用体验通常越好，成本也越低。</p>
                     </div>
@@ -3388,6 +3400,8 @@
                 </div>
                 <div id="section-agent" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
+                    <p id="settings-lock-agent" class="hidden text-sm text-red-400">正在执行 Agent Loop，部分设置项暂不可更改。</p>
+                    <label class="flex items-center gap-2 text-sm text-gray-300"><input id="agent-auto-scroll" type="checkbox" class="accent-emerald-500"> 自动滚动到末尾</label>
                     <p class="text-sm leading-relaxed text-red-400">
                         内测功能：建议使用默认或干净的 API 分组。Codex CLI、Claude Code 等 Agent 转接分组会优先遵循其原生工具规则，可能大幅降低本应用工具调用准确率。
                     </p>
@@ -3455,8 +3469,9 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.4.0 Release</span>
+                            <span id="app-version">V7.5.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
+                            <button type="button" onclick="checkForUpdatesManually()" class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
                         <button type="button" id="toggle-update-history-btn" onclick="toggleUpdateHistory()"
@@ -3474,6 +3489,7 @@
                 <div class="flex justify-end gap-3 pt-4 border-t border-gray-700 mt-5">
                     <button onclick="toggleSettings()"
                         class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
+                    <span id="api-unsaved-hint" class="hidden self-center text-xs text-red-400">点击保存后才会生效</span>
                     <button onclick="saveSettings()"
                         class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存设置</button>
                 </div>
@@ -4299,10 +4315,12 @@
 
         async function performAutomaticCompaction(chat) {
             if (!chat || autoSummaryInterval === 0) return true;
+            contextCompactionRunning = true;
+            updateSettingsLocks();
             let interval = autoSummaryInterval;
             let turns = getCompleteConversationTurns(chat);
             let batches = Math.floor(turns.length / interval);
-            if (batches <= 0) return true;
+            if (batches <= 0) { contextCompactionRunning = false; updateSettingsLocks(); return true; }
             if (chat.agentEnabled && chat.agentAutoCompactionPromptShown !== true) {
                 const selectedInterval = await showAgentAutoCompactionConfirm(interval);
                 chat.agentAutoCompactionPromptShown = true;
@@ -4315,10 +4333,10 @@
                     if (selectedRadio) selectedRadio.checked = true;
                 }
                 interval = autoSummaryInterval;
-                if (interval === 0) return true;
+                if (interval === 0) { contextCompactionRunning = false; updateSettingsLocks(); return true; }
                 turns = getCompleteConversationTurns(chat);
                 batches = Math.floor(turns.length / interval);
-                if (batches <= 0) return true;
+                if (batches <= 0) { contextCompactionRunning = false; updateSettingsLocks(); return true; }
             }
             showVoiceNotification(`正在压缩上下文（${batches} 段）`, false, 0, true);
             try {
@@ -4334,6 +4352,9 @@
                 appendLog('error', `自动上下文压缩失败：${error.message}`);
                 showVoiceNotification(`上下文压缩失败，已使用完整上下文继续：${error.message}`, true, 5000);
                 return false;
+            } finally {
+                contextCompactionRunning = false;
+                updateSettingsLocks();
             }
         }
 
@@ -4992,6 +5013,12 @@
         let recordLogsEnabled = localStorage.getItem('record_logs') === 'true';
         let logRecords = loadLogRecords();
         let streamBytesReceived = 0;
+        let pendingSettings = null;
+        let apiSettingsDirty = false;
+        let settingsSnapshot = null;
+        let contextCompactionRunning = false;
+        let queuedAgentMessages = [];
+        window.queuedAgentMessages = queuedAgentMessages;
 
         const LOG_LEVEL_PRIORITIES = {
             trace: 0,
@@ -5807,6 +5834,7 @@
 
         function renderMessages(messages) {
             const wrapper = document.getElementById('messages-wrapper');
+            if (isGenerating && wrapper && wrapper.children.length) return;
             wrapper.innerHTML = '';
             if (!messages || messages.length === 0) {
                 const greetingText = getGreetingByTime();
@@ -6105,12 +6133,43 @@
                 populateAdvancedSettings();
                 populateAgentSettings();
                 updateSettingsPortraitMode();
+                updateSettingsLocks();
             } else {
+                if (apiSettingsDirty && !confirm('API 配置已修改但尚未保存，是否保存更改？')) { return; }
+                if (apiSettingsDirty) saveSettings(true);
                 closeAnimatedModal(modal, 'flex', () => {
                     modal.classList.remove('portrait-layout');
                 });
             }
             lucide.createIcons();
+        }
+
+        function updateSettingsLocks() {
+            const agentRunning = typeof isAgentTaskRunning === 'function' && isAgentTaskRunning();
+            const compaction = contextCompactionRunning;
+            const audio = Boolean(window._audioChatRunning);
+            const desktop = Boolean(window._desktopWorkRunning);
+            const lock = (section, disabled, text) => {
+                const el = document.getElementById(`section-${section}`); if (!el) return;
+                el.querySelectorAll('input,select,textarea,button').forEach(node => { if (node.id !== 'settings-back-btn') node.disabled = disabled; });
+                let note = document.getElementById(`settings-lock-${section}`);
+                if (!note) { note = document.createElement('p'); note.id = `settings-lock-${section}`; note.className = 'text-sm text-red-400'; el.querySelector('h3')?.after(note); }
+                note.textContent = text; note.classList.toggle('hidden', !disabled);
+            };
+            lock('ai-chat', compaction, '正在执行上下文压缩，部分设置项暂不可更改。');
+            lock('voice-chat', audio || desktop, audio ? '正在执行 Audio Chat，部分设置项暂不可更改。' : '正在执行 Desktop Code Work，部分设置项暂不可更改。');
+            lock('desktop-work', desktop || audio, desktop ? '正在执行 Desktop Code Work，部分设置项暂不可更改。' : '正在执行 Audio Chat，部分设置项暂不可更改。');
+            lock('agent', agentRunning, '正在执行 Agent Loop，部分设置项暂不可更改。');
+        }
+
+        function markApiSettingsDirty() { apiSettingsDirty = true; document.getElementById('api-unsaved-hint')?.classList.remove('hidden'); }
+        function onContextSettingChange() {
+            if (contextCompactionRunning) return;
+            const radio = document.querySelector('input[name="auto-summary-interval"]:checked');
+            autoSummaryInterval = Number(radio?.value || 10);
+            localStorage.setItem('auto_summary_interval', String(autoSummaryInterval));
+            const model = document.getElementById('context-compaction-model-select')?.value;
+            if (model) localStorage.setItem('context_compaction_model', model);
         }
 
         function updateSettingsPortraitMode() {
@@ -6216,6 +6275,10 @@
         }
 
         function switchSettingsSection(sectionId, btn) {
+            if (apiSettingsDirty && sectionId !== 'api' && document.getElementById('section-api')?.classList.contains('active-section')) {
+                if (!confirm('API 配置已修改但尚未保存，是否保存更改？')) return;
+                saveSettings(true);
+            }
             document.querySelectorAll('.settings-content-section').forEach(s => s.classList.remove('active-section'));
             document.querySelectorAll('.settings-sidebar button').forEach(b => b.classList.remove('active-nav'));
             const target = document.getElementById('section-' + sectionId);
@@ -6248,6 +6311,7 @@
 
         function setTemp(val, btn) {
             currentTemp = val;
+            if (!isGenerating) localStorage.setItem('chat_temp', currentTemp);
             document.querySelectorAll('.temp-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         }
@@ -6256,6 +6320,7 @@
             currentFontSize = size;
             document.body.classList.remove('font-size-small', 'font-size-medium', 'font-size-large', 'font-size-extra-large', 'font-size-huge');
             document.body.classList.add(`font-size-${size}`);
+            localStorage.setItem('font_size', currentFontSize);
             document.querySelectorAll('.font-btn').forEach(b => b.classList.toggle('active', b.dataset.size === size));
         }
 
@@ -6382,6 +6447,7 @@
 
         function setLayoutMode(mode, btn) {
             currentLayoutMode = mode;
+            if (!isGenerating) { localStorage.setItem('layout_mode', mode); applyLayoutMode(mode); }
             document.querySelectorAll('.layout-btn').forEach(b => b.classList.toggle('active', b.dataset.layout === mode));
         }
 
@@ -6411,7 +6477,10 @@
             }, 3000);
         }
 
-        function saveSettings() {
+        function saveSettings(skipClose = false) {
+            if (isGenerating || (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning())) {
+                showVoiceNotification('设置会在本轮流传输结束后应用', false, 3000, false, 'warning');
+            }
             systemPrompt = document.getElementById('sys-prompt').value;
             localStorage.setItem('sys_prompt', systemPrompt);
             localStorage.setItem('chat_temp', currentTemp);
@@ -6495,16 +6564,58 @@
             const recordToggle = document.getElementById('record-logs-toggle');
             if (recordToggle) recordLogsEnabled = recordToggle.checked;
             localStorage.setItem('record_logs', recordLogsEnabled ? 'true' : 'false');
+            const autoScroll = document.getElementById('agent-auto-scroll');
+            if (autoScroll) localStorage.setItem('agent_auto_scroll', autoScroll.checked ? 'true' : 'false');
+            apiSettingsDirty = false;
+            document.getElementById('api-unsaved-hint')?.classList.add('hidden');
             saveAgentCommandSettings();
             if (activeChatId) {
                 const currentChat = chats.find(c => c.id === activeChatId);
                 if (currentChat) renderMessagesWithResolvedRefs(currentChat.messages);
             }
             applyLayoutMode(currentLayoutMode);
-            toggleSettings();
+            if (!skipClose) toggleSettings();
             updateTokenEstimate();
             syncAppStateToMain();
         }
+
+        async function checkForUpdatesManually() {
+            if (!window.electronAPI?.checkForUpdates) return;
+            showVoiceNotification('正在检查更新……', false, 0, true);
+            const result = await window.electronAPI.checkForUpdates();
+            hideVoiceNotification();
+            if (!result?.success) showVoiceNotification(`检查更新失败：${result?.error || '未知错误'}`, true, 4000);
+        }
+
+        let setupGuidePage = 0;
+        const setupGuidePages = [
+            ['应用简介', 'AIChat-UI 是支持多模型、Canvas、语音和 Agent 的本地桌面 AI 工具。', 'guide/1.gif'],
+            ['API 配置', '填写 Base URL、API Key，并选择 Responses 或 Chat Completions。', 'guide/2.gif'],
+            ['外观', '选择主题、背景和字体大小。', 'guide/3.gif'],
+            ['上下文压缩', '选择自动压缩频次与摘要模型。', 'guide/4.gif'],
+            ['编码模式', '配置 Canvas 页面布局与代码字号。', 'guide/5.gif'],
+            ['语音聊天', '选择语音聊天使用的模型。', 'guide/6.gif'],
+            ['桌面协作', '设置传图按钮、清晰度与自动截图。', 'guide/7.gif'],
+            ['Agent', '配置 Agent 详情、超时、图像细节和允许命令。', 'guide/8.gif'],
+            ['其他设置', '调整数学渲染、自动更新与开发者选项。', 'guide/9.gif']
+        ];
+        function renderSetupGuidePage() {
+            const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
+            if (!c || !page) return;
+            c.innerHTML = `<img src="${page[2]}" class="w-full max-h-56 object-contain rounded-xl mb-4" onerror="this.style.display='none'"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3><p class="text-sm text-gray-300 mb-4">${page[1]}</p>`;
+            const sectionMap = ['about','api','appearance','ai-chat','coding','voice-chat','desktop-work','agent','other'];
+            const source = document.getElementById(`section-${sectionMap[setupGuidePage]}`);
+            if (source) source.querySelectorAll('input,select,textarea').forEach(el => { const clone = el.closest('label,div')?.cloneNode(true); if (clone) c.appendChild(clone); });
+            document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
+            document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
+        }
+        function openSetupGuide() {
+            if (isGenerating || (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) || contextCompactionRunning) { showVoiceNotification('当前正在执行任务，暂不可进入配置指引。', true, 3000); return; }
+            setupGuidePage = 0; renderSetupGuidePage(); const modal = document.getElementById('setup-guide-modal'); modal?.classList.remove('hidden'); openAnimatedModal(modal, 'flex');
+        }
+        function closeSetupGuide() { const modal = document.getElementById('setup-guide-modal'); closeAnimatedModal(modal, 'flex', () => modal?.classList.add('hidden')); }
+        function setupGuidePrev() { if (setupGuidePage > 0) { setupGuidePage -= 1; renderSetupGuidePage(); } }
+        function setupGuideNext() { if (setupGuidePage < setupGuidePages.length - 1) { setupGuidePage += 1; renderSetupGuidePage(); } else closeSetupGuide(); }
 
         function updateBackgroundImage() {
             const bgNum = selectedBackgroundImage;
@@ -6895,12 +7006,20 @@
             }
         }
         async function sendMessage() {
-            if (isGenerating) return;
+            if (isGenerating) {
+                const queuedInput = document.getElementById('user-input');
+                const queuedText = queuedInput?.value?.trim();
+                if (queuedText && typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) {
+                    queuedAgentMessages.push(queuedText); queuedInput.value = ''; renderQueuedAgentMessages();
+                }
+                return;
+            }
             const input = document.getElementById('user-input');
             const rawText = input.value;
             const text = rawText.trim();
             if (!text && currentAttachments.length === 0) return;
             const model = document.getElementById('model-select').value;
+            if (apiSettingsDirty) { markApiSettingsDirty(); }
             const chat = chats.find(c => c.id === activeChatId);
             if (!chat) return;
             if (chat.agentEnabled && typeof ensureAgentWorkspaceAvailable === 'function' && !(await ensureAgentWorkspaceAvailable(chat))) {
@@ -6983,6 +7102,11 @@
             await performAutomaticCompaction(chat);
             if (chat.agentEnabled) await requestAgentLoop(model, chat);
             else await requestAI(actualMessage, model, chat, attachmentsToSend);
+        }
+        function renderQueuedAgentMessages() {
+            const el = document.getElementById('queued-agent-messages'); if (!el) return;
+            el.classList.toggle('hidden', queuedAgentMessages.length === 0);
+            el.innerHTML = queuedAgentMessages.map(text => `<div>↳ ${sanitizeHtml(text)}（将在下次插入时插入）</div>`).join('');
         }
         function onCodeMirrorChange() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
@@ -7728,6 +7852,13 @@
             document.getElementById('sys-prompt').value = systemPrompt;
             document.getElementById('api-key-input').value = getAPIKey();
             document.getElementById('base-url-input').value = getBaseURL();
+            ['api-key-input','base-url-input','max-tokens-input','model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
+            document.querySelectorAll('input[name="request-endpoint"]').forEach(el => el.addEventListener('change', markApiSettingsDirty));
+            const immediateSettings = {
+                'sys-prompt':'sys_prompt','voice-chat-model-input':'voice_chat_model','voice-fish-base-input':'voice_fish_base','voice-fish-key-input':'voice_fish_key','voice-fish-name-input':'voice_fish_name','voice-fish-id-input':'voice_fish_id','voice-xf-appid-input':'voice_xf_appid','voice-xf-key-input':'voice_xf_key','voice-xf-secret-input':'voice_xf_secret','voice-preset-probability':'voice_preset_probability','desktop-shortcut-input':'desktop_shortcut','desktop-image-quality-input':'desktop_image_quality'
+            };
+            Object.entries(immediateSettings).forEach(([id,key]) => document.getElementById(id)?.addEventListener('input', e => { if (!isGenerating) localStorage.setItem(key, e.target.value); }));
+            ['desktop-skip-b-preset-input','desktop-auto-screenshot-input','math-render-toggle','auto-update-toggle','developer-mode-toggle','record-logs-toggle'].forEach(id => document.getElementById(id)?.addEventListener('change', e => { if (!isGenerating) localStorage.setItem(id.replace(/-input|-/g,'_').replace(/^_/,'').replace(/_toggle$/,''), e.target.checked ? 'true' : 'false'); }));
             document.getElementById('max-tokens-input').value = maxTokensLimit;
             const savedDetail = localStorage.getItem('image_detail_level') || 'medium';
             const detailSelect = document.getElementById('image-detail-select');

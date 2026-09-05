@@ -38,6 +38,14 @@ view_image
 Arguments: {"path":"string"}
 Reads an image file from the bound workspace and returns it as a base64 data URL so the model can inspect it. Supports jpg, png, gif, webp, bmp, svg, ico. Images larger than 8MB return metadata only without the data URL.
 
+web_search
+Arguments: {"query":"string","limit":number}
+Searches the public DuckDuckGo HTML endpoint without an API key.
+
+browse_web
+Arguments: {"url":"string","max_chars":number}
+Fetches and extracts readable text from a public web page.
+
 update_plan
 Arguments: {"explanation":"string","plan":[{"step":"string","status":"pending|in_progress|completed"}]}
 Records or updates the task plan. This tool does not execute any system operation. The plan is displayed to the user and stored for the session. At most one step may be in_progress at a time. Call this when starting a multi-step task or when the plan changes.

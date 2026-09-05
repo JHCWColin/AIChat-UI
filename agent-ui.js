@@ -17,7 +17,9 @@
         update_plan: "list-checks",
         _claude_insert_text: "file-pen-line",
         _claude_undo_edit: "undo-2",
-        _codex_apply_patch: "file-pen-line"
+        _codex_apply_patch: "file-pen-line",
+        web_search: "search",
+        browse_web: "globe"
     };
     const TOOL_LABELS = {
         read_file_range: "读取",
@@ -826,6 +828,16 @@
     }
 
     async function requestAgentModel(chat, model, options = {}) {
+        if (Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
+            const queued = window.queuedAgentMessages.splice(0);
+            queued.forEach(content => {
+                const message = { role: "user", content: String(content || ""), agentQueued: true };
+                chat.messages.push(message);
+                if (typeof appendMessageToUI === "function") appendMessageToUI("user", message.content, null, false, "", []);
+            });
+            if (typeof persistAgentChats === "function") persistAgentChats();
+            if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
+        }
         const messages = await buildAgentMessages(chat);
         const promptCacheKey = typeof getPromptCacheKeyForChat === "function"
             ? getPromptCacheKeyForChat(chat)
@@ -1011,6 +1023,10 @@
         });
         chat.updatedAt = Date.now();
         persistAgentChats();
+        if (localStorage.getItem("agent_auto_scroll") !== "false") {
+            const wrapper = document.getElementById("messages-wrapper");
+            if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
+        }
         return message;
     }
 
@@ -1069,7 +1085,7 @@
                     agentCurrentExecutionId = "";
                 }
             }
-        } else if (call.name === "read_file_range" || call.name === "write_file" || call.name === "edit_file" || call.name === "list_dir" || call.name === "grep_files" || call.name === "view_image") {
+        } else if (call.name === "web_search" || call.name === "browse_web" || call.name === "read_file_range" || call.name === "write_file" || call.name === "edit_file" || call.name === "list_dir" || call.name === "grep_files" || call.name === "view_image") {
             const toolArguments = call.name === "view_image"
                 ? { ...(call.arguments || {}), detail: call.arguments?.detail || localStorage.getItem("agent_view_image_detail") || "medium" }
                 : (call.arguments || {});
@@ -1193,7 +1209,8 @@
         if (!chat?.agentEnabled) return requestAI("", model, chat);
         if (isAgentTaskRunning()) return;
         if (!(await refreshAgentWorkspace(chat))) return;
-        agentTaskChatId = chat.id;
+            agentTaskChatId = chat.id;
+            if (typeof updateSettingsLocks === "function") updateSettingsLocks();
         agentStopRequested = false;
         startAgentTaskTimer();
         isGenerating = true;
@@ -1204,10 +1221,22 @@
         let emptyResponses = 0;
         try {
             while (!agentStopRequested) {
-                const result = await requestAgentModel(chat, model, {
+                let result;
+                for (let attempt = 1; attempt <= 6; attempt += 1) {
+                    try {
+                        result = await requestAgentModel(chat, model, {
                     statusRow: thinkingRow,
                     onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
-                });
+                        });
+                        break;
+                    } catch (error) {
+                        if (!/network|failed to fetch|fetch/i.test(String(error?.message || ''))) throw error;
+                        if (attempt >= 6) throw new Error('连接已断开');
+                        showVoiceNotification(`尝试重新连接……${attempt}/6`, true, 0, true);
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                    }
+                }
+                hideVoiceNotification();
                 completeAgentThinking(chat, model, thinkingRow, result);
                 thinkingRow = null;
                 if (agentStopRequested) break;
@@ -1320,6 +1349,7 @@
             abortController = null;
             isGenerating = false;
             agentTaskChatId = null;
+            if (typeof updateSettingsLocks === "function") updateSettingsLocks();
             document.getElementById("send-btn")?.classList.remove("hidden");
             document.getElementById("stop-btn")?.classList.add("hidden");
             renderChatHistory();

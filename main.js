@@ -15,6 +15,7 @@ const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const https = require("https");
 const WebSocket = require("ws");
 const {
     AgentWorkspaceStore,
@@ -56,6 +57,19 @@ let updateDownloadRequested = false;
 let agentWorkspaceStore = null;
 const pendingAgentWorkspaceSelections = new Map();
 const agentShellRunner = new AgentShellRunner();
+
+function fetchPublicText(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, { headers: { 'User-Agent': 'AIChat-UI/1.0' } }, res => {
+            let data = ''; res.setEncoding('utf8');
+            res.on('data', chunk => { data += chunk; if (data.length > 2000000) res.destroy(); });
+            res.on('end', () => resolve(data));
+            res.on('error', reject);
+        }).on('error', reject);
+    });
+}
+
+function stripHtmlText(html) { return String(html || '').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim(); }
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -106,6 +120,16 @@ async function checkForAppUpdates() {
         console.warn(`[AutoUpdate] 检查更新失败: ${error.message}`);
     }
 }
+
+ipcMain.handle("app:check-for-updates", async (event) => {
+    if (!isMainSender(event)) throw new Error("非法的更新检查请求");
+    try {
+        await autoUpdater.checkForUpdates();
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
 
 autoUpdater.on("update-available", async (info) => {
     currentVersionConfirmedLatest = false;
@@ -897,6 +921,16 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
     const source = request && typeof request === "object" ? request : {};
     const name = String(source.name || "");
     const args = source.arguments && typeof source.arguments === "object" ? source.arguments : {};
+    if (name === "web_search") {
+        const query = String(args.query || '').trim(); if (!query) return { success: false, error: 'query is required' };
+        const html = await fetchPublicText(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+        const matches = [...html.matchAll(/result__a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)].slice(0, Math.min(Number(args.limit) || 5, 10));
+        return { success: true, results: matches.map(m => ({ title: stripHtmlText(m[2]), url: m[1] })) };
+    }
+    if (name === "browse_web") {
+        const url = String(args.url || '').trim(); if (!/^https?:\/\//i.test(url)) return { success: false, error: 'valid http(s) url is required' };
+        const html = await fetchPublicText(url); return { success: true, url, text: stripHtmlText(html).slice(0, Math.min(Number(args.max_chars) || 12000, 50000)) };
+    }
     const binding = await getAgentWorkspaceStore().get(source.chatId);
     if (!binding.bound || !binding.exists) {
         return { success: false, error: "bound workspace is unavailable" };
