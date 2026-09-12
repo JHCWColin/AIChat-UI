@@ -597,6 +597,19 @@
             scrollbar-width: none;
         }
 
+        #settings-modal,
+        #settings-modal * {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        #settings-modal::-webkit-scrollbar,
+        #settings-modal *::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+
         .action-btn {
             display: flex;
             align-items: center;
@@ -767,13 +780,13 @@
             transition: opacity 0.22s ease;
         }
 
-        #settings-modal > div,
-        #setup-guide-modal > div,
-        #compact-confirm-modal > div,
-        #danger-confirm-modal > div,
-        #agent-yolo-warning-modal > div,
-        #agent-workspace-trust-modal > div,
-        #agent-auto-compaction-modal > div {
+        #settings-modal>div,
+        #setup-guide-modal>div,
+        #compact-confirm-modal>div,
+        #danger-confirm-modal>div,
+        #agent-yolo-warning-modal>div,
+        #agent-workspace-trust-modal>div,
+        #agent-auto-compaction-modal>div {
             opacity: 0;
             transform: translateY(14px) scale(0.985);
             transition: opacity 0.22s ease, transform 0.22s ease;
@@ -790,13 +803,13 @@
             pointer-events: auto;
         }
 
-        #settings-modal.modal-active > div,
-        #setup-guide-modal.modal-active > div,
-        #compact-confirm-modal.modal-active > div,
-        #danger-confirm-modal.modal-active > div,
-        #agent-yolo-warning-modal.modal-active > div,
-        #agent-workspace-trust-modal.modal-active > div,
-        #agent-auto-compaction-modal.modal-active > div {
+        #settings-modal.modal-active>div,
+        #setup-guide-modal.modal-active>div,
+        #compact-confirm-modal.modal-active>div,
+        #danger-confirm-modal.modal-active>div,
+        #agent-yolo-warning-modal.modal-active>div,
+        #agent-workspace-trust-modal.modal-active>div,
+        #agent-auto-compaction-modal.modal-active>div {
             opacity: 1;
             transform: translateY(0) scale(1);
         }
@@ -896,7 +909,8 @@
             max-height: calc(100vh - 7rem);
         }
 
-        @media (max-aspect-ratio: 1/1), (orientation: portrait) {
+        @media (max-aspect-ratio: 1/1),
+        (orientation: portrait) {
             #settings-modal>div {
                 width: 100vw !important;
                 height: 100vh !important;
@@ -1964,7 +1978,7 @@
             transform: translateX(-50%) translateY(0) scale(1);
         }
 
-        #voice-replay-island > div {
+        #voice-replay-island>div {
             min-height: 34px;
             padding: 0.2rem 0.5rem 0.2rem 0.7rem;
             border-radius: 2rem;
@@ -1979,7 +1993,7 @@
             gap: 0.65rem;
         }
 
-        body.theme-light #voice-replay-island > div {
+        body.theme-light #voice-replay-island>div {
             border-color: rgba(0, 0, 0, 0.12);
             background: rgba(255, 255, 255, 0.84);
             color: #1f1f1f;
@@ -2043,8 +2057,8 @@
             display: flex;
         }
 
-        #compact-confirm-modal > div,
-        #danger-confirm-modal > div {
+        #compact-confirm-modal>div,
+        #danger-confirm-modal>div {
             width: min(440px, 100%);
             padding: 1.25rem;
             border: 1px solid rgba(255, 255, 255, 0.18);
@@ -2061,8 +2075,8 @@
             background: rgba(0, 0, 0, 0.16);
         }
 
-        body.theme-light #compact-confirm-modal > div,
-        body.theme-light #danger-confirm-modal > div {
+        body.theme-light #compact-confirm-modal>div,
+        body.theme-light #danger-confirm-modal>div {
             border-color: rgba(0, 0, 0, 0.12);
             background: rgba(255, 255, 255, 0.82);
             color: #1f1f1f;
@@ -2134,7 +2148,7 @@
         body.theme-light #voice-btn.recording {
             background: rgba(220, 38, 38, 0.8);
         }
-        
+
         #active-chat-heading {
             min-width: 0;
             display: flex;
@@ -2252,7 +2266,7 @@
             font-size: 13px;
         }
 
-        .agent-tool-row-wrapper + .agent-tool-row-wrapper {
+        .agent-tool-row-wrapper+.agent-tool-row-wrapper {
             margin-top: 0.75rem !important;
         }
 
@@ -2261,8 +2275,8 @@
             margin-top: 0.5rem;
         }
 
-        .agent-segment-row + .agent-tool-row-wrapper,
-        .agent-tool-row-wrapper + .agent-segment-row {
+        .agent-segment-row+.agent-tool-row-wrapper,
+        .agent-tool-row-wrapper+.agent-segment-row {
             margin-top: 0.75rem !important;
         }
 
@@ -2391,11 +2405,25 @@
             flex: 1 1 auto;
         }
 
-        .font-size-small .agent-tool-row { font-size: 0.875rem; }
-        .font-size-medium .agent-tool-row { font-size: 1rem; }
-        .font-size-large .agent-tool-row { font-size: 1.125rem; }
-        .font-size-extra-large .agent-tool-row { font-size: 1.25rem; }
-        .font-size-huge .agent-tool-row { font-size: 1.375rem; }
+        .font-size-small .agent-tool-row {
+            font-size: 0.875rem;
+        }
+
+        .font-size-medium .agent-tool-row {
+            font-size: 1rem;
+        }
+
+        .font-size-large .agent-tool-row {
+            font-size: 1.125rem;
+        }
+
+        .font-size-extra-large .agent-tool-row {
+            font-size: 1.25rem;
+        }
+
+        .font-size-huge .agent-tool-row {
+            font-size: 1.375rem;
+        }
 
         .agent-tool-row.failed {
             border-left-color: #ef4444;
@@ -2415,8 +2443,13 @@
         }
 
         @keyframes agent-text-scan {
-            from { background-position: 180% 50%; }
-            to { background-position: -80% 50%; }
+            from {
+                background-position: 180% 50%;
+            }
+
+            to {
+                background-position: -80% 50%;
+            }
         }
 
         .agent-tool-row.running .agent-tool-summary-text,
@@ -2426,11 +2459,11 @@
             --scan-text-highlight: #ffffff;
             color: transparent !important;
             background-image: linear-gradient(105deg,
-                var(--scan-text-base) 0%,
-                var(--scan-text-base) 38%,
-                var(--scan-text-highlight) 48%,
-                var(--scan-text-base) 58%,
-                var(--scan-text-base) 100%);
+                    var(--scan-text-base) 0%,
+                    var(--scan-text-base) 38%,
+                    var(--scan-text-highlight) 48%,
+                    var(--scan-text-base) 58%,
+                    var(--scan-text-base) 100%);
             background-size: 260% 100%;
             background-clip: text;
             -webkit-background-clip: text;
@@ -2454,6 +2487,7 @@
         }
 
         @media (prefers-reduced-motion: reduce) {
+
             .agent-tool-row.running .agent-tool-summary-text,
             .agent-tool-row.running .ai-thinking-label,
             .ai-pending-text {
@@ -2549,7 +2583,7 @@
             overflow-wrap: anywhere;
         }
 
-        #agent-workspace-trust-files li + li {
+        #agent-workspace-trust-files li+li {
             margin-top: 4px;
         }
 
@@ -2559,28 +2593,199 @@
             background: rgba(255, 255, 255, 0.94);
             color: #111827;
         }
-        #setup-guide-modal > div { height: min(720px, calc(100vh - 2rem)); max-height: calc(100vh - 2rem); align-items: stretch; background: rgba(47,47,47,.78); border: 1px solid rgba(255,255,255,.1); border-radius: .75rem; box-shadow: 0 24px 80px rgba(0,0,0,.42); backdrop-filter: blur(40px) saturate(150%); -webkit-backdrop-filter: blur(40px) saturate(150%); }
-        body.theme-light #setup-guide-modal > div { background: rgba(255,255,255,.78); border-color: rgba(255,255,255,.72); color: #111827; backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); }
-        #setup-guide-modal input:not([type="checkbox"]), #setup-guide-modal select, #setup-guide-modal textarea { color: inherit; background: rgba(23,23,23,.72); border: 1px solid rgba(107,114,128,.65); outline: none; }
-        body.theme-light #setup-guide-modal input:not([type="checkbox"]), body.theme-light #setup-guide-modal select, body.theme-light #setup-guide-modal textarea { background: rgba(255,255,255,.72); color: #111827; border-color: rgba(0,0,0,.16); }
-        #setup-guide-modal .theme-btn, #setup-guide-modal .font-btn, #setup-guide-modal .accent-color-btn, #setup-guide-modal .code-size-btn, #setup-guide-modal .layout-btn { padding: .65rem .9rem; border: 1px solid rgba(107,114,128,.65); background: rgba(255,255,255,.08); color: #e5e7eb; transition: background .2s ease, border-color .2s ease, transform .2s ease; }
-        #setup-guide-modal .theme-btn:hover, #setup-guide-modal .font-btn:hover, #setup-guide-modal .accent-color-btn:hover, #setup-guide-modal .code-size-btn:hover, #setup-guide-modal .layout-btn:hover { transform: translateY(-1px); border-color: var(--accent-primary); }
-        #setup-guide-modal .theme-btn.active, #setup-guide-modal .font-btn.active, #setup-guide-modal .accent-color-btn.active, #setup-guide-modal .code-size-btn.active, #setup-guide-modal .layout-btn.active, #setup-guide-modal [data-guide-bg].active { background: rgba(var(--accent-rgb),.2); border-color: var(--accent-primary) !important; color: var(--accent-primary); box-shadow: 0 0 0 1px rgba(var(--accent-rgb),.22), 0 8px 24px rgba(var(--accent-rgb),.12); }
-        body.theme-light #setup-guide-modal .theme-btn, body.theme-light #setup-guide-modal .font-btn, body.theme-light #setup-guide-modal .accent-color-btn, body.theme-light #setup-guide-modal .code-size-btn, body.theme-light #setup-guide-modal .layout-btn { background: rgba(255,255,255,.58); color: #374151; }
-        #setup-guide-modal .setup-guide-content { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
-        #setup-guide-content { scrollbar-width: none; -ms-overflow-style: none; overflow-x: hidden; }
-        #setup-guide-content::-webkit-scrollbar { width: 0; height: 0; display: none; }
-        #setup-guide-modal .setup-guide-page { animation: setup-guide-page-in .28s ease both; }
-        @keyframes setup-guide-page-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
-        #setup-guide-modal .setup-guide-gif { display: block; width: 100%; max-height: 270px; object-fit: contain; border-radius: 0; background: transparent; border: 0; }
-        #setup-guide-modal .setup-guide-section-title { font-size: .75rem; font-weight: 700; color: #fff !important; letter-spacing: .08em; text-transform: uppercase; margin: .85rem 0 .45rem; }
-        #setup-guide-modal .setup-guide-description { color: #9ca3af; font-size: .86rem; line-height: 1.75; margin-bottom: 1rem; }
-        #queued-agent-messages { scrollbar-width: none; -ms-overflow-style: none; overflow-x: hidden; }
-        #queued-agent-messages::-webkit-scrollbar { display: none; width: 0; height: 0; }
-        .agent-reconnect-status { color: #f87171; background: linear-gradient(90deg, #f87171 0%, #fff 45%, #f87171 90%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; animation: agent-reconnect-scan 1.35s linear infinite; font-weight: 600; }
-        @keyframes agent-reconnect-scan { from { background-position: 180% 0; } to { background-position: -80% 0; } }
-        #setup-guide-modal.portrait-layout > div { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; }
-        @media (max-aspect-ratio: 1/1), (orientation: portrait) { #setup-guide-modal > div { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; margin: 0 !important; border-radius: 0 !important; } }
+
+        #setup-guide-modal>div {
+            height: min(720px, calc(100vh - 2rem));
+            max-height: calc(100vh - 2rem);
+            align-items: stretch;
+            background: rgba(47, 47, 47, .78);
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: .75rem;
+            box-shadow: 0 24px 80px rgba(0, 0, 0, .42);
+            backdrop-filter: blur(40px) saturate(150%);
+            -webkit-backdrop-filter: blur(40px) saturate(150%);
+        }
+
+        body.theme-light #setup-guide-modal>div {
+            background: rgba(255, 255, 255, .78);
+            border-color: rgba(255, 255, 255, .72);
+            color: #111827;
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+        }
+
+        #setup-guide-modal input:not([type="checkbox"]),
+        #setup-guide-modal select,
+        #setup-guide-modal textarea {
+            color: inherit;
+            background: rgba(23, 23, 23, .72);
+            border: 1px solid rgba(107, 114, 128, .65);
+            outline: none;
+        }
+
+        body.theme-light #setup-guide-modal input:not([type="checkbox"]),
+        body.theme-light #setup-guide-modal select,
+        body.theme-light #setup-guide-modal textarea {
+            background: rgba(255, 255, 255, .72);
+            color: #111827;
+            border-color: rgba(0, 0, 0, .16);
+        }
+
+        #setup-guide-modal .theme-btn,
+        #setup-guide-modal .font-btn,
+        #setup-guide-modal .accent-color-btn,
+        #setup-guide-modal .code-size-btn,
+        #setup-guide-modal .layout-btn {
+            padding: .65rem .9rem;
+            border: 1px solid rgba(107, 114, 128, .65);
+            background: rgba(255, 255, 255, .08);
+            color: #e5e7eb;
+            transition: background .2s ease, border-color .2s ease, transform .2s ease;
+        }
+
+        #setup-guide-modal .theme-btn:hover,
+        #setup-guide-modal .font-btn:hover,
+        #setup-guide-modal .accent-color-btn:hover,
+        #setup-guide-modal .code-size-btn:hover,
+        #setup-guide-modal .layout-btn:hover {
+            transform: translateY(-1px);
+            border-color: var(--accent-primary);
+        }
+
+        #setup-guide-modal .theme-btn.active,
+        #setup-guide-modal .font-btn.active,
+        #setup-guide-modal .accent-color-btn.active,
+        #setup-guide-modal .code-size-btn.active,
+        #setup-guide-modal .layout-btn.active,
+        #setup-guide-modal [data-guide-bg].active {
+            background: rgba(var(--accent-rgb), .2);
+            border-color: var(--accent-primary) !important;
+            color: var(--accent-primary);
+            box-shadow: 0 0 0 1px rgba(var(--accent-rgb), .22), 0 8px 24px rgba(var(--accent-rgb), .12);
+        }
+
+        body.theme-light #setup-guide-modal .theme-btn,
+        body.theme-light #setup-guide-modal .font-btn,
+        body.theme-light #setup-guide-modal .accent-color-btn,
+        body.theme-light #setup-guide-modal .code-size-btn,
+        body.theme-light #setup-guide-modal .layout-btn {
+            background: rgba(255, 255, 255, .58);
+            color: #374151;
+        }
+
+        #setup-guide-modal .setup-guide-content {
+            min-width: 0;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #setup-guide-content {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            overflow-x: hidden;
+        }
+
+        #setup-guide-content::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+            display: none;
+        }
+
+        #setup-guide-modal .setup-guide-page {
+            animation: setup-guide-page-in .28s ease both;
+        }
+
+        @keyframes setup-guide-page-in {
+            from {
+                opacity: 0;
+                transform: translateX(28px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        #setup-guide-modal .setup-guide-gif {
+            display: block;
+            width: 100%;
+            max-height: 470px;
+            object-fit: contain;
+            border-radius: 0;
+            background: transparent;
+            border: 0;
+        }
+
+        #setup-guide-modal .setup-guide-section-title {
+            font-size: .75rem;
+            font-weight: 700;
+            color: #fff !important;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin: .85rem 0 .45rem;
+        }
+
+        #setup-guide-modal .setup-guide-description {
+            color: #9ca3af;
+            font-size: .86rem;
+            line-height: 1.75;
+            margin-bottom: 1rem;
+        }
+
+        #queued-agent-messages {
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            overflow-x: hidden;
+        }
+
+        #queued-agent-messages::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
+        }
+
+        .agent-reconnect-status {
+            color: #f87171;
+            background: linear-gradient(90deg, #f87171 0%, #fff 45%, #f87171 90%);
+            background-size: 220% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: agent-reconnect-scan 1.35s linear infinite;
+            font-weight: 600;
+        }
+
+        @keyframes agent-reconnect-scan {
+            from {
+                background-position: 180% 0;
+            }
+
+            to {
+                background-position: -80% 0;
+            }
+        }
+
+        #setup-guide-modal.portrait-layout>div {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            max-height: none !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+        }
+
+        @media (max-aspect-ratio: 1/1),
+        (orientation: portrait) {
+            #setup-guide-modal>div {
+                width: 100vw !important;
+                height: 100vh !important;
+                max-width: none !important;
+                max-height: none !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+            }
+        }
     </style>
 </head>
 
@@ -2636,141 +2841,65 @@
                             </select>
                         </div>
                         <div class="input-selector-row">
-                        <div class="model-selector-container flex items-center gap-2">
-                            <select id="model-select" onchange="onModelSelectionChange()">
-                                <option value="deepseek-v4-pro-0813">deepseek-v4-pro-0813</option>
-                                <option value="deepseek-v4-flash-0731">deepseek-v4-flash-0731</option>
-                                <option value="qwen3.8-flash">qwen3.8-flash</option>
-                                <option value="qwen3.8-max">qwen3.8-max</option>
-                                <option value="gemini-3.7-flash">gemini-3.7-flash</option>
-                                <option value="claude-opus-5">claude-opus-5</option>
-                                <option value="gemini-3.6-flash">gemini-3.6-flash</option>
-                                <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
-                                <option value="gpt-5.6-sol">gpt-5.6-sol</option>
-                                <option value="gpt-5.6-terra" selected>gpt-5.6-terra（默认）</option>
-                                <option value="gpt-5.6-luna">gpt-5.6-luna</option>
-                                <option value="kimi-k3">kimi-k3</option>
-                                <option value="gpt-5.5-2026-04-24">gpt-5.5-2026-04-24</option>
-                                <option value="gpt-5.5">gpt-5.5</option>
-                                <option value="gemini-3.5-flash">gemini-3.5-flash</option>
-                                <option value="DeepSeek-OCR-2">DeepSeek-OCR-2</option>
-                                <option value="DeepSeek-V4-Flash">DeepSeek-V4-Flash</option>
-                                <option value="DeepSeek-V4-Pro">DeepSeek-V4-Pro</option>
-                                <option value="deepseek-v4-flash">deepseek-v4-flash</option>
-                                <option value="claude-opus-4-8">claude-opus-4-8</option>
-                                <option value="claude-opus-4-8-thinking">claude-opus-4-8-thinking</option>
-                                <option value="claude-opus-4-8-low">claude-opus-4-8-low</option>
-                                <option value="claude-opus-4-8-max">claude-opus-4-8-max</option>
-                                <option value="claude-opus-4-8-high">claude-opus-4-8-high</option>
-                                <option value="claude-opus-4-8-xhigh">claude-opus-4-8-xhigh</option>
-                                <option value="claude-opus-4-7">claude-opus-4-7</option>
-                                <option value="claude-opus-4-7-low">claude-opus-4-7-low</option>
-                                <option value="claude-opus-4-7-minimal">claude-opus-4-7-minimal</option>
-                                <option value="claude-opus-4-7-medium">claude-opus-4-7-medium</option>
-                                <option value="claude-opus-4-7-max">claude-opus-4-7-max</option>
-                                <option value="claude-opus-4-7-high">claude-opus-4-7-high</option>
-                                <option value="claude-opus-4-7-xhigh">claude-opus-4-7-xhigh</option>
-                                <option value="qwen3.6-plus">qwen3.6-plus</option>
-                                <option value="qwen3.6-plus-search">qwen3.6-plus-search</option>
-                                <option value="MiniMax-M2.7">MiniMax-M2.7</option>
-                                <option value="gpt-5.4-nano-2026-03-17">gpt-5.4-nano-2026-03-17</option>
-                                <option value="gpt-5.4-nano">gpt-5.4-nano</option>
-                                <option value="gpt-5.4-nano-low">gpt-5.4-nano-low</option>
-                                <option value="gpt-5.4-nano-medium">gpt-5.4-nano-medium</option>
-                                <option value="gpt-5.4-nano-high">gpt-5.4-nano-high</option>
-                                <option value="gpt-5.4-nano-xhigh">gpt-5.4-nano-xhigh</option>
-                                <option value="gpt-5.4-mini">gpt-5.4-mini</option>
-                                <option value="gpt-5.4-mini-low">gpt-5.4-mini-low</option>
-                                <option value="gpt-5.4-mini-medium">gpt-5.4-mini-medium</option>
-                                <option value="gpt-5.4-mini-high">gpt-5.4-mini-high</option>
-                                <option value="gpt-5.4-mini-xhigh">gpt-5.4-mini-xhigh</option>
-                                <option value="gpt-5.4-mini-2026-03-17">gpt-5.4-mini-2026-03-17</option>
-                                <option value="gpt-5.4-2026-03-05">gpt-5.4-2026-03-05</option>
-                                <option value="gpt-5.4">gpt-5.4</option>
-                                <option value="gpt-5.4-pro">gpt-5.4-pro</option>
-                                <option value="gpt-5.4-pro-2026-03-05">gpt-5.4-pro-2026-03-05</option>
-                                <option value="gpt-5.4-low">gpt-5.4-low</option>
-                                <option value="gpt-5.4-medium">gpt-5.4-medium</option>
-                                <option value="gpt-5.4-high">gpt-5.4-high</option>
-                                <option value="gpt-5.4-xhigh">gpt-5.4-xhigh</option>
-                                <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview</option>
-                                <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                                <option value="gemini-3.1-pro-preview-thinking">gemini-3.1-pro-preview-thinking
-                                </option>
-                                <option value="gemini-3.1-pro-preview-search">gemini-3.1-pro-preview-search</option>
-                                <option value="gemini-3.1-pro-preview-high">gemini-3.1-pro-preview-high</option>
-                                <option value="gemini-3.1-pro-preview-low">gemini-3.1-pro-preview-low</option>
-                                <option value="gemini-3.1-pro-preview-thinking-*">gemini-3.1-pro-preview-thinking-*
-                                </option>
-                                <option value="claude-sonnet-4-6-thinking">claude-sonnet-4-6-thinking</option>
-                                <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
-                                <option value="claude-sonnet-4-6-high">claude-sonnet-4-6-high</option>
-                                <option value="claude-sonnet-4-6-low">claude-sonnet-4-6-low</option>
-                                <option value="claude-sonnet-4-6-max">claude-sonnet-4-6-max</option>
-                                <option value="claude-sonnet-4-6-medium">claude-sonnet-4-6-medium</option>
-                                <option value="grok-4.2">grok-4.2</option>
-                                <option value="qwen3.5-35b-a3b">qwen3.5-35b-a3b</option>
-                                <option value="qwen3.5-27b">qwen3.5-27b</option>
-                                <option value="qwen3.5-plus">qwen3.5-plus</option>
-                                <option value="qwen3.5-flash">qwen3.5-flash</option>
-                                <option value="qwen3.5-122b-a10b">qwen3.5-122b-a10b</option>
-                                <option value="qwen3.5-397b-a17b">qwen3.5-397b-a17b</option>
-                                <option value="qwen3.5-flash-search">qwen3.5-flash-search</option>
-                                <option value="qwen3.5-plus-search">qwen3.5-plus-search</option>
-                                <option value="MiniMax-M2.5">MiniMax-M2.5</option>
-                                <option value="glm-5">glm-5</option>
-                                <option value="GLM-5">GLM-5</option>
-                                <option value="claude-opus-4-6">claude-opus-4-6</option>
-                                <option value="claude-opus-4-6-thinking">claude-opus-4-6-thinking</option>
-                                <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-                                <option value="claude-opus-4-6-low">claude-opus-4-6-low</option>
-                                <option value="claude-opus-4-6-medium">claude-opus-4-6-medium</option>
-                                <option value="claude-opus-4-6-high">claude-opus-4-6-high</option>
-                                <option value="claude-opus-4-6-max">claude-opus-4-6-max</option>
-                                <option value="gpt-5.3-chat-latest">gpt-5.3-chat-latest</option>
-                                <option value="kimi-k2.5">kimi-k2.5</option>
-                                <option value="doubao-seed-1-8-251228">doubao-seed-1-8-251228</option>
-                                <option value="MiniMax-M2.1">MiniMax-M2.1</option>
-                                <option value="glm-4.7">glm-4.7</option>
-                                <option value="GLM-4.7">GLM-4.7</option>
-                                <option value="qwen3-vl-plus">qwen3-vl-plus</option>
-                                <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-                                <option value="gemini-3-flash-preview-nothinking">gemini-3-flash-preview-nothinking
-                                </option>
-                                <option value="gemini-3-flash-preview-search">gemini-3-flash-preview-search</option>
-                                <option value="gemini-3-flash-preview-thinking">gemini-3-flash-preview-thinking
-                                </option>
-                                <option value="gemini-3-flash-preview-thinking-*">gemini-3-flash-preview-thinking-*
-                                </option>
-                                <option value="gpt-5.2-codex">gpt-5.2-codex</option>
-                                <option value="gpt-5.2-codex-high">gpt-5.2-codex-high</option>
-                                <option value="gpt-5.2-codex-low">gpt-5.2-codex-low</option>
-                                <option value="gpt-5.2-codex-medium">gpt-5.2-codex-medium</option>
-                                <option value="gpt-5.2">gpt-5.2</option>
-                                <option value="gpt-5.2-2025-12-11">gpt-5.2-2025-12-11</option>
-                                <option value="gpt-5.2-chat-latest">gpt-5.2-chat-latest</option>
-                                <option value="gpt-5.2-pro">gpt-5.2-pro</option>
-                                <option value="gpt-5.2-pro-2025-12-11">gpt-5.2-pro-2025-12-11</option>
-                                <option value="gpt-5.2-medium">gpt-5.2-medium</option>
-                                <option value="gpt-5.2-high">gpt-5.2-high</option>
-                                <option value="deepseek-v3.2">deepseek-v3.2</option>
-                                <option value="deepseek-v3.2-thinking">deepseek-v3.2-thinking</option>
-                                <option value="gemini-3-pro-preview">gemini-3-pro-preview</option>
-                                <option value="gemini-3-pro-preview-low">gemini-3-pro-preview-low</option>
-                                <option value="gemini-3-pro-preview-search">gemini-3-pro-preview-search</option>
-                                <option value="gemini-3-pro-preview-thinking">gemini-3-pro-preview-thinking</option>
-                                <option value="gemini-3-pro-preview-thinking-*">gemini-3-pro-preview-thinking-*
-                                </option>
-                            </select>
-                            <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"></span>
-                        </div>
-                        <div id="agent-command-mode-bar">
-                            <label for="agent-command-mode-select">Command Mode</label>
-                            <select id="agent-command-mode-select" onchange="onAgentCommandModeChange(this.value)">
-                                <option value="safe" selected>Safe Commands Only</option>
-                                <option value="yolo">YOLO Mode</option>
-                            </select>
-                        </div>
+                            <div class="model-selector-container flex items-center gap-2">
+                                <select id="model-select" onchange="onModelSelectionChange()">
+                                    <option value="gpt-6-astra">gpt-6-astra</option>
+                                    <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+                                    <option value="gpt-5.6-terra" selected>gpt-5.6-terra（默认）</option>
+                                    <option value="gpt-5.6-luna">gpt-5.6-luna（建议直接去官网使用）</option>
+
+                                    <option value="gpt-5.5-2026-04-24">gpt-5.5-2026-04-24</option>
+                                    <option value="gpt-5.5">gpt-5.5</option>
+
+                                    <option value="claude-fable-5-1">claude-fable-5-1</option>
+                                    <option value="claude-opus-5">claude-opus-5</option>
+                                    <option value="claude-sonnet-5">claude-sonnet-5</option>
+                                    <option value="claude-fable-5">claude-fable-5</option>
+
+                                    <option value="claude-opus-4-8">claude-opus-4-8</option>
+                                    <option value="claude-opus-4-8-thinking">claude-opus-4-8-thinking</option>
+                                    <option value="claude-opus-4-8-low">claude-opus-4-8-low</option>
+                                    <option value="claude-opus-4-8-medium">claude-opus-4-8-medium</option>
+                                    <option value="claude-opus-4-8-high">claude-opus-4-8-high</option>
+                                    <option value="claude-opus-4-8-max">claude-opus-4-8-max</option>
+                                    <option value="claude-opus-4-8-xhigh">claude-opus-4-8-xhigh</option>
+
+                                    <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+                                    <option value="gemini-3.8-flash-search">gemini-3.8-flash-search</option>
+                                    <option value="gemini-3.7-flash">gemini-3.7-flash</option>
+                                    <option value="gemini-3.7-flash-search">gemini-3.7-flash-search</option>
+                                    <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+
+                                    <option value="grok-4.6">grok-4.6</option>
+                                    <option value="grok-4.5">grok-4.5</option>
+
+                                    <option value="deepseek-v4.1-flash">deepseek-v4.1-flash</option>
+                                    <option value="deepseek-v4-pro-0813">deepseek-v4-pro-0813</option>
+
+                                    <option value="qwen3.8-flash">qwen3.8-flash</option>
+                                    <option value="qwen3.8-max">qwen3.8-max</option>
+                                    <option value="qwen3.7-flash">qwen3.7-flash</option>
+                                    <option value="qwen3.7-plus">qwen3.7-plus</option>
+                                    <option value="qwen3.7-max">qwen3.7-max</option>
+
+                                    <option value="glm-5.3-flash">glm-5.3-flash</option>
+                                    <option value="glm-5.3">glm-5.3</option>
+                                    <option value="glm-5.2">glm-5.2</option>
+
+                                    <option value="kimi-k3">kimi-k3</option>
+
+                                    <option value="qwen-vl-ocr">qwen-vl-ocr</option>
+                                    <option value="pic-ocr">pic-ocr</option>
+                                </select>
+                                <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"></span>
+                            </div>
+                            <div id="agent-command-mode-bar">
+                                <label for="agent-command-mode-select">Command Mode</label>
+                                <select id="agent-command-mode-select" onchange="onAgentCommandModeChange(this.value)">
+                                    <option value="safe" selected>Safe Commands Only</option>
+                                    <option value="yolo">YOLO Mode</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="input-area p-3 flex items-end gap-2 w-full shadow-lg relative">
                             <button id="attach-plus-btn" onclick="toggleAttachMenu(event)" title="添加附件"
@@ -2781,7 +2910,8 @@
                                 <button onclick="triggerFileInput(); toggleAttachMenu();">
                                     <i data-lucide="paperclip" class="w-4 h-4"></i> 添加附件
                                 </button>
-                                <button id="image-generation-btn" onclick="switchToImageGeneration(); toggleAttachMenu();">
+                                <button id="image-generation-btn"
+                                    onclick="switchToImageGeneration(); toggleAttachMenu();">
                                     <i data-lucide="image-plus" class="w-4 h-4"></i> 图像生成
                                 </button>
                                 <button id="image-edit-btn" onclick="switchToImageEdit(); toggleAttachMenu();">
@@ -2797,12 +2927,12 @@
                                 <button onclick="requestManualCompaction(); toggleAttachMenu();">
                                     <i data-lucide="file-scan" class="w-4 h-4"></i> 压缩上下文
                                 </button>
-                                 <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
-                                     <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
-                                 </button>
+                                <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
+                                    <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
+                                </button>
                                 <button id="desktop-work-entry-btn" onclick="startDesktopWork(); toggleAttachMenu();">
-                                     <i data-lucide="monitor-up" class="w-4 h-4"></i> 桌面协作
-                                 </button>
+                                    <i data-lucide="monitor-up" class="w-4 h-4"></i> 桌面协作
+                                </button>
                                 <button id="agent-entry-btn" onclick="enterAgentMode(); toggleAttachMenu();">
                                     <i data-lucide="bot" class="w-4 h-4"></i> 进入Agent模式
                                 </button>
@@ -2877,9 +3007,16 @@
     </div>
     <div id="setup-guide-modal" class="fixed inset-0 z-[120] hidden items-center justify-center p-4">
         <div class="w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex flex-col">
-            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button aria-label="返回" onclick="setupGuideBack()" class="px-3 py-2 rounded-xl hover:bg-gray-800">←</button><h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button aria-label="关闭" onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button></header>
+            <header class="flex items-center justify-between p-4 border-b border-gray-700"><button aria-label="返回"
+                    onclick="setupGuideBack()" class="px-3 py-2 rounded-xl hover:bg-gray-800">←</button>
+                <h2 id="setup-guide-title" class="font-semibold">配置指引</h2><button aria-label="关闭"
+                    onclick="closeSetupGuide()" class="px-3 py-2 rounded-xl hover:bg-gray-800">×</button>
+            </header>
             <div id="setup-guide-content" class="setup-guide-content p-5"></div>
-            <footer class="flex justify-end gap-3 p-4 border-t border-gray-700"><button id="setup-guide-prev" onclick="setupGuidePrev()" class="px-4 py-2 rounded-xl border border-gray-700">上一页</button><button id="setup-guide-next" onclick="setupGuideNext()" class="px-4 py-2 rounded-xl bg-emerald-600">下一页</button></footer>
+            <footer class="flex justify-end gap-3 p-4 border-t border-gray-700"><button id="setup-guide-prev"
+                    onclick="setupGuidePrev()" class="px-4 py-2 rounded-xl border border-gray-700">上一页</button><button
+                    id="setup-guide-next" onclick="setupGuideNext()"
+                    class="px-4 py-2 rounded-xl bg-emerald-600">下一页</button></footer>
         </div>
     </div>
 
@@ -2887,7 +3024,9 @@
         <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex">
             <aside class="settings-sidebar p-3 flex flex-col">
                 <div class="settings-sidebar-header flex items-center justify-between gap-3 mb-3 px-2">
-                    <button id="settings-back-btn" class="settings-back-btn hidden items-center gap-2 px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-200" onclick="toggleSettings()">
+                    <button id="settings-back-btn"
+                        class="settings-back-btn hidden items-center gap-2 px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-200"
+                        onclick="toggleSettings()">
                         <i data-lucide="arrow-left" class="w-4 h-4"></i> 返回
                     </button>
                     <h2 class="text-lg font-semibold text-gray-200">偏好设置</h2>
@@ -2897,9 +3036,10 @@
                         onclick="switchSettingsSection('ai-chat', this)">对话设置</button>
                     <button data-section="appearance" onclick="switchSettingsSection('appearance', this)">外观设置</button>
                     <button data-section="coding" onclick="switchSettingsSection('coding', this)">编码模式</button>
-                     <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
-                     <button data-section="desktop-work" onclick="switchSettingsSection('desktop-work', this)">桌面协作</button>
-                     <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
+                    <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
+                    <button data-section="desktop-work"
+                        onclick="switchSettingsSection('desktop-work', this)">桌面协作</button>
+                    <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
                     <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
                     <button data-section="agent" onclick="switchSettingsSection('agent', this)">Agent</button>
                     <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">开发调试</button>
@@ -2928,21 +3068,34 @@
                     <div class="pt-2">
                         <label class="block text-sm font-medium mb-3 text-gray-300">自动摘要</label>
                         <div class="space-y-2">
-                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="0" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">不进行自动压缩</strong><small class="block mt-1 text-xs text-gray-500">不压缩上下文，消耗更多 Token；上下文更完整、回复通常更精确，但处理时间可能更长。</small></span>
+                            <label
+                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="0"
+                                    class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">不进行自动压缩</strong><small
+                                        class="block mt-1 text-xs text-gray-500">不压缩上下文，消耗更多
+                                        Token；上下文更完整、回复通常更精确，但处理时间可能更长。</small></span>
                             </label>
-                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="10" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">默认：每 10 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次生成一份摘要。</small></span>
+                            <label
+                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="10"
+                                    class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">默认：每 10 轮对话自动压缩</strong><small
+                                        class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次生成一份摘要。</small></span>
                             </label>
-                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="15" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份摘要。</small></span>
+                            <label
+                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="15"
+                                    class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small
+                                        class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份摘要。</small></span>
                             </label>
-                            <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="20" class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份摘要。</small></span>
+                            <label
+                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                <input type="radio" name="auto-summary-interval" value="20"
+                                    class="mt-1 accent-emerald-500">
+                                <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small
+                                        class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份摘要。</small></span>
                             </label>
                         </div>
                         <p class="text-[11px] text-gray-500 mt-2">摘要不会替换界面的原本聊天记录，也不会展示。</p>
@@ -2968,19 +3121,24 @@
                     <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">强调色</label>
                         <div class="accent-color-grid">
-                            <button class="accent-color-btn rounded-xl" data-accent="green" onclick="setAccentColor('green')">
+                            <button class="accent-color-btn rounded-xl" data-accent="green"
+                                onclick="setAccentColor('green')">
                                 <span class="accent-color-swatch" style="--swatch-color:#10b981"></span>绿色
                             </button>
-                            <button class="accent-color-btn rounded-xl" data-accent="sky" onclick="setAccentColor('sky')">
+                            <button class="accent-color-btn rounded-xl" data-accent="sky"
+                                onclick="setAccentColor('sky')">
                                 <span class="accent-color-swatch" style="--swatch-color:#38bdf8"></span>浅蓝
                             </button>
-                            <button class="accent-color-btn rounded-xl" data-accent="amber" onclick="setAccentColor('amber')">
+                            <button class="accent-color-btn rounded-xl" data-accent="amber"
+                                onclick="setAccentColor('amber')">
                                 <span class="accent-color-swatch" style="--swatch-color:#f59e0b"></span>琥珀
                             </button>
-                            <button class="accent-color-btn rounded-xl" data-accent="rose" onclick="setAccentColor('rose')">
+                            <button class="accent-color-btn rounded-xl" data-accent="rose"
+                                onclick="setAccentColor('rose')">
                                 <span class="accent-color-swatch" style="--swatch-color:#fb7185"></span>玫红
                             </button>
-                            <button class="accent-color-btn rounded-xl" data-accent="claude" onclick="setAccentColor('claude')">
+                            <button class="accent-color-btn rounded-xl" data-accent="claude"
+                                onclick="setAccentColor('claude')">
                                 <span class="accent-color-swatch" style="--swatch-color:#d97757"></span>暖白
                             </button>
                         </div>
@@ -3080,26 +3238,32 @@
                             <input type="password" id="api-key-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
                                 placeholder="sk-...">
-                            <div class="mt-2 space-y-2">
+                            <!-- div class="mt-2 space-y-2">
                                 <button type="button" onclick="applyPresetApiKey('sk-*****')"
                                     class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
                                     <span class="block text-sm font-medium text-gray-200">替换为 default-only</span>
-                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">虽然价格贵，但 gpt 系列模型支持流式输出。</span>
-                                    <span class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
+                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">虽然价格贵，但 gpt
+                                        系列模型支持流式输出。</span>
+                                    <span
+                                        class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
                                 </button>
                                 <button type="button" onclick="applyPresetApiKey('sk-*****')"
                                     class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
                                     <span class="block text-sm font-medium text-gray-200">替换为 codex-only</span>
-                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">仅支持 gpt 系列的最近模型且不支持流式，但价格五折。</span>
-                                    <span class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
+                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">仅支持 gpt
+                                        系列的最近模型且不支持流式，但价格五折。</span>
+                                    <span
+                                        class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
                                 </button>
                                 <button type="button" onclick="applyPresetApiKey('sk-*****')"
                                     class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
                                     <span class="block text-sm font-medium text-gray-200">替换为 codex-default</span>
-                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">成本优先，非 gpt 系列支持流式，gpt 最新系列仍享受五折但不支持流式。</span>
-                                    <span class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
+                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">成本优先，非 gpt 系列支持流式，gpt
+                                        最新系列仍享受五折但不支持流式。</span>
+                                    <span
+                                        class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
                                 </button>
-                            </div>
+                            </div -->
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-gray-300">Base URL</label>
@@ -3117,13 +3281,21 @@
                         <div>
                             <label class="block text-sm font-medium mb-3 text-gray-300">请求端点</label>
                             <div class="space-y-2">
-                                <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                    <input type="radio" name="request-endpoint" value="/chat/completions" class="mt-1 accent-emerald-500">
-                                    <span><strong class="block text-sm text-gray-200">/chat/completions</strong><small class="block mt-1 text-xs text-gray-500">兼容当前聊天接口，适用于大多数 OpenAI 风格服务端。</small></span>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/chat/completions"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">/chat/completions</strong><small
+                                            class="block mt-1 text-xs text-gray-500">兼容当前聊天接口，适用于大多数 OpenAI
+                                            风格服务端。</small></span>
                                 </label>
-                                <label class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                    <input type="radio" name="request-endpoint" value="/responses" class="mt-1 accent-emerald-500">
-                                    <span><strong class="block text-sm text-gray-200">/responses</strong><small class="block mt-1 text-xs text-gray-500">使用响应式接口，适合支持 Responses API 的服务端。</small></span>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/responses"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">/responses</strong><small
+                                            class="block mt-1 text-xs text-gray-500">使用响应式接口，适合支持 Responses API
+                                            的服务端。</small></span>
                                 </label>
                             </div>
                             <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。</p>
@@ -3137,7 +3309,8 @@
                             <textarea id="model-list-input" rows="10"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm font-mono outline-none focus:border-emerald-500 transition-colors resize-y"
                                 placeholder="每行填写一个模型名称"></textarea>
-                            <p class="text-[11px] text-gray-500 mt-2">每行一个模型；可直接增加、删除或调整顺序。保存后会同步更新主模型选择器和重试模型选择器，并存储在本机 LocalStorage 中。</p>
+                            <p class="text-[11px] text-gray-500 mt-2">每行一个模型；可直接增加、删除或调整顺序。保存后会同步更新主模型选择器和重试模型选择器，并存储在本机
+                                LocalStorage 中。</p>
                         </div>
                     </div>
                 </div>
@@ -3152,7 +3325,7 @@
                             <input type="text" id="voice-chat-model-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
                                 placeholder="gemini-3.5-flash-nothinking">
-                                <p class="text-[11px] text-gray-500 mt-2">推荐选择速度优先的模型。</p>
+                            <p class="text-[11px] text-gray-500 mt-2">推荐选择速度优先的模型。</p>
                         </div>
                     </div>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
@@ -3161,7 +3334,7 @@
                             <label class="block text-sm font-medium mb-2 text-gray-300">API Base</label>
                             <input type="text" id="voice-fish-base-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                                <p class="text-[11px] text-gray-500 mt-2">注意区分FishAudio的国际版和国内版链接。</p>
+                            <p class="text-[11px] text-gray-500 mt-2">注意区分FishAudio的国际版和国内版链接。</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
@@ -3193,7 +3366,8 @@
                             class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">
                             <i data-lucide="waves" class="w-4 h-4"></i> 生成/覆盖预制语音包
                         </button>
-                        <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">A 组：每轮请求开始时立即播放的短回应。B 组：A 组后按设定概率播放的思考等待语音。C 组：本轮附带桌面截图时，在 A 组后播放的看图提示语音。预制语音包可以明显减少等待感。</p>
+                        <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">A 组：每轮请求开始时立即播放的短回应。B 组：A
+                            组后按设定概率播放的思考等待语音。C 组：本轮附带桌面截图时，在 A 组后播放的看图提示语音。预制语音包可以明显减少等待感。</p>
                     </div>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <p class="text-xs font-semibold text-gray-300">科大讯飞流式听写</p>
@@ -3245,20 +3419,26 @@
                             </select>
                             <p class="text-[11px] text-gray-500 mt-2">截图只保留下一次语音输入附带的最后一张图片。</p>
                         </div>
-                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
+                        <div
+                            class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-300" for="desktop-skip-b-preset-input">跳过B组语音</label>
-                                <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">B 组是按概率播放的思考等待语音；C 组是附带截图时播放的看图提示语音。开启后桌面协作只播放 A 组和 C 组。</p>
+                                <label class="block text-sm font-medium text-gray-300"
+                                    for="desktop-skip-b-preset-input">跳过B组语音</label>
+                                <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">B 组是按概率播放的思考等待语音；C
+                                    组是附带截图时播放的看图提示语音。开启后桌面协作只播放 A 组和 C 组。</p>
                             </div>
                             <label class="cloud-toggle shrink-0">
                                 <input type="checkbox" id="desktop-skip-b-preset-input">
                                 <span class="slider"></span>
                             </label>
                         </div>
-                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
+                        <div
+                            class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 flex items-center justify-between gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-300" for="desktop-auto-screenshot-input">自动传图</label>
-                                <p class="text-[11px] text-gray-500 mt-2">每次 VAD 结束并完成语音识别后，若本轮没有手动截图，则自动截取鼠标所在显示器并附带到请求。</p>
+                                <label class="block text-sm font-medium text-gray-300"
+                                    for="desktop-auto-screenshot-input">自动传图</label>
+                                <p class="text-[11px] text-gray-500 mt-2">每次 VAD
+                                    结束并完成语音识别后，若本轮没有手动截图，则自动截取鼠标所在显示器并附带到请求。</p>
                             </div>
                             <label class="cloud-toggle shrink-0">
                                 <input type="checkbox" id="desktop-auto-screenshot-input">
@@ -3287,17 +3467,20 @@
                             <span class="text-[11px] text-gray-500 mt-0.5">关闭后所有 KaTeX、数学公式、化学方程式将以原始标记显示。</span>
                         </div>
                         <label class="cloud-toggle">
-                            <input type="checkbox" id="math-render-toggle" onchange="onMathRenderToggleChange()" checked>
+                            <input type="checkbox" id="math-render-toggle" onchange="onMathRenderToggleChange()"
+                                checked>
                             <span class="slider"></span>
                         </label>
                     </div>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex flex-col pr-3">
                             <span class="text-sm font-medium text-gray-200">自动探测更新</span>
-                            <span class="text-[11px] text-gray-500 mt-0.5">默认开启；仅 Setup 安装版会在每次启动时检查 GitHub Release，Portable 版本不会检查。</span>
+                            <span class="text-[11px] text-gray-500 mt-0.5">默认开启；仅 Setup 安装版会在每次启动时检查 GitHub
+                                Release，Portable 版本不会检查。</span>
                         </div>
                         <label class="cloud-toggle shrink-0">
-                            <input type="checkbox" id="auto-update-toggle" onchange="onAutoUpdateToggleChange()" checked>
+                            <input type="checkbox" id="auto-update-toggle" onchange="onAutoUpdateToggleChange()"
+                                checked>
                             <span class="slider"></span>
                         </label>
                     </div>
@@ -3320,23 +3503,28 @@
                                 <label class="block text-sm font-medium mb-2 text-gray-300">日志级别</label>
                                 <div class="flex gap-4 flex-wrap">
                                     <label class="inline-flex items-center gap-2 text-sm text-gray-300">
-                                        <input type="radio" name="log-level" value="trace" onchange="onLogLevelChange(this)">
+                                        <input type="radio" name="log-level" value="trace"
+                                            onchange="onLogLevelChange(this)">
                                         Trace
                                     </label>
                                     <label class="inline-flex items-center gap-2 text-sm text-gray-300">
-                                        <input type="radio" name="log-level" value="debug" onchange="onLogLevelChange(this)">
+                                        <input type="radio" name="log-level" value="debug"
+                                            onchange="onLogLevelChange(this)">
                                         Debug
                                     </label>
                                     <label class="inline-flex items-center gap-2 text-sm text-gray-300">
-                                        <input type="radio" name="log-level" value="info" onchange="onLogLevelChange(this)">
+                                        <input type="radio" name="log-level" value="info"
+                                            onchange="onLogLevelChange(this)">
                                         Info
                                     </label>
                                     <label class="inline-flex items-center gap-2 text-sm text-gray-300">
-                                        <input type="radio" name="log-level" value="error" onchange="onLogLevelChange(this)">
+                                        <input type="radio" name="log-level" value="error"
+                                            onchange="onLogLevelChange(this)">
                                         Error
                                     </label>
                                 </div>
-                                <p class="text-[11px] text-gray-500 mt-2">Trace 模式记录所有日志并输出更多请求/响应详细信息，Debug 模式输出更多控制台和流式接收日志，Info 模式仅显示基础通知，Error 模式仅记录错误。</p>
+                                <p class="text-[11px] text-gray-500 mt-2">Trace 模式记录所有日志并输出更多请求/响应详细信息，Debug
+                                    模式输出更多控制台和流式接收日志，Info 模式仅显示基础通知，Error 模式仅记录错误。</p>
                             </div>
                             <div class="flex items-center justify-between">
                                 <div>
@@ -3344,13 +3532,16 @@
                                     <span class="text-[11px] text-gray-500">启用后会记录当前模式产生的日志。</span>
                                 </div>
                                 <label class="cloud-toggle">
-                                    <input type="checkbox" id="record-logs-toggle" onchange="onRecordLogsToggleChange()">
+                                    <input type="checkbox" id="record-logs-toggle"
+                                        onchange="onRecordLogsToggleChange()">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                             <div id="log-actions" class="flex flex-wrap gap-2 hidden">
-                                <button onclick="exportLogs()" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-xl text-sm">导出日志</button>
-                                <button onclick="clearLogs()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm">清除日志</button>
+                                <button onclick="exportLogs()"
+                                    class="px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-xl text-sm">导出日志</button>
+                                <button onclick="clearLogs()"
+                                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm">清除日志</button>
                             </div>
                         </div>
                     </div>
@@ -3360,89 +3551,123 @@
                         <i data-lucide="book-open" class="w-4 h-4"></i>使用指导
                     </h3>
                     <div>
-<p style="font-size:1.8em; font-weight:bold; margin:1em 0 0.5em;">欢迎使用 AIChatUI</p>
-<p style="margin:0.5em 0; line-height:1.6;">本则使用引导将指导你使用这个全功能的AI对话前端框架，充分发挥生产力，减少遇到的实际体验问题。</p>
+                        <p style="font-size:1.8em; font-weight:bold; margin:1em 0 0.5em;">欢迎使用 AIChatUI</p>
+                        <p style="margin:0.5em 0; line-height:1.6;">本则使用引导将指导你使用这个全功能的AI对话前端框架，充分发挥生产力，减少遇到的实际体验问题。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">必要配置</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在开始使用AIUI之前，你需要将自己的<strong>apikey</strong>，以及对应的<strong>服务器url</strong>填入“设置 - API配置”中，你同样可以在这里调整<strong>最大Token限制</strong>，以防止单词使用超过预算金额。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• “设置 - API配置 - 模型列表”支持每行填写一个模型名称。你可以增加、删除或调整顺序；保存后主模型选择器与重试选择器会立即同步。模型列表保存在本机 LocalStorage 中，“恢复默认”只会先恢复编辑框内容，仍需点击保存设置。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 当前版本已移除云端同步与云端记忆入口，所有聊天与记忆仅保存在本地。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在设置的其他位置选择你喜欢的背景图片、亮暗模式以及文字大小。以及默认使用的语音输入模型。（<strong>前提是你提供的AI后端要支持语音转文字模型</strong>）。</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">必要配置</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            在开始使用AIUI之前，你需要将自己的<strong>apikey</strong>，以及对应的<strong>服务器url</strong>填入“设置 -
+                            API配置”中，你同样可以在这里调整<strong>最大Token限制</strong>，以防止单词使用超过预算金额。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• “设置 - API配置 -
+                            模型列表”支持每行填写一个模型名称。你可以增加、删除或调整顺序；保存后主模型选择器与重试选择器会立即同步。模型列表保存在本机 LocalStorage
+                            中，“恢复默认”只会先恢复编辑框内容，仍需点击保存设置。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 当前版本已移除云端同步与云端记忆入口，所有聊天与记忆仅保存在本地。
+                        </p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            在设置的其他位置选择你喜欢的背景图片、亮暗模式以及文字大小。以及默认使用的语音输入模型。（<strong>前提是你提供的AI后端要支持语音转文字模型</strong>）。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">文字对话</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在模型列表里选择模型（前提是AI后端要支持）进行文字对话。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 对于AI发出的所有消息，可以使用“复制”功能。对于AI发出的<strong>最后一条</strong>消息，可以使用“重试”功能。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 使用“语音转文字”模型进行语音输入，识别到的内容将会在鼠标光标（若存在）处插入，或者在末尾插入，不会影响对话框中已有内容。</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">文字对话</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在模型列表里选择模型（前提是AI后端要支持）进行文字对话。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            对于AI发出的所有消息，可以使用“复制”功能。对于AI发出的<strong>最后一条</strong>消息，可以使用“重试”功能。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            使用“语音转文字”模型进行语音输入，识别到的内容将会在鼠标光标（若存在）处插入，或者在末尾插入，不会影响对话框中已有内容。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">上下文压缩</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在“设置 - 对话设置”中可关闭自动摘要，或选择每 10、15、20 个完整对话轮次生成一份独立摘要。摘要只影响发送给模型的上下文，界面中的原始聊天记录不会被删除或隐藏。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在输入框开头输入 <strong>/compact</strong>，或使用“+ - 压缩上下文”，可以手动压缩自上次压缩结束后至今的完整轮次。/compact 后面的文字会作为本次摘要的额外要求。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 图片、附件和 AI 生成图片不会发送给上下文压缩助手。摘要模型沿用全局 API Key 与 Base URL，可在对话设置中单独指定。</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">上下文压缩</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在“设置 - 对话设置”中可关闭自动摘要，或选择每 10、15、20
+                            个完整对话轮次生成一份独立摘要。摘要只影响发送给模型的上下文，界面中的原始聊天记录不会被删除或隐藏。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在输入框开头输入
+                            <strong>/compact</strong>，或使用“+ - 压缩上下文”，可以手动压缩自上次压缩结束后至今的完整轮次。/compact 后面的文字会作为本次摘要的额外要求。
+                        </p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 图片、附件和 AI 生成图片不会发送给上下文压缩助手。摘要模型沿用全局
+                            API Key 与 Base URL，可在对话设置中单独指定。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">语音聊天</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 首次使用前，在“设置 - 语音聊天”填写对话模型、Fish Audio API、音色 ID 与科大讯飞流式听写凭据。Fish Audio 固定使用 HTTP TTS，语音识别固定使用科大讯飞。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 可在语音聊天设置中生成 A/B/C 三组预制语音。桌面协作请求附带截图时，A 组播放后必定随机播放一条 C 组语音。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 从输入框左侧“+”菜单进入语音聊天。当前文字上下文会自动带入；结束通话后，本次完整的人类/AI轮次会自动拼接回当前对话，随后可继续文字聊天。</p>
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">桌面协作</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 从输入框左侧“+”菜单或托盘进入桌面协作。主窗口会自动最小化，透明字幕窗口停靠在当前显示器底部。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 按偏好设置中的全局传图快捷键截取鼠标所在显示器；连续截图只保留最后一张，并在下一次语音输入时发送。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 语音窗口仅显示当前 AI 回复和当前用户发言；深浅主题跟随主窗口。用户持续沉默时不会主动触发模型。</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">语音聊天</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 首次使用前，在“设置 - 语音聊天”填写对话模型、Fish Audio
+                            API、音色 ID 与科大讯飞流式听写凭据。Fish Audio 固定使用 HTTP TTS，语音识别固定使用科大讯飞。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 可在语音聊天设置中生成 A/B/C
+                            三组预制语音。桌面协作请求附带截图时，A 组播放后必定随机播放一条 C 组语音。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            从输入框左侧“+”菜单进入语音聊天。当前文字上下文会自动带入；结束通话后，本次完整的人类/AI轮次会自动拼接回当前对话，随后可继续文字聊天。</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">桌面协作</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            从输入框左侧“+”菜单或托盘进入桌面协作。主窗口会自动最小化，透明字幕窗口停靠在当前显示器底部。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            按偏好设置中的全局传图快捷键截取鼠标所在显示器；连续截图只保留最后一张，并在下一次语音输入时发送。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 语音窗口仅显示当前 AI
+                            回复和当前用户发言；深浅主题跟随主窗口。用户持续沉默时不会主动触发模型。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">画布编写</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在对话框左侧的“+”中选择“Canvas”或者手动在输入框的开头处输入指令/canvas以启动画布。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 若仅发送/canvas则不会调用AI，只会创建空画布。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在启用的canvas的会话中，每一次调用AI都会附带上canvas中的<strong>全部内容</strong>，AI可通过<strong>replace指令修改或增添</strong>canvas中的内容。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• canvas内容<strong>实时本地更新</strong>，<strong>不需要手动保存</strong>。</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">画布编写</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            在对话框左侧的“+”中选择“Canvas”或者手动在输入框的开头处输入指令/canvas以启动画布。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 若仅发送/canvas则不会调用AI，只会创建空画布。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            在启用的canvas的会话中，每一次调用AI都会附带上canvas中的<strong>全部内容</strong>，AI可通过<strong>replace指令修改或增添</strong>canvas中的内容。
+                        </p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            canvas内容<strong>实时本地更新</strong>，<strong>不需要手动保存</strong>。</p>
 
-<p style="margin:0.8em 0 0.3em;">示例输入：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">/canvas 用html配合第三方库写一个日语转罗马音工具</p>
-<p style="margin:0.3em 0;">AI回复会被解析为：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">修改了画布代码：canvas[replace]with[253行]。</p>
-<p style="margin:0.3em 0;">再次输入：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">再加入反向转化的功能</p>
-<p style="margin:0.3em 0;">AI可以精准修改canvas中的特定部分代码。</p>
+                        <p style="margin:0.8em 0 0.3em;">示例输入：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">/canvas 用html配合第三方库写一个日语转罗马音工具</p>
+                        <p style="margin:0.3em 0;">AI回复会被解析为：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">修改了画布代码：canvas[replace]with[253行]。
+                        </p>
+                        <p style="margin:0.3em 0;">再次输入：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">再加入反向转化的功能</p>
+                        <p style="margin:0.3em 0;">AI可以精准修改canvas中的特定部分代码。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">绘画工具</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在对话框左侧的“+”中选择“图像生成”以进入图像生成模式，你会发现<strong>模型列表</strong>中的模型变成了图像有关的模型。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在提示词中加入宽高比关键词即可指定比例，例如“海边日落 16:9”或“人物头像 4：3”。前面的数字是宽，后面的数字是高；不填写比例时继续使用默认的 1:1。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 若会话中存在AI生成的图片或你上传的图片，可以通过在“+”中选择“图像编辑”以进入图像编辑模式，调用AI时会走向图像编辑端点，对最近的一张AI生成的图片或你上传的图片进行编辑。</p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在“图像生成”或“图像编辑”模式可以在“+”中选择“退出图像生成模式”以回到正常的对话模式。<strong>此时为了减少上下文负载，每次调用AI仅会附带最后一张图片作为附件！</strong></p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">绘画工具</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            在对话框左侧的“+”中选择“图像生成”以进入图像生成模式，你会发现<strong>模型列表</strong>中的模型变成了图像有关的模型。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在提示词中加入宽高比关键词即可指定比例，例如“海边日落
+                            16:9”或“人物头像 4：3”。前面的数字是宽，后面的数字是高；不填写比例时继续使用默认的 1:1。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            若会话中存在AI生成的图片或你上传的图片，可以通过在“+”中选择“图像编辑”以进入图像编辑模式，调用AI时会走向图像编辑端点，对最近的一张AI生成的图片或你上传的图片进行编辑。</p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
+                            在“图像生成”或“图像编辑”模式可以在“+”中选择“退出图像生成模式”以回到正常的对话模式。<strong>此时为了减少上下文负载，每次调用AI仅会附带最后一张图片作为附件！</strong>
+                        </p>
 
-<p style="margin:0.8em 0 0.3em;">示例输入：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">（选择图像生成，进入图像生成模式）画一张海滩图片</p>
-<p style="margin:0.3em 0;">AI回复示例：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">生成完成 【图片1】</p>
-<p style="margin:0.3em 0;">第二次输入：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">（选择图像编辑，进入图像编辑模式）把太阳改成月亮</p>
-<p style="margin:0.3em 0;">AI回复示例：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">生成完成 【图片2】</p>
-<p style="margin:0.3em 0;">第三次输入：（此时只有【图片2】会被发送）</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">（选择退出图像生成模式）你看到的是太阳还是月亮？</p>
-<p style="margin:0.3em 0;">AI回复示例：</p>
-<p style="margin-left:2em; font-style:italic; color:#555;">我只能看到月亮在一片沙滩上空。</p>
+                        <p style="margin:0.8em 0 0.3em;">示例输入：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">（选择图像生成，进入图像生成模式）画一张海滩图片</p>
+                        <p style="margin:0.3em 0;">AI回复示例：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">生成完成 【图片1】</p>
+                        <p style="margin:0.3em 0;">第二次输入：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">（选择图像编辑，进入图像编辑模式）把太阳改成月亮</p>
+                        <p style="margin:0.3em 0;">AI回复示例：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">生成完成 【图片2】</p>
+                        <p style="margin:0.3em 0;">第三次输入：（此时只有【图片2】会被发送）</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">（选择退出图像生成模式）你看到的是太阳还是月亮？</p>
+                        <p style="margin:0.3em 0;">AI回复示例：</p>
+                        <p style="margin-left:2em; font-style:italic; color:#555;">我只能看到月亮在一片沙滩上空。</p>
 
-<p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">提供反馈</p>
-<p style="margin:0.3em 0;"><a href="https://github.com/JHCWColin/AIChat-UI" style="color:#1a0dab;">https://github.com/JHCWColin/AIChat-UI</a></p>
-<p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 欢迎在这里为我提出issue，关注最新更新！</p>
+                        <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">提供反馈</p>
+                        <p style="margin:0.3em 0;"><a href="https://github.com/JHCWColin/AIChat-UI"
+                                style="color:#1a0dab;">https://github.com/JHCWColin/AIChat-UI</a></p>
+                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 欢迎在这里为我提出issue，关注最新更新！</p>
 
-<p style="border-bottom:1px solid #ddd; margin:1.5em 0 1em;"></p>
+                        <p style="border-bottom:1px solid #ddd; margin:1.5em 0 1em;"></p>
 
-<p style="font-weight:bold; margin:0.5em 0;"><strong>感谢你的使用和支持！</strong></p>
+                        <p style="font-weight:bold; margin:0.5em 0;"><strong>感谢你的使用和支持！</strong></p>
 
-<p style="margin:0.3em 0;">2026年6月18日<br>开发者JHCWColin</p></div>
+                        <p style="margin:0.3em 0;">2026年6月18日<br>开发者JHCWColin</p>
+                    </div>
                 </div>
                 <div id="section-agent" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
                     <p id="settings-lock-agent" class="hidden text-sm text-red-400">正在执行 Agent Loop，部分设置项暂不可更改。</p>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col pr-3"><span class="text-sm font-medium text-gray-200">自动滚动到末尾</span><span class="text-[11px] text-gray-500 mt-0.5">每次生成新的工具调用提示或纯文本时滚动到底部。</span></div>
-                        <label class="cloud-toggle shrink-0"><input id="agent-auto-scroll" type="checkbox"><span class="slider"></span></label>
+                        <div class="flex flex-col pr-3"><span
+                                class="text-sm font-medium text-gray-200">自动滚动到末尾</span><span
+                                class="text-[11px] text-gray-500 mt-0.5">每次生成新的工具调用提示或纯文本时滚动到底部。</span></div>
+                        <label class="cloud-toggle shrink-0"><input id="agent-auto-scroll" type="checkbox"><span
+                                class="slider"></span></label>
                     </div>
                     <p class="text-sm leading-relaxed text-red-400">
                         内测功能：建议使用默认或干净的 API 分组。Codex CLI、Claude Code 等 Agent 转接分组会优先遵循其原生工具规则，可能大幅降低本应用工具调用准确率。
                     </p>
                     <div>
-                        <label for="agent-diff-max-lines" class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
+                        <label for="agent-diff-max-lines"
+                            class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
                         <select id="agent-diff-max-lines"
                             class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             <option value="10">10</option>
@@ -3452,7 +3677,8 @@
                         </select>
                     </div>
                     <div>
-                        <label for="agent-detail-default-behavior" class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
+                        <label for="agent-detail-default-behavior"
+                            class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
                         <select id="agent-detail-default-behavior"
                             class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             <option value="expanded" selected>展开（默认）</option>
@@ -3460,8 +3686,10 @@
                         </select>
                     </div>
                     <div>
-                        <label for="agent-shell-timeout-seconds" class="block text-sm font-medium mb-2 text-gray-300">命令执行超时（秒）</label>
-                        <label for="agent-view-image-detail" class="block text-sm font-medium mb-2 text-gray-300">Agent image detail</label>
+                        <label for="agent-shell-timeout-seconds"
+                            class="block text-sm font-medium mb-2 text-gray-300">命令执行超时（秒）</label>
+                        <label for="agent-view-image-detail" class="block text-sm font-medium mb-2 text-gray-300">Agent
+                            image detail</label>
                         <select id="agent-view-image-detail"
                             class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             <option value="low">Low (fast)</option>
@@ -3471,7 +3699,8 @@
                         </select>
                     </div>
                     <div>
-                        <label for="agent-shell-timeout-seconds" class="block text-sm font-medium mb-2 text-gray-300">Agent shell timeout (seconds)</label>
+                        <label for="agent-shell-timeout-seconds"
+                            class="block text-sm font-medium mb-2 text-gray-300">Agent shell timeout (seconds)</label>
                         <input id="agent-shell-timeout-seconds" type="number" min="5" max="3600" step="1"
                             class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                     </div>
@@ -3497,7 +3726,7 @@
                             一个轻量级云端的智能对话应用，支持多种AI模型，具备持久化存储和多模态能力，致力于提供流畅的AI交互体验。
                             <br>Your Next Gen Vibe Coding Toolkit.<br>
                             享受乐趣。
-                        
+
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">开发者</strong><br>
@@ -3505,9 +3734,10 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.5.0 Release</span>
+                            <span id="app-version">V7.5.1 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
-                            <button type="button" onclick="checkForUpdatesManually()" class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
+                            <button type="button" onclick="checkForUpdatesManually()"
+                                class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
                         </p>
                         <div id="current-update-notes" class="leading-relaxed"></div>
                         <button type="button" id="toggle-update-history-btn" onclick="toggleUpdateHistory()"
@@ -3535,7 +3765,8 @@
     <div id="compact-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="compact-confirm-title">
         <div>
             <h3 id="compact-confirm-title" class="text-base font-semibold" style="text-align: center">压缩上下文</h3>
-            <p class="mt-3 text-sm leading-relaxed opacity-80">手动压缩会将上次压缩结束后至今的完整对话整理成摘要。压缩可能会或多或少降低模型的回复质量，但有助于缩短上下文、节省请求成本。</p>
+            <p class="mt-3 text-sm leading-relaxed opacity-80">
+                手动压缩会将上次压缩结束后至今的完整对话整理成摘要。压缩可能会或多或少降低模型的回复质量，但有助于缩短上下文、节省请求成本。</p>
             <div class="compact-confirm-actions">
                 <button type="button" class="compact-cancel" onclick="resolveCompactionConfirm(false)">取消</button>
                 <button type="button" class="compact-confirm" onclick="resolveCompactionConfirm(true)">确定</button>
@@ -3556,8 +3787,10 @@
 
     <div id="agent-workspace-trust-modal" role="dialog" aria-modal="true" aria-labelledby="agent-workspace-trust-title">
         <div>
-            <h3 id="agent-workspace-trust-title" class="text-base font-semibold text-red-400 text-center">信任此 Agent 工作区？</h3>
-            <p class="mt-3 text-sm leading-relaxed">继续即表示你信任此工作区。Agent 可能将其中的 Markdown 和纯文本内容作为指令发送给 API，并执行有风险的操作；来源不明请取消。</p>
+            <h3 id="agent-workspace-trust-title" class="text-base font-semibold text-red-400 text-center">信任此 Agent 工作区？
+            </h3>
+            <p class="mt-3 text-sm leading-relaxed">继续即表示你信任此工作区。Agent 可能将其中的 Markdown 和纯文本内容作为指令发送给
+                API，并执行有风险的操作；来源不明请取消。</p>
             <p id="agent-workspace-trust-path" title=""></p>
             <ul id="agent-workspace-trust-files" aria-label="工作区文本文件"></ul>
             <div class="flex justify-end gap-2 mt-5">
@@ -3571,15 +3804,21 @@
 
     <div id="agent-auto-compaction-modal" role="dialog" aria-modal="true" aria-labelledby="agent-auto-compaction-title">
         <div>
-            <h3 id="agent-auto-compaction-title" class="text-base font-semibold text-red-400 text-center">在 Agent 模式中自动压缩？</h3>
+            <h3 id="agent-auto-compaction-title" class="text-base font-semibold text-red-400 text-center">在 Agent
+                模式中自动压缩？</h3>
             <p class="mt-3 text-sm leading-relaxed">即将触发自动上下文压缩，但你可能尚未触及上下文长度上限。请选择本次会话后续使用的自动压缩设置。</p>
             <p id="agent-auto-compaction-current" class="mt-2 text-xs text-gray-400"></p>
             <div class="grid gap-2 mt-4">
-                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(0)">不进行自动压缩</button>
-                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(10)">每 10 轮对话自动压缩</button>
-                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(15)">每 15 轮对话自动压缩</button>
-                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(20)">每 20 轮对话自动压缩</button>
-                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(null)">不更改当前设置并继续</button>
+                <button type="button" class="agent-compaction-option"
+                    onclick="resolveAgentAutoCompactionConfirm(0)">不进行自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(10)">每
+                    10 轮对话自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(15)">每
+                    15 轮对话自动压缩</button>
+                <button type="button" class="agent-compaction-option" onclick="resolveAgentAutoCompactionConfirm(20)">每
+                    20 轮对话自动压缩</button>
+                <button type="button" class="agent-compaction-option"
+                    onclick="resolveAgentAutoCompactionConfirm(null)">不更改当前设置并继续</button>
             </div>
         </div>
     </div>
@@ -3587,7 +3826,8 @@
     <div id="agent-yolo-warning-modal" role="dialog" aria-modal="true" aria-labelledby="agent-yolo-warning-title">
         <div>
             <h3 id="agent-yolo-warning-title" class="text-base font-semibold text-red-400 text-center">启用 YOLO Mode</h3>
-            <p class="mt-3 text-sm leading-relaxed text-gray-300">YOLO Mode 会跳过所有 Shell 命令确认并直接执行。命令可以访问工作区外路径，并可能修改或删除本机数据。</p>
+            <p class="mt-3 text-sm leading-relaxed text-gray-300">YOLO Mode 会跳过所有 Shell
+                命令确认并直接执行。命令可以访问工作区外路径，并可能修改或删除本机数据。</p>
             <div class="flex justify-end gap-2 mt-5">
                 <button type="button" class="px-4 py-2 rounded-md border border-gray-600 text-sm"
                     onclick="resolveAgentYoloWarning(false)">取消</button>
@@ -3932,7 +4172,7 @@
                     audio.onended = null;
                     audio.onerror = null;
                     audio.onpause = null;
-                    try { audio.pause(); } catch {}
+                    try { audio.pause(); } catch { }
                     audio.src = '';
                 }
                 this.currentAudio = null;
@@ -4009,7 +4249,7 @@
                     if (token !== this.playbackToken || audio !== this.currentAudio) return;
                     try {
                         audio.currentTime = Math.min(offset, Math.max(0, Math.max(0, audio.duration - 0.01)));
-                    } catch {}
+                    } catch { }
                     if (autoPlay) {
                         console.info(`[VoiceReplay] metadata segment=${index + 1} audioDuration=${audio.duration}`);
                         audio.play().catch(error => {
@@ -5165,56 +5405,36 @@
             syncRetrySelect();
         }
 
-        const IMAGE_MODELS = [{
-            value: 'gemini-3.1-flash-image',
-            text: 'gemini-3.1-flash-image (推荐)'
-        },
-        {
-            value: 'gemini-3.1-flash-image-0.5k',
-            text: 'gemini-3.1-flash-image-0.5k'
-        },
-        {
-            value: 'gemini-3.1-flash-image-2k',
-            text: 'gemini-3.1-flash-image-2k'
-        },
-        {
-            value: 'gemini-3.1-flash-image-4k',
-            text: 'gemini-3.1-flash-image-4k'
-        },
-        {
-            value: 'gemini-3-pro-image',
-            text: 'gemini-3-pro-image'
-        },
-        {
-            value: 'gemini-3-pro-image-2k',
-            text: 'gemini-3-pro-image-2k'
-        },
-        {
-            value: 'gemini-3-pro-image-4k',
-            text: 'gemini-3-pro-image-4k'
-        },
-        {
-            value: 'gpt-image-2',
-            text: 'gpt-image-2 (最强，可能不稳定)'
-        },
-        {
-            value: 'gemini-3.1-flash-image-preview-0.5k',
-            text: 'gemini-3.1-flash-image-preview-0.5k'
-        },
-        {
-            value: 'gemini-3.1-flash-image-preview-2k',
-            text: 'gemini-3.1-flash-image-preview-2k'
-        },
-        {
-            value: 'gemini-3.1-flash-image-preview-4k',
-            text: 'gemini-3.1-flash-image-preview-4k'
-        },
-        {
-            value: 'doubao-seedream-4-0-250828',
-            text: 'doubao-seedream-4-0-250828'
-        }
+        const IMAGE_MODELS = [
+            {
+                value: 'gpt-image-2.5-sunburst',
+                text: 'gpt-image-2.5-sunburst (最强)'
+            },
+            {
+                value: 'gpt-image-2.5-flare',
+                text: 'gpt-image-2.5-flare (快速)'
+            },
+            {
+                value: 'gemini-3.1-flash-lite-image',
+                text: 'gemini-3.1-flash-lite-image'
+            },
+            {
+                value: 'nano-banana-lite',
+                text: 'nano-banana-lite'
+            },
+            {
+                value: 'gemini-3.1-flash-image-0.5k',
+                text: 'gemini-3.1-flash-image-0.5k'
+            },
+            {
+                value: 'gemini-3.1-flash-image-2k',
+                text: 'gemini-3.1-flash-image-2k'
+            },
+            {
+                value: 'gemini-3.1-flash-image-4k',
+                text: 'gemini-3.1-flash-image-4k'
+            }
         ];
-
         function getImageDetailConfig() {
             const level = localStorage.getItem('image_detail_level') || 'medium';
             switch (level) {
@@ -5861,17 +6081,17 @@
         }
 
         // 渲染消息列表，自动解析图片引用
-        async function renderMessagesWithResolvedRefs(messages) {
+        async function renderMessagesWithResolvedRefs(messages, forceRender = false) {
             const resolved = [];
             for (const msg of messages) {
                 resolved.push(await resolveMessageReferences(msg));
             }
-            renderMessages(resolved);
+            renderMessages(resolved, forceRender);
         }
 
-        function renderMessages(messages) {
+        function renderMessages(messages, forceRender = false) {
             const wrapper = document.getElementById('messages-wrapper');
-            if (isGenerating && wrapper && wrapper.children.length) return;
+            if (isGenerating && !forceRender && wrapper && wrapper.children.length) return;
             wrapper.innerHTML = '';
             if (!messages || messages.length === 0) {
                 const greetingText = getGreetingByTime();
@@ -5918,10 +6138,10 @@
                 const isLast = idx === messages.length - 1;
                 const renderedRow = appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
                     .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
-                        agentFinal: msg.agentFinal === true,
-                        agentSegment: msg.agentSegment === true,
-                        agentMessage: renderingAgentChat && msg.role === 'assistant'
-                    });
+                    agentFinal: msg.agentFinal === true,
+                    agentSegment: msg.agentSegment === true,
+                    agentMessage: renderingAgentChat && msg.role === 'assistant'
+                });
                 pendingFinalRow = msg.role === 'assistant' && msg.agentFinal === true ? renderedRow : null;
                 if (pendingFinalRow && deferredFinishMessage) {
                     const contentCol = pendingFinalRow.querySelector('.message-content-col');
@@ -6626,6 +6846,10 @@
             if (!result?.success) showVoiceNotification(`检查更新失败：${result?.error || '未知错误'}`, true, 4000);
         }
 
+        const FIRST_SETUP_GUIDE_SHOWN_KEY = 'first_setup_guide_shown';
+        const FIRST_MODEL_UPDATE_PROMPT_SHOWN_KEY = 'first_model_update_prompt_shown';
+        let firstSetupGuideShown = 0;
+        let firstModelUpdatePromptShown = 0;
         let setupGuidePage = 0;
         const setupGuidePages = [
             ['应用简介', 'AIChat-UI 是一个本地优先的桌面 AI 工作台，支持多模型对话、Canvas 编码、语音聊天、桌面协作和 Agent Loop。所有会话与偏好默认保存在本机，适合个人开发与实验。', 'guide/1.gif'],
@@ -6645,11 +6869,11 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V7.5.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
-                setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint()==='/responses'?'active':''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint()==='/chat/completions'?'active':''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
-                setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green','Green'],['sky','Sky'],['amber','Amber'],['rose','Rose'],['claude','Claude']].map(([x,label])=>`<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor===x?'active':''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x==='green'?'#10b981':x==='sky'?'#38bdf8':x==='amber'?'#f59e0b':x==='rose'?'#fb7185':'#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small','小'],['medium','中'],['large','大'],['extra-large','特大'],['huge','巨大']].map(([x,label])=>`<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize===x?'active':''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[1,2,3,4,5,6].map(x=>`<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage===x?'active border-emerald-500':'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"><span class="block text-[11px] text-gray-400 mt-1">背景 ${x}</span></button>`).join('')}</div>` : '',
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V7.5.1 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
+                setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[1, 2, 3, 4, 5, 6].map(x => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"><span class="block text-[11px] text-gray-400 mt-1">背景 ${x}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
-                setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode==='classic'?'active':''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode==='split'?'active':''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize==='small'?'active':''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize==='medium'?'active':''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize==='large'?'active':''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
+                setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode === 'classic' ? 'active' : ''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode === 'split' ? 'active' : ''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'small' ? 'active' : ''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'medium' ? 'active' : ''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'large' ? 'active' : ''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
                 setupGuidePage === 5 ? `<label class="block text-sm text-gray-300">语音对话模型<input id="guide-voice-model" value="${escapeHtml(localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL)}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label>` : '',
                 setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
                 setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
@@ -6657,35 +6881,54 @@
                 `</div>`
             ].join('');
             c.innerHTML = `<div class="setup-guide-page"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3><img src="${page[2]}" class="setup-guide-gif mb-3" alt="" onerror="this.remove()"><p class="setup-guide-description">${page[1]}</p>${blocks}</div>`;
-            if (setupGuidePage === 3) { const i=document.getElementById('guide-summary-interval'); if(i)i.value=String(autoSummaryInterval); const s=document.getElementById('guide-summary-model'); if(s){ renderModelOptions(s,textModelList.length?textModelList:loadModelList()); s.value=localStorage.getItem('context_compaction_model')||DEFAULT_CONTEXT_COMPACTION_MODEL; } }
-            if (setupGuidePage === 5) { const v=document.getElementById('guide-voice-model'); if(v)v.value=localStorage.getItem('voice_chat_model')||DEFAULT_VOICE_CHAT_MODEL; }
-            if (setupGuidePage === 6) { const q=document.getElementById('guide-desktop-quality'); if(q)q.value=localStorage.getItem('desktop_image_quality')||'balanced'; }
-            if (setupGuidePage === 7) { const d=document.getElementById('guide-agent-diff'); if(d)d.value=localStorage.getItem('agent_diff_max_lines')||'10'; const b=document.getElementById('guide-agent-detail'); if(b)b.value=localStorage.getItem('agent_detail_default_behavior')||'expanded'; const t=document.getElementById('guide-agent-timeout'); if(t)t.value=localStorage.getItem('agent_shell_timeout_seconds')||'120'; const im=document.getElementById('guide-agent-image'); if(im)im.value=localStorage.getItem('agent_view_image_detail')||'medium'; const sc=document.getElementById('guide-agent-scroll'); if(sc)sc.checked=localStorage.getItem('agent_auto_scroll')!=='false'; }
-            if (setupGuidePage === 8) { const v=document.getElementById('guide-voice-transcribe'); if(v)v.value=localStorage.getItem('voice_model')||'whisper-1'; }
+            if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval'); if (i) i.value = String(autoSummaryInterval); const s = document.getElementById('guide-summary-model'); if (s) { renderModelOptions(s, textModelList.length ? textModelList : loadModelList()); s.value = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL; } }
+            if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model'); if (v) v.value = localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL; }
+            if (setupGuidePage === 6) { const q = document.getElementById('guide-desktop-quality'); if (q) q.value = localStorage.getItem('desktop_image_quality') || 'balanced'; }
+            if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = localStorage.getItem('agent_detail_default_behavior') || 'expanded'; const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const sc = document.getElementById('guide-agent-scroll'); if (sc) sc.checked = localStorage.getItem('agent_auto_scroll') !== 'false'; }
+            if (setupGuidePage === 8) { const v = document.getElementById('guide-voice-transcribe'); if (v) v.value = localStorage.getItem('voice_model') || 'whisper-1'; }
             document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
             document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
         }
         function guideSetEndpoint(value, btn) { document.querySelectorAll('#setup-guide-content .theme-btn').forEach(b => b.classList.remove('active')); btn?.classList.add('active'); window._guideEndpoint = value; }
-        function guideSetTheme(value, btn) { setTheme(value); document.querySelectorAll('[data-guide-theme]').forEach(b=>b.classList.toggle('active',b.dataset.guideTheme===value)); }
-        function guideSetAccent(value, btn) { setAccentColor(value); document.querySelectorAll('[data-guide-accent]').forEach(b=>b.classList.toggle('active',b.dataset.guideAccent===value)); }
-        function guideSetFont(value, btn) { setFontSize(value, btn); document.querySelectorAll('[data-guide-font]').forEach(b=>b.classList.toggle('active',b.dataset.guideFont===value)); }
-        function guideSetBackground(value, btn) { selectedBackgroundImage=value; setBackgroundImage(value, btn); document.querySelectorAll('[data-guide-bg]').forEach(b=>{ const active=Number(b.dataset.guideBg)===value; b.classList.toggle('active',active); b.classList.toggle('border-emerald-500',active); b.classList.toggle('border-gray-700',!active); }); }
+        function guideSetTheme(value, btn) { setTheme(value); document.querySelectorAll('[data-guide-theme]').forEach(b => b.classList.toggle('active', b.dataset.guideTheme === value)); }
+        function guideSetAccent(value, btn) { setAccentColor(value); document.querySelectorAll('[data-guide-accent]').forEach(b => b.classList.toggle('active', b.dataset.guideAccent === value)); }
+        function guideSetFont(value, btn) { setFontSize(value, btn); document.querySelectorAll('[data-guide-font]').forEach(b => b.classList.toggle('active', b.dataset.guideFont === value)); }
+        function guideSetBackground(value, btn) { selectedBackgroundImage = value; setBackgroundImage(value, btn); document.querySelectorAll('[data-guide-bg]').forEach(b => { const active = Number(b.dataset.guideBg) === value; b.classList.toggle('active', active); b.classList.toggle('border-emerald-500', active); b.classList.toggle('border-gray-700', !active); }); }
         function syncSetupGuidePage() {
-            if (setupGuidePage === 1) { const b=document.getElementById('guide-base-url')?.value.trim(); const k=document.getElementById('guide-api-key')?.value.trim(); const mt=Number(document.getElementById('guide-max-tokens')?.value||0); if(b) localStorage.setItem('base_url',b); if(k) localStorage.setItem('api_key',k); localStorage.setItem('max_tokens_limit',String(Number.isFinite(mt)?Math.max(0,mt):0)); maxTokensLimit=Math.max(0,mt)||0; const maxInput=document.getElementById('max-tokens-input'); if(maxInput) maxInput.value=String(maxTokensLimit); const baseInput=document.getElementById('base-url-input'); if(baseInput&&b) baseInput.value=b; const keyInput=document.getElementById('api-key-input'); if(keyInput&&k) keyInput.value=k; if(window._guideEndpoint) { localStorage.setItem('request_endpoint',window._guideEndpoint); const endpointInput=document.querySelector(`input[name="request-endpoint"][value="${window._guideEndpoint}"]`); if(endpointInput) endpointInput.checked=true; } }
-            if (setupGuidePage === 3) { const i=document.getElementById('guide-summary-interval')?.value; const m=document.getElementById('guide-summary-model')?.value; if(i) { autoSummaryInterval=Number(i); localStorage.setItem('auto_summary_interval',i); const radio=document.querySelector(`input[name="auto-summary-interval"][value="${i}"]`); if(radio) radio.checked=true; } if(m) { localStorage.setItem('context_compaction_model',m); const select=document.getElementById('context-compaction-model-select'); if(select) select.value=m; } }
-            if (setupGuidePage === 5) { const v=document.getElementById('guide-voice-model')?.value.trim(); if(v) { localStorage.setItem('voice_chat_model',v); const input=document.getElementById('voice-chat-model-input'); if(input) input.value=v; } }
-            if (setupGuidePage === 6) { const s=document.getElementById('guide-desktop-shortcut')?.value.trim(); const q=document.getElementById('guide-desktop-quality')?.value; if(s) { localStorage.setItem('desktop_shortcut',s); const input=document.getElementById('desktop-shortcut-input'); if(input) input.value=s; } if(q) { localStorage.setItem('desktop_image_quality',q); const select=document.getElementById('desktop-image-quality-input'); if(select) select.value=q; } const auto=document.getElementById('guide-desktop-auto')?.checked?'true':'false'; localStorage.setItem('desktop_auto_screenshot',auto); const toggle=document.getElementById('desktop-auto-screenshot-input'); if(toggle) toggle.checked=auto==='true'; }
-            if (setupGuidePage === 7) { ['guide-agent-diff','guide-agent-detail','guide-agent-timeout','guide-agent-image'].forEach((id,i)=>{const v=document.getElementById(id)?.value;if(v) localStorage.setItem(['agent_diff_max_lines','agent_detail_default_behavior','agent_shell_timeout_seconds','agent_view_image_detail'][i],v);}); const autoScroll=document.getElementById('guide-agent-scroll')?.checked?'true':'false'; localStorage.setItem('agent_auto_scroll',autoScroll); const autoScrollInput=document.getElementById('agent-auto-scroll'); if(autoScrollInput) autoScrollInput.checked=autoScroll==='true'; }
-            if (setupGuidePage === 8) { localStorage.setItem('voice_model',document.getElementById('guide-voice-transcribe')?.value||'whisper-1'); mathRenderingEnabled=Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled=Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled',mathRenderingEnabled?'true':'false'); localStorage.setItem('auto_update_enabled',autoUpdateEnabled?'true':'false'); }
+            if (setupGuidePage === 1) { const b = document.getElementById('guide-base-url')?.value.trim(); const k = document.getElementById('guide-api-key')?.value.trim(); const mt = Number(document.getElementById('guide-max-tokens')?.value || 0); if (b) localStorage.setItem('base_url', b); if (k) localStorage.setItem('api_key', k); localStorage.setItem('max_tokens_limit', String(Number.isFinite(mt) ? Math.max(0, mt) : 0)); maxTokensLimit = Math.max(0, mt) || 0; const maxInput = document.getElementById('max-tokens-input'); if (maxInput) maxInput.value = String(maxTokensLimit); const baseInput = document.getElementById('base-url-input'); if (baseInput && b) baseInput.value = b; const keyInput = document.getElementById('api-key-input'); if (keyInput && k) keyInput.value = k; if (window._guideEndpoint) { localStorage.setItem('request_endpoint', window._guideEndpoint); const endpointInput = document.querySelector(`input[name="request-endpoint"][value="${window._guideEndpoint}"]`); if (endpointInput) endpointInput.checked = true; } }
+            if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval')?.value; const m = document.getElementById('guide-summary-model')?.value; if (i) { autoSummaryInterval = Number(i); localStorage.setItem('auto_summary_interval', i); const radio = document.querySelector(`input[name="auto-summary-interval"][value="${i}"]`); if (radio) radio.checked = true; } if (m) { localStorage.setItem('context_compaction_model', m); const select = document.getElementById('context-compaction-model-select'); if (select) select.value = m; } }
+            if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model')?.value.trim(); if (v) { localStorage.setItem('voice_chat_model', v); const input = document.getElementById('voice-chat-model-input'); if (input) input.value = v; } }
+            if (setupGuidePage === 6) { const s = document.getElementById('guide-desktop-shortcut')?.value.trim(); const q = document.getElementById('guide-desktop-quality')?.value; if (s) { localStorage.setItem('desktop_shortcut', s); const input = document.getElementById('desktop-shortcut-input'); if (input) input.value = s; } if (q) { localStorage.setItem('desktop_image_quality', q); const select = document.getElementById('desktop-image-quality-input'); if (select) select.value = q; } const auto = document.getElementById('guide-desktop-auto')?.checked ? 'true' : 'false'; localStorage.setItem('desktop_auto_screenshot', auto); const toggle = document.getElementById('desktop-auto-screenshot-input'); if (toggle) toggle.checked = auto === 'true'; }
+            if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const autoScroll = document.getElementById('guide-agent-scroll')?.checked ? 'true' : 'false'; localStorage.setItem('agent_auto_scroll', autoScroll); const autoScrollInput = document.getElementById('agent-auto-scroll'); if (autoScrollInput) autoScrollInput.checked = autoScroll === 'true'; }
+            if (setupGuidePage === 8) { localStorage.setItem('voice_model', document.getElementById('guide-voice-transcribe')?.value || 'whisper-1'); mathRenderingEnabled = Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled = Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false'); localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false'); }
         }
         function setupGuideBack() { if (setupGuidePage === 0) closeSetupGuide(); else setupGuidePrev(); }
         function openSetupGuide() {
             if (isGenerating || (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) || contextCompactionRunning) { showVoiceNotification('当前正在执行任务，暂不可进入配置指引。', true, 3000); return; }
             setupGuidePage = 0; renderSetupGuidePage(); const modal = document.getElementById('setup-guide-modal'); modal?.classList.remove('hidden'); modal?.classList.remove('portrait-layout'); if (window.matchMedia('(max-aspect-ratio: 1/1), (orientation: portrait)').matches) modal?.classList.add('portrait-layout'); openAnimatedModal(modal, 'flex');
         }
-        function closeSetupGuide() { const modal = document.getElementById('setup-guide-modal'); closeAnimatedModal(modal, 'flex', () => modal?.classList.add('hidden')); }
+        function closeSetupGuide(onClosed = null) { const modal = document.getElementById('setup-guide-modal'); closeAnimatedModal(modal, 'flex', () => { modal?.classList.add('hidden'); onClosed?.(); }); }
         function setupGuidePrev() { syncSetupGuidePage(); if (setupGuidePage > 0) { setupGuidePage -= 1; renderSetupGuidePage(); } }
-        function setupGuideNext() { syncSetupGuidePage(); if (setupGuidePage < setupGuidePages.length - 1) { setupGuidePage += 1; renderSetupGuidePage(); } else { closeSetupGuide(); } }
+        function completeFirstSetupGuide() {
+            closeSetupGuide(() => {
+                if (firstModelUpdatePromptShown === 1) return;
+                firstModelUpdatePromptShown = 1;
+                localStorage.setItem(FIRST_MODEL_UPDATE_PROMPT_SHOWN_KEY, '1');
+                if (window.confirm('配置指引已完成，是否将模型列表更新到最新？')) {
+                    resetModelListEditor();
+                    saveSettings(true);
+                }
+            });
+        }
+        function setupGuideNext() { syncSetupGuidePage(); if (setupGuidePage < setupGuidePages.length - 1) { setupGuidePage += 1; renderSetupGuidePage(); } else { completeFirstSetupGuide(); } }
+        function openFirstSetupGuide() {
+            firstSetupGuideShown = Number(localStorage.getItem(FIRST_SETUP_GUIDE_SHOWN_KEY) || 0);
+            firstModelUpdatePromptShown = Number(localStorage.getItem(FIRST_MODEL_UPDATE_PROMPT_SHOWN_KEY) || 0);
+            if (firstSetupGuideShown === 1) return;
+            firstSetupGuideShown = 1;
+            localStorage.setItem(FIRST_SETUP_GUIDE_SHOWN_KEY, '1');
+            window.setTimeout(() => openSetupGuide(), 300);
+        }
 
         function updateBackgroundImage() {
             const bgNum = selectedBackgroundImage;
@@ -7005,7 +7248,7 @@
             const index = chats.findIndex(c => c.id === chatId);
             if (index !== -1) chats.splice(index, 1);
             if (chat.agentEnabled && window.electronAPI?.removeAgentWorkspace) {
-                window.electronAPI.removeAgentWorkspace(chat.id).catch(() => {});
+                window.electronAPI.removeAgentWorkspace(chat.id).catch(() => { });
             }
             localStorage.setItem('ai_chats', JSON.stringify(chats));
             if (activeChatId === chatId) {
@@ -7623,10 +7866,11 @@
             isGenerating = true;
             document.getElementById('send-btn').classList.add('hidden');
             document.getElementById('stop-btn').classList.remove('hidden');
+            const sendAttachments = [...currentAttachments];
             const userMsg = {
                 role: 'user',
                 content: prompt || '(无文本)',
-                attachments: currentAttachments.map(att => ({
+                attachments: sendAttachments.map(att => ({
                     name: att.name,
                     type: att.type,
                     data: att.data,
@@ -7635,9 +7879,9 @@
             };
             chat.messages.push(userMsg);
             chat.updatedAt = Date.now();
+            appendMessageToUI('user', prompt || '(无文本)', null, false, '', sendAttachments);
             localStorage.setItem('ai_chats', JSON.stringify(chats));
             resetInputState(); // 清空输入框
-            const sendAttachments = [...currentAttachments];
             currentAttachments = [];
             onAttachmentsChanged();
             let imageBase64 = null;
@@ -7716,7 +7960,7 @@
                 chat.messages.push(aiMsg);
                 chat.updatedAt = Date.now();
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
-                await renderMessagesWithResolvedRefs(chat.messages);
+                await renderMessagesWithResolvedRefs(chat.messages, true);
             } catch (err) {
                 aiRow.remove();
                 const aiMsg = {
@@ -7729,7 +7973,7 @@
                 chat.messages.push(aiMsg);
                 chat.updatedAt = Date.now();
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
-                await renderMessagesWithResolvedRefs(chat.messages);
+                await renderMessagesWithResolvedRefs(chat.messages, true);
             } finally {
                 abortController = null;
                 isGenerating = false;
@@ -7925,13 +8169,13 @@
             document.getElementById('sys-prompt').value = systemPrompt;
             document.getElementById('api-key-input').value = getAPIKey();
             document.getElementById('base-url-input').value = getBaseURL();
-            ['api-key-input','base-url-input','max-tokens-input','model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
+            ['api-key-input', 'base-url-input', 'max-tokens-input', 'model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
             document.querySelectorAll('input[name="request-endpoint"]').forEach(el => el.addEventListener('change', markApiSettingsDirty));
             const immediateSettings = {
-                'sys-prompt':'sys_prompt','voice-chat-model-input':'voice_chat_model','voice-fish-base-input':'voice_fish_base','voice-fish-key-input':'voice_fish_key','voice-fish-name-input':'voice_fish_name','voice-fish-id-input':'voice_fish_id','voice-xf-appid-input':'voice_xf_appid','voice-xf-key-input':'voice_xf_key','voice-xf-secret-input':'voice_xf_secret','voice-preset-probability':'voice_preset_probability','desktop-shortcut-input':'desktop_shortcut','desktop-image-quality-input':'desktop_image_quality'
+                'sys-prompt': 'sys_prompt', 'voice-chat-model-input': 'voice_chat_model', 'voice-fish-base-input': 'voice_fish_base', 'voice-fish-key-input': 'voice_fish_key', 'voice-fish-name-input': 'voice_fish_name', 'voice-fish-id-input': 'voice_fish_id', 'voice-xf-appid-input': 'voice_xf_appid', 'voice-xf-key-input': 'voice_xf_key', 'voice-xf-secret-input': 'voice_xf_secret', 'voice-preset-probability': 'voice_preset_probability', 'desktop-shortcut-input': 'desktop_shortcut', 'desktop-image-quality-input': 'desktop_image_quality'
             };
-            Object.entries(immediateSettings).forEach(([id,key]) => document.getElementById(id)?.addEventListener('input', e => { if (!isGenerating) localStorage.setItem(key, e.target.value); }));
-            ['desktop-skip-b-preset-input','desktop-auto-screenshot-input','math-render-toggle','auto-update-toggle','developer-mode-toggle','record-logs-toggle'].forEach(id => document.getElementById(id)?.addEventListener('change', e => { if (!isGenerating) localStorage.setItem(id.replace(/-input|-/g,'_').replace(/^_/,'').replace(/_toggle$/,''), e.target.checked ? 'true' : 'false'); }));
+            Object.entries(immediateSettings).forEach(([id, key]) => document.getElementById(id)?.addEventListener('input', e => { if (!isGenerating) localStorage.setItem(key, e.target.value); }));
+            ['desktop-skip-b-preset-input', 'desktop-auto-screenshot-input', 'math-render-toggle', 'auto-update-toggle', 'developer-mode-toggle', 'record-logs-toggle'].forEach(id => document.getElementById(id)?.addEventListener('change', e => { if (!isGenerating) localStorage.setItem(id.replace(/-input|-/g, '_').replace(/^_/, '').replace(/_toggle$/, ''), e.target.checked ? 'true' : 'false'); }));
             document.getElementById('max-tokens-input').value = maxTokensLimit;
             const savedDetail = localStorage.getItem('image_detail_level') || 'medium';
             const detailSelect = document.getElementById('image-detail-select');
@@ -8008,6 +8252,7 @@
             syncAppStateToMain();
             if (window.electronAPI?.signalRendererReady) window.electronAPI.signalRendererReady();
             loadUpdateLog();
+            openFirstSetupGuide();
         };
 
         function updateTempUI() {

@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V7.5.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V7.5.1_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -139,31 +139,9 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 运行方式
 
-### 浏览器方式
-
-直接打开 `index.html` 即可运行基础前端界面。
-
-### Electron 方式
-
-```bash
 npm install
 npm start
-```
-
----
-
-## 以 Windows 为例的桌面应用构建
-
-项目当前使用 `electron-builder` 生成以下 Windows 产物：
-
-- Portable：`AIUI7.5.0-Release-Portable.exe`
-- Setup：`AIUI7.5.0-Release-Setup.exe`
-
-构建命令：
-
-```bash
-npm run build
-```
+npm run build  //构建
 
 构建输出目录：`dist/`
 
@@ -172,8 +150,8 @@ npm run build
 
 ## 版本信息
 
-- 当前版本：`V7.5.0 Release`
-- 当前构建标识：`build20260829`
+- 当前版本：`V7.5.1 Release`
+- 当前构建标识：`build20260912`
 
 ---
 
