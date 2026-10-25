@@ -250,7 +250,11 @@
 
 | 想改什么 | 位置 |
 |---|---|
-| AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`（约 4002–4291） |
+| AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`（约 4882–5300） |
+| Claude `/v1/messages` 协议转换 | `index.html` `buildMessagesPayloadFromBase` / `extractMessagesStreamUpdate`；语音窗口对应 `voicechat-api.js` 的 `buildMessagesPayload` / `extractUpdate` |
+| API 配置档案（多组 Key 切换） | `index.html` `readApiProfiles` / `switchApiProfile` / `saveApiProfile`（约 7073 起）+ HTML `#api-profile-select` |
+| 上下文窗口进度条 | `index.html` `updateContextMeter` / `getContextWindowForModel`（约 5923 起）+ `#context-meter` |
+| Agent 阈值压缩触发 | `agent-ui.js` `compactAgentContextIfNeeded`（在 Agent Loop 每轮开头调用） |
 | AI 回复如何渲染 / Markdown / 防 XSS | `renderAssistantMarkdown` + `sanitizeHtml`（约 4610–4642） |
 | 发送消息流程 | `sendMessage`（6081）+ `requestAI`（7158） |
 | 会话存储 / 增删 | `createNewChat` / `deleteChat` / `switchChat`（6022–6079）+ localStorage `ai_chats` |
@@ -276,10 +280,29 @@
 | 文件 | 作用 |
 |---|---|
 | `agent-protocol.js` | 固定 Tool Definitions/Core Rules、连续独立 JSON 对象与交错正文段解析、当前时间格式化。浏览器和 Node 测试均可复用。 |
-| `agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、行差异生成、Shell 执行器和命令前缀匹配。 |
-| `agent-ui.js` | Agent 会话绑定、上下文组装、正文/工具顺序渲染、模型请求循环、工具结果 IndexedDB 持久化、正文内命令授权、可折叠 diff/命令输出和绿竖线工具状态。 |
+| `agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、批量原子编辑、glob 匹配、路径增删移动复制、行差异生成、Shell 执行器、后台进程管理器、命令前缀匹配。 |
+| `agent-search.js` | `web_search` 的引擎适配层：Bing 与 DuckDuckGo 免密钥 HTML 结果解析、Bing 跳转链接还原、Bing 官方 API 响应映射、引擎与结果数量归一化。浏览器和 Node 测试均可复用。 |
+| `agent-ui.js` | Agent 会话绑定、上下文组装、正文/工具顺序渲染、模型请求循环、工具结果 IndexedDB 持久化、正文内命令授权、阈值上下文压缩、可折叠 diff/命令输出和绿竖线工具状态。 |
 | `alwaysAllowedCommand.txt` | 发布包内置安全命令前缀；用户增项写入 Electron `userData/alwaysAllowedCommand.user.txt`。 |
-| `test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单和 Shell 单元测试。 |
+| `test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单、搜索解析和 Shell 单元测试。 |
+
+### 7.1.1 Agent 工具清单
+
+| 工具 | 作用 | 约束 |
+|---|---|---|
+| `read_file_range` | 读取文本文件，行号可选 | 限制在工作区内；单次默认最多 2000 行，返回 `hasMore` 与续读行号 |
+| `write_file` | 创建或覆盖写入 | 限制在工作区内 |
+| `edit_file` | 唯一匹配替换 | 限制在工作区内；失败时返回缺失/歧义提示 |
+| `multi_edit_file` | 单文件多处批量编辑 | 原子写入：任一处失败则完全不落盘 |
+| `list_dir` | 列目录 | 限制在工作区内 |
+| `glob_files` | 按路径 glob 查找文件 | 限制在工作区内；`**`、`*`、`?`、字符类 |
+| `grep_files` | 正则搜索内容 | 支持 context/exclude/case_sensitive/files_only；跳过二进制与大文件 |
+| `delete_path` / `move_path` / `copy_path` | 删除、移动、复制 | 限制在工作区内；不可删除工作区根目录 |
+| `view_image` | 读取图片为 data URL | 限制在工作区内 |
+| `run_shell` | 运行命令并等待结束 | 可访问工作区外，可能触发用户授权 |
+| `start_process` / `read_process_output` / `stop_process` / `list_processes` | 后台长驻进程 | 30 分钟自动回收；停止任务或退出应用时统一终止 |
+| `web_search` / `browse_web` | 联网搜索与网页抓取 | 免密钥；搜索可分引擎并自动回退 |
+| `update_plan` / `finish_task` | 计划与终止 | 不执行系统操作 |
 
 ### 7.2 Agent Loop 顺序
 
@@ -294,11 +317,13 @@
         → finish_task → 显示最终文本并结束
 ```
 
+单次模型回复中的工具会先在界面上按正文顺序渲染，再成批执行：标记为只读的工具（read_file_range、list_dir、glob_files、grep_files、view_image、web_search、browse_web、read_process_output、list_processes）并发运行，写操作与 shell 仍逐个串行，并在遇到写操作前先排空已积攒的只读批次，以保证"后续调用能看到先前改动"的语义。
+
 Agent 工具 JSON 不直接渲染给用户。Agent 的 `/responses` 请求使用结构化消息数组保留角色边界，不会把上下文压成带 `user:`/`assistant:` 标签的字符串。解析器将单次回复拆成有序正文段和工具段，兼容标准对象、扁平 `tool_call`、`<.../>` 和 DSML 包装，并丢弃回显的 `ToolResult` 与工具结果正文；可见 Agent 文本在进入 Markdown/KaTeX 前还会再次剥离工具对象。模型 SSE 事件按 `id` 或 `sequence_number` 去重，因此正文、工具提示和 reasoning 思考过程可以流式显示且不会在后续任务中重复 JSON。每次含 reasoning 的 Agent 模型轮次会保留独立思考记录，运行时显示文字扫描高光，完成后标题改为“思考了 N 秒”；思考详情只解析 `**加粗**`，与工具详情共用行数与默认折叠设置。固定 Agent 提示词强制所有完成任务以 `finish_task` 结束，包括无需其他工具的纯文本回答。开发者模式会记录 Agent 流数据累计字节；任一接口返回 501 时转接另一端点并显示黄色提示。工具消息不会被上下文压缩删除；Agent 自动压缩按已完成的用户任务轮次统计，内部循环调用不计数。
 
 ### 7.3 Electron IPC
 
-`preload.js` 暴露 `selectAgentWorkspace`、`getAgentWorkspace`、`executeAgentTool`、`checkAgentCommand`、`saveAgentCommandAdditions` 和 Shell 进度/取消接口；`main.js` 通过 `agent-workspaces.json` 绑定会话与工作区，并在每次文件操作再次校验路径和符号链接边界。
+`preload.js` 暴露 `selectAgentWorkspace`、`getAgentWorkspace`、`executeAgentTool`、`checkAgentCommand`、`saveAgentCommandAdditions`、`listAgentProcesses`、`stopAllAgentProcesses` 和 Shell 进度/取消接口；`main.js` 通过 `agent-workspaces.json` 绑定会话与工作区，并在每次文件操作再次校验路径和符号链接边界。后台进程在应用退出（`before-quit`）和停止 Agent 任务时统一回收。
 
 ---
 

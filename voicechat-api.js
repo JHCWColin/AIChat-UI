@@ -48,7 +48,63 @@
         });
     }
 
+    function buildMessagesPayload(basePayload) {
+        const { messages: sourceMessages, max_tokens, max_output_tokens, prompt_cache_key, cache_control, temperature, top_p, top_k, ...rest } = basePayload || {};
+        const messages = Array.isArray(sourceMessages) ? sourceMessages : [];
+        const payload = { ...rest };
+        if (max_tokens !== undefined || max_output_tokens !== undefined) {
+            payload.max_tokens = max_tokens ?? max_output_tokens;
+        }
+        const systemText = messages
+            .filter(message => message?.role === 'system')
+            .map(message => extractText(message?.content))
+            .filter(Boolean)
+            .join('\n\n')
+            .trim();
+        if (systemText) payload.system = systemText;
+        payload.messages = messages
+            .filter(message => message?.role === 'user' || message?.role === 'assistant')
+            .map(message => ({
+                role: message.role,
+                content: buildMessagesContent(message?.content)
+            }))
+            .filter(message => message.content.length);
+        return payload;
+    }
+
+    function buildMessagesContent(content) {
+        if (typeof content === 'string') return content ? [{ type: 'text', text: content }] : [];
+        if (!Array.isArray(content)) {
+            const text = String(content || '');
+            return text ? [{ type: 'text', text }] : [];
+        }
+        const blocks = [];
+        for (const part of content) {
+            if (!part || typeof part !== 'object') continue;
+            if (part.type === 'image_url' || part.type === 'input_image') {
+                const url = typeof part.image_url === 'string' ? part.image_url : (part.image_url?.url || '');
+                const dataUrl = String(url || '').match(/^data:([^;,]+);base64,(.+)$/s);
+                if (dataUrl) blocks.push({ type: 'image', source: { type: 'base64', media_type: dataUrl[1], data: dataUrl[2].replace(/\s/g, '') } });
+                else if (/^https?:\/\//i.test(String(url || ''))) blocks.push({ type: 'image', source: { type: 'url', url } });
+                continue;
+            }
+            const text = part.type === 'text' ? String(part.text || '') : extractText(part);
+            if (text) blocks.push({ type: 'text', text });
+        }
+        return blocks;
+    }
+
+    function extractMessagesOutput(payload) {
+        const blocks = Array.isArray(payload?.content) ? payload.content : [];
+        return blocks
+            .filter(block => block?.type === 'text' || (!block?.type && typeof block?.text === 'string'))
+            .map(block => String(block.text || ''))
+            .filter(Boolean)
+            .join('');
+    }
+
     function buildPayload(basePayload, endpoint) {
+        if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayload(basePayload);
         if (endpoint !== '/responses') return basePayload;
         const messages = Array.isArray(basePayload?.messages) ? basePayload.messages : [];
         const systemMessage = messages.find(message => message?.role === 'system');
@@ -79,6 +135,20 @@
 
     function extractUpdate(payload, endpoint) {
         if (!payload || typeof payload !== 'object') return {};
+        if (endpoint === '/v1/messages' || endpoint === '/messages') {
+            const type = String(payload.type || '');
+            const delta = payload.delta && typeof payload.delta === 'object' ? payload.delta : {};
+            if (type === 'content_block_delta') {
+                if (delta.type === 'text_delta' || typeof delta.text === 'string') return { delta: String(delta.text || '') };
+                return {};
+            }
+            if (type === 'content_block_start') {
+                const block = payload.content_block || {};
+                return block.type === 'text' ? { snapshot: String(block.text || '') } : {};
+            }
+            if (!type) return { snapshot: extractMessagesOutput(payload) };
+            return {};
+        }
         if (endpoint === '/chat/completions' || Array.isArray(payload.choices)) {
             const choice = payload.choices?.[0] || {};
             return {
@@ -119,24 +189,35 @@
     }
 
     async function streamText(options) {
-        const preferredEndpoint = options.endpoint === '/chat/completions' ? '/chat/completions' : '/responses';
-        const send = endpoint => fetch(`${String(options.baseUrl || '').replace(/\/$/, '')}${endpoint}`, {
-            method: 'POST',
-            headers: {
+        const SUPPORTED_ENDPOINTS = ['/responses', '/chat/completions', '/v1/messages'];
+        const preferredEndpoint = SUPPORTED_ENDPOINTS.includes(options.endpoint) ? options.endpoint : '/responses';
+        const send = endpoint => {
+            const headers = {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${options.apiKey || ''}`
-            },
-            body: JSON.stringify(buildPayload(options.payload, endpoint)),
-            signal: options.signal
-        });
+            };
+            if (endpoint === '/v1/messages') headers['anthropic-version'] = '2023-06-01';
+            return fetch(`${String(options.baseUrl || '').replace(/\/$/, '')}${endpoint}`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(buildPayload(options.payload, endpoint)),
+                signal: options.signal
+            });
+        };
 
         let endpoint = preferredEndpoint;
         let response = await send(endpoint);
-        if (endpoint === '/responses' && response.status === 501) {
+        if (response.status === 501) {
+            // A 501 means the relay does not implement that path at all, so walk the
+            // remaining protocols in turn before giving up.
             await response.text().catch(() => '');
-            endpoint = '/chat/completions';
-            if (typeof options.onFallback === 'function') options.onFallback(endpoint);
-            response = await send(endpoint);
+            for (const candidate of SUPPORTED_ENDPOINTS.filter(item => item !== preferredEndpoint)) {
+                endpoint = candidate;
+                if (typeof options.onFallback === 'function') options.onFallback(endpoint);
+                response = await send(endpoint);
+                if (response.status !== 501) break;
+                await response.text().catch(() => '');
+            }
         }
         if (!response.ok) {
             const detail = await response.text().catch(() => '');
@@ -148,7 +229,7 @@
             const payload = await response.json();
             const text = endpoint === '/chat/completions'
                 ? extractText(payload?.choices?.[0]?.message?.content)
-                : extractResponsesOutput(payload);
+                : (endpoint === '/v1/messages' ? extractMessagesOutput(payload) : extractResponsesOutput(payload));
             if (typeof options.onText === 'function') options.onText(text);
             return { text, endpoint };
         }

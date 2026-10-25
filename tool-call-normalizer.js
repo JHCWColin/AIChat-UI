@@ -538,7 +538,22 @@
             "search": "grep_files", "find": "grep_files", "ripgrep": "grep_files", "grep": "grep_files",
             "functions.grep_files": "grep_files", "open_image": "view_image", "read_image": "view_image",
             "show_image": "view_image", "functions.view_image": "view_image", "plan": "update_plan",
-            "set_plan": "update_plan", "functions.update_plan": "update_plan"
+            "set_plan": "update_plan", "functions.update_plan": "update_plan",
+            "find_files": "glob_files", "glob": "glob_files", "file_search": "glob_files",
+            "functions.glob_files": "glob_files", "list_files": "glob_files",
+            "multi_edit": "multi_edit_file", "batch_edit": "multi_edit_file", "edit_many": "multi_edit_file",
+            "functions.multi_edit_file": "multi_edit_file",
+            "delete_file": "delete_path", "remove_file": "delete_path", "rm": "delete_path", "unlink": "delete_path",
+            "delete_directory": "delete_path", "remove": "delete_path",
+            "move_file": "move_path", "rename": "move_path", "mv": "move_path",
+            "copy_file": "copy_path", "cp": "copy_path",
+            "start_background_process": "start_process", "run_background": "start_process",
+            "background_process": "start_process", "spawn_process": "start_process",
+            "read_process": "read_process_output", "get_process_output": "read_process_output",
+            "process_output": "read_process_output",
+            "kill_process": "stop_process", "terminate_process": "stop_process",
+            "search_web": "web_search", "google_search": "web_search", "bing_search": "web_search",
+            "fetch_url": "browse_web", "fetch_web_page": "browse_web", "read_url": "browse_web"
         };
         if (aliases[key]) return aliases[key];
         const suffix = key.split(".").pop();
@@ -601,6 +616,97 @@
         }
         if (name === "update_plan" || name === "plan" || name === "set_plan") {
             return { ...call, name: "update_plan", arguments: { explanation: String(args.explanation || ""), plan: Array.isArray(args.plan) ? args.plan : [] } };
+        }
+        if (name === "glob_files") {
+            return {
+                ...call,
+                name: "glob_files",
+                arguments: {
+                    pattern: String(args.pattern || args.glob || args.query || ""),
+                    path: String(args.path || args.dir_path || "."),
+                    limit: Number(args.limit) || 0
+                }
+            };
+        }
+        if (name === "multi_edit_file") {
+            const edits = Array.isArray(args.edits)
+                ? args.edits
+                : (typeof args.old_text === "string" ? [{ old_text: args.old_text, new_text: args.new_text, replace_all: args.replace_all }] : []);
+            return {
+                ...call,
+                name: "multi_edit_file",
+                arguments: {
+                    path: String(args.path || args.file_path || ""),
+                    edits: edits.map(entry => ({
+                        old_text: String(entry?.old_text ?? entry?.oldText ?? ""),
+                        new_text: String(entry?.new_text ?? entry?.newText ?? ""),
+                        ...(entry?.replace_all === true || entry?.replaceAll === true ? { replace_all: true } : {})
+                    }))
+                }
+            };
+        }
+        if (name === "delete_path") {
+            return {
+                ...call,
+                name: "delete_path",
+                arguments: { path: String(args.path || args.file_path || args.target || ""), recursive: args.recursive === true }
+            };
+        }
+        if (name === "move_path" || name === "copy_path") {
+            return {
+                ...call,
+                name,
+                arguments: {
+                    from: String(args.from || args.source || args.src || args.path || ""),
+                    to: String(args.to || args.destination || args.dest || args.target || ""),
+                    overwrite: args.overwrite === true
+                }
+            };
+        }
+        if (name === "start_process") {
+            return {
+                ...call,
+                name: "start_process",
+                arguments: {
+                    command: String(args.command ?? args.cmd ?? args.input ?? args.script ?? ""),
+                    process_id: String(args.process_id || args.processId || args.id || "")
+                }
+            };
+        }
+        if (name === "read_process_output") {
+            return {
+                ...call,
+                name: "read_process_output",
+                arguments: {
+                    process_id: String(args.process_id || args.processId || args.id || ""),
+                    tail_bytes: Number(args.tail_bytes) || 0
+                }
+            };
+        }
+        if (name === "stop_process") {
+            return { ...call, name: "stop_process", arguments: { process_id: String(args.process_id || args.processId || args.id || "") } };
+        }
+        if (name === "web_search") {
+            const engine = String(args.engine || args.provider || "").trim().toLowerCase();
+            return {
+                ...call,
+                name: "web_search",
+                arguments: {
+                    query: String(args.query || args.q || args.search || ""),
+                    limit: Number(args.limit) || 0,
+                    ...(engine ? { engine } : {})
+                }
+            };
+        }
+        if (name === "browse_web") {
+            return {
+                ...call,
+                name: "browse_web",
+                arguments: {
+                    url: String(args.url || args.link || args.href || ""),
+                    max_chars: Number(args.max_chars) || 0
+                }
+            };
         }
         return name !== originalName ? { ...call, name, arguments: args } : call;
     }

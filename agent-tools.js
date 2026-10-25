@@ -5,6 +5,13 @@ const { spawn } = require("child_process");
 
 const DEFAULT_SHELL_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
+const DEFAULT_READ_LINE_COUNT = 2000;
+const MAX_READ_CHARACTERS = 1000000;
+const DEFAULT_GLOB_LIMIT = 100;
+const MAX_GLOB_LIMIT = 1000;
+const BACKGROUND_SHELL_BUFFER_BYTES = 512 * 1024;
+const BACKGROUND_SHELL_MAX_LIFETIME_MS = 30 * 60 * 1000;
+const DEFAULT_SEARCH_ENGINES = ["bing", "duckduckgo"];
 const WORKSPACE_SCAN_EXCLUDED_DIRECTORIES = new Set([
     ".git",
     "node_modules",
@@ -200,43 +207,62 @@ function buildLineDiff(beforeContent, afterContent) {
 }
 
 async function readFileRange(workspacePath, args = {}) {
-    const startLine = Number(args.start_line);
-    const endLine = Number(args.end_line);
-    if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < 1) {
-        return { success: false, error: "start_line and end_line must be positive integers" };
+    const hasStart = args.start_line !== undefined && args.start_line !== null && args.start_line !== "";
+    const hasEnd = args.end_line !== undefined && args.end_line !== null && args.end_line !== "";
+    const startLine = hasStart ? Number(args.start_line) : 1;
+    const explicitEnd = hasEnd ? Number(args.end_line) : null;
+    if (hasStart && (!Number.isInteger(startLine) || startLine < 1)) {
+        return { success: false, error: "start_line must be a positive integer" };
     }
-    if (startLine > endLine) return { success: false, error: "start_line must not exceed end_line" };
+    if (hasEnd && (!Number.isInteger(explicitEnd) || explicitEnd < 1)) {
+        return { success: false, error: "end_line must be a positive integer" };
+    }
+    if (explicitEnd !== null && startLine > explicitEnd) return { success: false, error: "start_line must not exceed end_line" };
+    // Without an explicit end_line the caller wants an open-ended read; cap the
+    // span so a single call can never return an unbounded amount of text.
+    const endLine = explicitEnd !== null ? explicitEnd : startLine + DEFAULT_READ_LINE_COUNT - 1;
     try {
         const { targetPath, workspaceReal } = await resolveWorkspacePath(workspacePath, args.path);
         const content = await fs.readFile(targetPath, "utf8");
         const lines = splitTextLines(content);
         const totalLines = lines.length;
-        if (startLine > totalLines) {
-            return {
-                success: true,
-                path: path.relative(workspaceReal, targetPath) || path.basename(targetPath),
-                requestedStartLine: startLine,
-                requestedEndLine: endLine,
-                actualStartLine: null,
-                actualEndLine: null,
-                returnedLines: 0,
-                totalLines,
-                content: "",
-                note: `start_line exceeds the file length (${totalLines} lines)`
-            };
+        const relativePath = path.relative(workspaceReal, targetPath) || path.basename(targetPath);
+        const selection = lines.slice(startLine - 1, endLine);
+        const selectedText = selection.join("\n");
+        let text = selectedText;
+        let truncatedByLength = false;
+        if (selectedText.length > MAX_READ_CHARACTERS) {
+            // Cut on a line boundary so the reported next start_line never lands
+            // in the middle of a line the caller only partially received.
+            const boundary = selectedText.lastIndexOf("\n", MAX_READ_CHARACTERS);
+            text = boundary > 0 ? selectedText.slice(0, boundary) : selectedText.slice(0, MAX_READ_CHARACTERS);
+            truncatedByLength = true;
         }
-        const actualEndLine = Math.min(endLine, totalLines);
-        return {
+        // A successful read always reports the range it actually delivered, so the
+        // model can page forward with start_line instead of re-reading from line 1.
+        const deliveredLines = text ? splitTextLines(text).length : 0;
+        const hasMore = truncatedByLength || startLine - 1 + deliveredLines < totalLines;
+        const result = {
             success: true,
-            path: path.relative(workspaceReal, targetPath) || path.basename(targetPath),
+            path: relativePath,
             requestedStartLine: startLine,
-            requestedEndLine: endLine,
-            actualStartLine: startLine,
-            actualEndLine,
-            returnedLines: actualEndLine - startLine + 1,
+            requestedEndLine: explicitEnd,
+            actualStartLine: deliveredLines ? startLine : null,
+            actualEndLine: deliveredLines ? startLine + deliveredLines - 1 : null,
+            returnedLines: deliveredLines,
             totalLines,
-            content: lines.slice(startLine - 1, actualEndLine).join("\n")
+            hasMore,
+            truncated: truncatedByLength,
+            content: text
         };
+        if (!deliveredLines) {
+            result.note = startLine > totalLines
+                ? `start_line exceeds the file length (${totalLines} lines)`
+                : "the requested range contains no text";
+        } else if (hasMore) {
+            result.note = `file continues beyond returned lines; continue with start_line=${startLine + deliveredLines}`;
+        }
+        return result;
     } catch (error) {
         return { success: false, error: error.message };
     }
@@ -288,8 +314,22 @@ async function editFile(workspacePath, args = {}) {
         const { targetPath, workspaceReal } = await resolveWorkspacePath(workspacePath, args.path);
         const content = await fs.readFile(targetPath, "utf8");
         const occurrences = countOccurrences(content, args.old_text);
-        if (occurrences === 0) return { success: false, error: "old_text not found" };
-        if (occurrences > 1) return { success: false, error: "old_text is ambiguous", occurrences };
+        if (occurrences === 0) {
+            return {
+                success: false,
+                error: "old_text not found",
+                hint: "Re-read the file and copy old_text verbatim, including whitespace and indentation. Do not include line-number prefixes.",
+                totalLines: splitTextLines(content).length
+            };
+        }
+        if (occurrences > 1) {
+            return {
+                success: false,
+                error: "old_text is ambiguous",
+                occurrences,
+                hint: `old_text matches ${occurrences} locations. Include more surrounding context so it matches exactly once, or use multi_edit_file to replace several occurrences deliberately.`
+            };
+        }
         const nextContent = content.replace(args.old_text, args.new_text);
         await fs.writeFile(targetPath, nextContent, "utf8");
         return {
@@ -298,8 +338,307 @@ async function editFile(workspacePath, args = {}) {
             occurrences: 1,
             charactersBefore: content.length,
             charactersAfter: nextContent.length,
-            displayDiff: buildLineDiff(args.old_text, args.new_text)
+            displayDiff: buildLineDiff(content, nextContent)
         };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+function normalizeEditEntries(args = {}) {
+    const raw = Array.isArray(args.edits) && args.edits.length
+        ? args.edits
+        : (typeof args.old_text === "string" ? [args] : []);
+    return raw.map(entry => ({
+        oldText: typeof entry?.old_text === "string" ? entry.old_text : "",
+        newText: typeof entry?.new_text === "string" ? entry.new_text : "",
+        replaceAll: entry?.replace_all === true
+    }));
+}
+
+async function multiEditFile(workspacePath, args = {}) {
+    const edits = normalizeEditEntries(args);
+    if (!edits.length) return { success: false, error: "edits must contain at least one {old_text,new_text} entry" };
+    const invalidIndex = edits.findIndex(edit => !edit.oldText);
+    if (invalidIndex >= 0) return { success: false, error: `edits[${invalidIndex}].old_text must be a non-empty string` };
+    try {
+        const { targetPath, workspaceReal } = await resolveWorkspacePath(workspacePath, args.path);
+        const original = await fs.readFile(targetPath, "utf8");
+        const relativePath = path.relative(workspaceReal, targetPath) || path.basename(targetPath);
+        let content = original;
+        const applied = [];
+        // Each edit sees the result of the previous one, matching the order the
+        // model wrote them in; a failure aborts before anything reaches disk.
+        for (let index = 0; index < edits.length; index += 1) {
+            const edit = edits[index];
+            const occurrences = countOccurrences(content, edit.oldText);
+            if (occurrences === 0) {
+                return {
+                    success: false,
+                    path: relativePath,
+                    failedIndex: index,
+                    appliedCount: 0,
+                    error: `edits[${index}].old_text not found`,
+                    hint: "No edits were saved because the batch must apply atomically. Re-read the file and verify every old_text."
+                };
+            }
+            if (occurrences > 1 && !edit.replaceAll) {
+                return {
+                    success: false,
+                    path: relativePath,
+                    failedIndex: index,
+                    occurrences,
+                    appliedCount: 0,
+                    error: `edits[${index}].old_text is ambiguous`,
+                    hint: `edits[${index}].old_text matches ${occurrences} locations. Add surrounding context, or set replace_all=true for that entry to replace all of them.`
+                };
+            }
+            content = edit.replaceAll
+                ? content.split(edit.oldText).join(edit.newText)
+                : content.replace(edit.oldText, edit.newText);
+            applied.push({ index, occurrences });
+            if (content === original) {
+                return {
+                    success: false,
+                    path: relativePath,
+                    failedIndex: index,
+                    appliedCount: 0,
+                    error: `edits[${index}] produced no change`,
+                    hint: "old_text and new_text are identical. Remove the no-op edit or supply the intended replacement."
+                };
+            }
+        }
+        if (content === original) return { success: false, path: relativePath, error: "edits produced no change" };
+        await fs.writeFile(targetPath, content, "utf8");
+        return {
+            success: true,
+            path: relativePath,
+            editCount: edits.length,
+            applied,
+            charactersBefore: original.length,
+            charactersAfter: content.length,
+            displayDiff: buildLineDiff(original, content)
+        };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+function globToRegExp(pattern) {
+    // Translate a shell-style glob into an anchored regexp that matches POSIX-style
+    // relative paths. "**" spans directory separators, "*" and "?" stay within one
+    // segment, and character classes pass through unchanged.
+    const source = String(pattern || "").trim();
+    let regex = "";
+    for (let index = 0; index < source.length; index += 1) {
+        const char = source[index];
+        if (char === "*") {
+            if (source[index + 1] === "*") {
+                index += 1;
+                if (source[index + 1] === "/") {
+                    index += 1;
+                    regex += "(?:[^/]+/)*";
+                } else {
+                    regex += ".*";
+                }
+            } else {
+                regex += "[^/]*";
+            }
+            continue;
+        }
+        if (char === "?") { regex += "[^/]"; continue; }
+        if (char === "[") {
+            const close = source.indexOf("]", index + 1);
+            if (close > index + 1) {
+                let body = source.slice(index + 1, close);
+                if (body[0] === "!") body = `^${body.slice(1)}`;
+                regex += `[${body.replace(/\\/g, "\\\\")}]`;
+                index = close;
+                continue;
+            }
+        }
+        regex += char.replace(/[.+^${}()|\\]/g, "\\$&");
+    }
+    return new RegExp(`^${regex}$`, "i");
+}
+
+async function globFiles(workspacePath, args = {}) {
+    const pattern = String(args.pattern || "").trim();
+    if (!pattern) return { success: false, error: "pattern is required" };
+    const limit = Math.max(1, Math.min(MAX_GLOB_LIMIT, Number(args.limit) || DEFAULT_GLOB_LIMIT));
+    try {
+        const directoryInput = String(args.path || args.dir_path || ".").trim() || ".";
+        const { workspaceReal, targetPath } = await resolveWorkspacePath(workspacePath, directoryInput, { allowMissing: false });
+        const startStat = await fs.stat(targetPath);
+        if (!startStat.isDirectory()) return { success: false, error: `not a directory: ${directoryInput}` };
+        let matcher;
+        try {
+            matcher = globToRegExp(pattern);
+        } catch (error) {
+            return { success: false, error: `invalid glob pattern: ${error.message}` };
+        }
+        const matches = [];
+        let truncated = false;
+        const visit = async directory => {
+            if (matches.length >= limit) { truncated = true; return; }
+            let entries;
+            try {
+                entries = await fs.readdir(directory, { withFileTypes: true });
+            } catch {
+                return;
+            }
+            entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+            for (const entry of entries) {
+                if (matches.length >= limit) { truncated = true; break; }
+                if (entry.isSymbolicLink()) continue;
+                if (WORKSPACE_SCAN_EXCLUDED_DIRECTORIES.has(entry.name.toLowerCase())) continue;
+                const fullPath = path.join(directory, entry.name);
+                const relativePath = path.relative(workspaceReal, fullPath).split(path.sep).join("/");
+                if (entry.isDirectory()) {
+                    await visit(fullPath);
+                    continue;
+                }
+                if (!entry.isFile() || !matcher.test(relativePath)) continue;
+                let entryStat;
+                try {
+                    entryStat = await fs.stat(fullPath);
+                } catch {
+                    continue;
+                }
+                matches.push({
+                    path: relativePath,
+                    size: entryStat.size,
+                    modifiedAt: entryStat.mtime?.toISOString?.() || ""
+                });
+            }
+        };
+        await visit(targetPath);
+        matches.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt) || a.path.localeCompare(b.path));
+        return { success: true, pattern, matches, totalCount: matches.length, truncated };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function deletePath(workspacePath, args = {}) {
+    const requested = String(args.path || "").trim();
+    if (!requested) return { success: false, error: "path is required" };
+    if (rejectsParentTraversal(requested)) return { success: false, error: "parent traversal is not allowed" };
+    try {
+        const { workspaceReal, targetPath } = await resolveWorkspacePath(workspacePath, requested, { allowMissing: false });
+        const relativePath = path.relative(workspaceReal, targetPath) || path.basename(targetPath);
+        // Refuse to delete the workspace root itself; that would destroy the session.
+        if (!relativePath || relativePath === "." || targetPath === workspaceReal) {
+            return { success: false, error: "refusing to delete the workspace root" };
+        }
+        const stats = await fs.lstat(targetPath);
+        if (stats.isDirectory()) {
+            const entries = await fs.readdir(targetPath);
+            if (entries.length && args.recursive !== true) {
+                return {
+                    success: false,
+                    path: relativePath,
+                    entryCount: entries.length,
+                    error: "directory is not empty",
+                    hint: "Pass recursive:true to delete a non-empty directory, or delete its files individually."
+                };
+            }
+            await fs.rm(targetPath, { recursive: true, force: false });
+            return { success: true, path: relativePath, type: "directory", removedEntries: entries.length };
+        }
+        await fs.rm(targetPath, { force: false });
+        return { success: true, path: relativePath, type: "file", size: stats.size };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function movePath(workspacePath, args = {}) {
+    const from = String(args.from || args.source || "").trim();
+    const to = String(args.to || args.destination || "").trim();
+    if (!from || !to) return { success: false, error: "from and to are required" };
+    try {
+        const source = await resolveWorkspacePath(workspacePath, from, { allowMissing: false });
+        const destination = await resolveWorkspacePath(workspacePath, to, { allowMissing: true });
+        const { workspaceReal } = source;
+        if (source.targetPath === workspaceReal) return { success: false, error: "refusing to move the workspace root" };
+        let overwrote = false;
+        try {
+            await fs.lstat(destination.targetPath);
+            overwrote = true;
+            if (args.overwrite !== true) {
+                return {
+                    success: false,
+                    from: path.relative(workspaceReal, source.targetPath).split(path.sep).join("/"),
+                    to: path.relative(workspaceReal, destination.targetPath).split(path.sep).join("/"),
+                    error: "destination already exists",
+                    hint: "Pass overwrite:true to replace the existing target."
+                };
+            }
+        } catch (error) {
+            if (!error || error.code !== "ENOENT") throw error;
+        }
+        await fs.mkdir(path.dirname(destination.targetPath), { recursive: true });
+        await fs.rename(source.targetPath, destination.targetPath);
+        return {
+            success: true,
+            from: path.relative(workspaceReal, source.targetPath).split(path.sep).join("/"),
+            to: path.relative(workspaceReal, destination.targetPath).split(path.sep).join("/"),
+            overwrote
+        };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+async function copyPath(workspacePath, args = {}) {
+    const from = String(args.from || args.source || "").trim();
+    const to = String(args.to || args.destination || "").trim();
+    if (!from || !to) return { success: false, error: "from and to are required" };
+    try {
+        const source = await resolveWorkspacePath(workspacePath, from, { allowMissing: false });
+        const destination = await resolveWorkspacePath(workspacePath, to, { allowMissing: true });
+        const { workspaceReal } = source;
+        const relativeFrom = path.relative(workspaceReal, source.targetPath).split(path.sep).join("/");
+        const relativeTo = path.relative(workspaceReal, destination.targetPath).split(path.sep).join("/");
+        const sourceStats = await fs.lstat(source.targetPath);
+        if (sourceStats.isDirectory()) {
+            if (isPathInside(source.targetPath, destination.targetPath)) {
+                return { success: false, error: "cannot copy a directory into itself" };
+            }
+            await fs.mkdir(destination.targetPath, { recursive: true });
+            await fs.cp(source.targetPath, destination.targetPath, {
+                recursive: true,
+                force: args.overwrite === true,
+                errorOnExist: args.overwrite !== true,
+                filter: candidate => {
+                    // Keep the copy inside the workspace and skip links and build output.
+                    const candidateReal = path.resolve(candidate);
+                    if (!isPathInside(workspaceReal, candidateReal)) return false;
+                    // The root itself is always copied; only descendants are filtered.
+                    if (candidateReal === path.resolve(source.targetPath)) return true;
+                    return !WORKSPACE_SCAN_EXCLUDED_DIRECTORIES.has(path.basename(candidate).toLowerCase());
+                }
+            });
+            return { success: true, from: relativeFrom, to: relativeTo, type: "directory" };
+        }
+        await fs.mkdir(path.dirname(destination.targetPath), { recursive: true });
+        if (args.overwrite !== true) {
+            try {
+                await fs.lstat(destination.targetPath);
+                return {
+                    success: false,
+                    from: relativeFrom,
+                    to: relativeTo,
+                    error: "destination already exists",
+                    hint: "Pass overwrite:true to replace the existing target."
+                };
+            } catch (error) {
+                if (!error || error.code !== "ENOENT") throw error;
+            }
+        }
+        await fs.copyFile(source.targetPath, destination.targetPath);
+        return { success: true, from: relativeFrom, to: relativeTo, type: "file", size: sourceStats.size };
     } catch (error) {
         return { success: false, error: error.message };
     }
@@ -466,6 +805,370 @@ class AgentShellRunner {
     }
 }
 
+/**
+ * Runs long-lived processes (dev servers, watchers) that the Agent must start and
+ * keep running while it continues working. Output is buffered in a ring so the
+ * model can poll it with read_process_output instead of blocking a shell call.
+ */
+class AgentBackgroundShellManager {
+    constructor(options = {}) {
+        this.processes = new Map();
+        this.sequence = 0;
+        this.maxLifetimeMs = Number(options.maxLifetimeMs) > 0 ? Number(options.maxLifetimeMs) : BACKGROUND_SHELL_MAX_LIFETIME_MS;
+    }
+
+    buildCommand(command) {
+        if (process.platform === "win32") {
+            return {
+                executable: "powershell.exe",
+                args: [
+                    "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+                    `$agentUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $agentUtf8; [Console]::OutputEncoding = $agentUtf8; $OutputEncoding = $agentUtf8; ${command}`
+                ]
+            };
+        }
+        return { executable: process.env.SHELL || "/bin/sh", args: ["-lc", command] };
+    }
+
+    start(options = {}) {
+        const processId = String(options.processId || "").trim() || `bg-${Date.now()}-${this.sequence += 1}`;
+        const command = String(options.command || "");
+        if (!command.trim()) return { success: false, error: "command is required" };
+        if (this.processes.has(processId)) return { success: false, error: `process id already in use: ${processId}` };
+        const { executable, args } = this.buildCommand(command);
+        let child;
+        try {
+            child = spawn(executable, args, {
+                cwd: options.cwd,
+                windowsHide: true,
+                env: process.env
+            });
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+        const state = {
+            processId,
+            command,
+            child,
+            stdoutBytes: 0,
+            stderrBytes: 0,
+            stdoutTruncated: false,
+            stderrTruncated: false,
+            stdoutChunks: [],
+            stderrChunks: [],
+            startedAt: Date.now(),
+            exitCode: null,
+            exited: false,
+            cancelled: false,
+            timer: null
+        };
+        const appendChunk = (chunk, target, streamName) => {
+            const buffer = Buffer.from(chunk);
+            if (streamName === "stdout") state.stdoutBytes += buffer.length;
+            else state.stderrBytes += buffer.length;
+            target.push(buffer);
+            let total = target.reduce((sum, item) => sum + item.length, 0);
+            while (total > BACKGROUND_SHELL_BUFFER_BYTES && target.length > 1) {
+                const removed = target.shift();
+                total -= removed.length;
+                if (streamName === "stdout") state.stdoutTruncated = true;
+                else state.stderrTruncated = true;
+            }
+        };
+        child.stdout?.on("data", chunk => appendChunk(chunk, state.stdoutChunks, "stdout"));
+        child.stderr?.on("data", chunk => appendChunk(chunk, state.stderrChunks, "stderr"));
+        child.on("error", error => {
+            state.exited = true;
+            state.exitCode = -1;
+            state.error = error.message;
+        });
+        child.on("close", code => {
+            state.exited = true;
+            state.exitCode = Number.isInteger(code) ? code : -1;
+            if (state.timer) clearTimeout(state.timer);
+        });
+        // Background processes are a convenience, never a permanent leak: reap on
+        // a fixed lifetime so a forgotten server cannot outlive the session.
+        state.timer = setTimeout(() => {
+            state.timedOut = true;
+            killProcessTree(child);
+        }, this.maxLifetimeMs);
+        state.timer.unref?.();
+        this.processes.set(processId, state);
+        return {
+            success: true,
+            processId,
+            command,
+            cwd: options.cwd,
+            message: `process started in the background; poll it with read_process_output using process_id="${processId}"`
+        };
+    }
+
+    read(processId, options = {}) {
+        const state = this.processes.get(String(processId || "").trim());
+        if (!state) return { success: false, error: `unknown process id: ${processId}` };
+        const tailBytes = Number(options.tail_bytes) > 0 ? Math.min(Number(options.tail_bytes), BACKGROUND_SHELL_BUFFER_BYTES) : 0;
+        const collect = chunks => {
+            const text = Buffer.concat(chunks).toString("utf8");
+            return tailBytes > 0 && text.length > tailBytes ? text.slice(-tailBytes) : text;
+        };
+        return {
+            success: true,
+            processId: state.processId,
+            command: state.command,
+            running: !state.exited,
+            exitCode: state.exitCode,
+            elapsedMs: Date.now() - state.startedAt,
+            stdout: collect(state.stdoutChunks),
+            stderr: collect(state.stderrChunks),
+            stdoutBytes: state.stdoutBytes,
+            stderrBytes: state.stderrBytes,
+            stdoutTruncated: state.stdoutTruncated,
+            stderrTruncated: state.stderrTruncated,
+            timedOut: state.timedOut === true,
+            hint: state.exited
+                ? "process has exited; the buffer above is its complete retained output"
+                : "process is still running; call read_process_output again after it has had time to produce output"
+        };
+    }
+
+    list() {
+        return {
+            success: true,
+            processes: [...this.processes.values()].map(state => ({
+                processId: state.processId,
+                command: state.command,
+                running: !state.exited,
+                exitCode: state.exitCode,
+                elapsedMs: Date.now() - state.startedAt,
+                stdoutBytes: state.stdoutBytes,
+                stderrBytes: state.stderrBytes
+            }))
+        };
+    }
+
+    stop(processId) {
+        const key = String(processId || "").trim();
+        const state = this.processes.get(key);
+        if (!state) return { success: false, error: `unknown process id: ${processId}` };
+        state.cancelled = true;
+        if (!state.exited) killProcessTree(state.child);
+        const result = this.read(key);
+        this.processes.delete(key);
+        if (state.timer) clearTimeout(state.timer);
+        return {
+            ...result,
+            running: false,
+            stopped: true,
+            finalStdout: result.stdout,
+            finalStderr: result.stderr
+        };
+    }
+
+    /**
+     * Stops a process and resolves once it has actually exited. On Windows the
+     * kill is performed by an async `taskkill`, so the synchronous stop() returns
+     * before the process is gone and its working directory stays locked.
+     */
+    async stopAndWait(processId, timeoutMs = 5000) {
+        const key = String(processId || "").trim();
+        const state = this.processes.get(key);
+        if (!state) return { success: false, error: `unknown process id: ${processId}` };
+        if (state.exited) return this.stop(key);
+        const exited = new Promise(resolve => {
+            if (state.exited) { resolve(); return; }
+            state.child.once("close", resolve);
+            // A process that ignores termination must not hang the caller forever.
+            setTimeout(resolve, timeoutMs).unref?.();
+        });
+        const result = this.stop(key);
+        await exited;
+        return result;
+    }
+
+    async stopAllAndWait(timeoutMs = 5000) {
+        const ids = [...this.processes.keys()];
+        await Promise.all(ids.map(id => this.stopAndWait(id, timeoutMs)));
+        return ids;
+    }
+
+    stopAll() {
+        const ids = [...this.processes.keys()];
+        ids.forEach(id => this.stop(id));
+        return ids;
+    }
+}
+
+/**
+ * Parses the `*** Begin Patch` envelope emitted natively by Codex- and
+ * Claude-Code-style models. Supporting it means a model that ignores our JSON
+ * protocol still produces useful edits instead of a hard failure.
+ */
+function parseApplyPatch(patchText) {
+    const lines = splitTextLines(String(patchText || ""));
+    if (!lines.length) return { error: "patch is empty" };
+    const operations = [];
+    let current = null;
+    let cursor = 0;
+    if (/^\*\*\*\s*Begin Patch\s*$/i.test(lines[0].trim())) cursor = 1;
+
+    const finishCurrent = () => {
+        if (!current) return;
+        if (current.type === "update" && !current.hunks.length) {
+            current.error = "update section contains no @@ hunk";
+        }
+        operations.push(current);
+        current = null;
+    };
+
+    for (; cursor < lines.length; cursor += 1) {
+        const raw = lines[cursor];
+        const trimmed = raw.trim();
+        if (/^\*\*\*\s*End Patch\s*$/i.test(trimmed)) break;
+        if (/^\*\*\*\s*Begin Patch\s*$/i.test(trimmed)) continue;
+        const marker = trimmed.match(/^\*\*\*\s*(Add|Update|Delete)\s+File:\s*(.+?)\s*$/i);
+        if (marker) {
+            finishCurrent();
+            const type = marker[1].toLowerCase();
+            current = { type, path: marker[2], lines: [], hunks: [] };
+            continue;
+        }
+        if (!current) {
+            if (trimmed) return { error: `unexpected content before any file section: ${trimmed.slice(0, 120)}` };
+            continue;
+        }
+        if (trimmed.startsWith("@@")) {
+            if (current.type !== "update") return { error: `@@ hunk is only valid in an Update section (${current.path})` };
+            current.hunks.push({ header: trimmed, lines: [] });
+            continue;
+        }
+        if (current.type === "update") {
+            if (!current.hunks.length) {
+                // A raw +/- line before any @@ hunk: start an implicit hunk.
+                if (/^[+\-]/.test(raw)) current.hunks.push({ header: "", lines: [] });
+                else if (!trimmed) continue;
+                else return { error: `update section for ${current.path} has content before the first @@ hunk` };
+            }
+            current.hunks[current.hunks.length - 1].lines.push(raw);
+            continue;
+        }
+        current.lines.push(raw);
+    }
+    finishCurrent();
+    if (!operations.length) return { error: "no file sections found in patch" };
+    return { operations };
+}
+
+/** Applies one Update-section hunk by locating its exact old-line block. */
+function applyPatchHunk(content, hunk, pathLabel) {
+    const oldLines = [];
+    const newLines = [];
+    for (const raw of hunk.lines) {
+        if (raw.startsWith("\\")) continue; // "\ No newline at end of file"
+        if (raw.startsWith("-")) { oldLines.push(raw.slice(1)); continue; }
+        if (raw.startsWith("+")) { newLines.push(raw.slice(1)); continue; }
+        // Context lines (leading space, or an empty line) belong to both sides.
+        const context = raw.startsWith(" ") ? raw.slice(1) : raw;
+        oldLines.push(context);
+        newLines.push(context);
+    }
+    if (!oldLines.length) return { error: `hunk for ${pathLabel} has no context or removed lines to locate` };
+    const fileLines = splitTextLines(content);
+    let matches = 0;
+    let matchIndex = -1;
+    for (let start = 0; start + oldLines.length <= fileLines.length; start += 1) {
+        let equal = true;
+        for (let offset = 0; offset < oldLines.length; offset += 1) {
+            if (fileLines[start + offset] !== oldLines[offset]) { equal = false; break; }
+        }
+        if (!equal) continue;
+        matches += 1;
+        matchIndex = start;
+        if (matches > 1) break;
+    }
+    if (matches === 0) return { error: `hunk context not found in ${pathLabel}` };
+    if (matches > 1) return { error: `hunk context is ambiguous in ${pathLabel} (matched ${matches}+ locations)` };
+    const next = [
+        ...fileLines.slice(0, matchIndex),
+        ...newLines,
+        ...fileLines.slice(matchIndex + oldLines.length)
+    ];
+    const hadTrailingNewline = /\r?\n$/.test(content);
+    return { content: next.join("\n") + (hadTrailingNewline && next.length ? "\n" : ""), removedLines: oldLines.length, addedLines: newLines.length };
+}
+
+async function applyPatch(workspacePath, args = {}) {
+    const patchText = String(args.input || args.patch || args.diff || args.content || "");
+    if (!patchText.trim()) return { success: false, error: "patch input is required" };
+    const parsed = parseApplyPatch(patchText);
+    if (parsed.error) return { success: false, error: parsed.error };
+    const results = [];
+    const diffs = [];
+    try {
+        const workspaceReal = await fs.realpath(workspacePath);
+        for (const operation of parsed.operations) {
+            if (operation.error) return { success: false, error: operation.error, appliedCount: 0 };
+            const target = await resolveWorkspacePath(workspacePath, operation.path, { allowMissing: operation.type === "add" });
+            const relativePath = path.relative(workspaceReal, target.targetPath).split(path.sep).join("/");
+            let existing = "";
+            let existed = false;
+            try {
+                existing = await fs.readFile(target.targetPath, "utf8");
+                existed = true;
+            } catch (error) {
+                if (error?.code !== "ENOENT") throw error;
+            }
+            if (operation.type === "add") {
+                if (existed) return { success: false, error: `Add File target already exists: ${relativePath}`, appliedCount: 0 };
+                const addedLines = operation.lines
+                    .filter(raw => !raw.startsWith("\\"))
+                    .map(raw => (raw.startsWith("+") ? raw.slice(1) : raw));
+                while (addedLines.length && !addedLines[addedLines.length - 1].trim()) addedLines.pop();
+                const created = addedLines.join("\n") + (addedLines.length ? "\n" : "");
+                await fs.mkdir(path.dirname(target.targetPath), { recursive: true });
+                await fs.writeFile(target.targetPath, created, "utf8");
+                diffs.push(buildLineDiff("", created));
+                results.push({ type: "add", path: relativePath, addedLines: addedLines.length });
+                continue;
+            }
+            if (!existed) return { success: false, error: `file not found for ${operation.type}: ${relativePath}`, appliedCount: 0 };
+            if (operation.type === "delete") {
+                await fs.rm(target.targetPath, { force: false });
+                diffs.push(buildLineDiff(existing, ""));
+                results.push({ type: "delete", path: relativePath, removedLines: splitTextLines(existing).length });
+                continue;
+            }
+            let content = existing;
+            for (const hunk of operation.hunks) {
+                const applied = applyPatchHunk(content, hunk, relativePath);
+                if (applied.error) return { success: false, error: applied.error, appliedCount: 0 };
+                content = applied.content;
+            }
+            if (content === existing) {
+                results.push({ type: "update", path: relativePath, hunks: operation.hunks.length, changed: false });
+                continue;
+            }
+            await fs.writeFile(target.targetPath, content, "utf8");
+            diffs.push(buildLineDiff(existing, content));
+            results.push({ type: "update", path: relativePath, hunks: operation.hunks.length, changed: true });
+        }
+        // Combine per-file diffs so the UI can render one ordinary diff block.
+        const combined = {
+            removedLines: diffs.reduce((sum, diff) => sum + diff.removedLines, 0),
+            addedLines: diffs.reduce((sum, diff) => sum + diff.addedLines, 0),
+            lines: diffs.flatMap(diff => diff.lines)
+        };
+        return {
+            success: true,
+            operationCount: results.length,
+            operations: results,
+            displayDiff: combined
+        };
+    } catch (error) {
+        return { success: false, error: error.message, appliedCount: 0 };
+    }
+}
+
 function getEnvironmentDescription(workspacePath) {
     const platformNames = { win32: "Windows", darwin: "macOS", linux: "Linux" };
     return [
@@ -568,21 +1271,84 @@ async function grepFiles(workspacePath, args = {}) {
         const pattern = String(args.pattern || "").trim();
         if (!pattern) return { success: false, error: "pattern is required" };
         const includeGlob = String(args.include || "").trim();
-        const searchPath = String(args.path || ".").trim();
+        const excludeGlob = String(args.exclude || "").trim();
+        const searchPath = String(args.path || ".").trim() || ".";
         const limit = Math.max(1, Math.min(1000, Number(args.limit) || 100));
+        const caseSensitive = args.case_sensitive === true;
+        const filesOnly = args.output_mode === "files_only";
+        const includeContext = filesOnly ? 0 : Math.max(0, Math.min(10, Number(args.context) || 0));
         let regex;
         try {
-            regex = new RegExp(pattern, "i");
+            regex = new RegExp(pattern, caseSensitive ? "" : "i");
         } catch (error) {
             return { success: false, error: `invalid regex pattern: ${error.message}` };
         }
         const { workspaceReal, targetPath } = await resolveWorkspacePath(workspacePath, searchPath, { allowMissing: false });
+        const toGlobMatcher = glob => {
+            if (!glob) return null;
+            try {
+                return globToRegExp(glob);
+            } catch {
+                return null;
+            }
+        };
+        const includeMatch = toGlobMatcher(includeGlob);
+        const excludeMatch = toGlobMatcher(excludeGlob);
         const matches = [];
+        const matchedFiles = new Set();
         let truncated = false;
-        const includeMatch = includeGlob
-            ? new RegExp("^" + includeGlob.replace(/\./g, "\\.").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i")
-            : null;
-        async function visit(directory) {
+        let scannedFiles = 0;
+        const considerFile = async fullPath => {
+            const relativePath = path.relative(workspaceReal, fullPath).split(path.sep).join("/");
+            const baseName = path.basename(fullPath);
+            if (includeMatch && !includeMatch.test(relativePath) && !includeMatch.test(baseName)) return;
+            if (excludeMatch && (excludeMatch.test(relativePath) || excludeMatch.test(baseName))) return;
+            let content;
+            try {
+                const fileStat = await fs.stat(fullPath);
+                if (fileStat.size > 2 * 1024 * 1024) return;
+                content = await fs.readFile(fullPath, "utf8");
+            } catch {
+                return;
+            }
+            // Skip binary-looking files: a NUL byte in the first block is the cheapest
+            // reliable signal and avoids returning mojibake line matches.
+            if (content.slice(0, 8000).includes("\0")) return;
+            scannedFiles += 1;
+            const lines = content.split(/\r?\n/);
+            for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+                if (matches.length >= limit) { truncated = true; break; }
+                if (!regex.test(lines[lineIndex])) continue;
+                if (filesOnly) {
+                    if (!matchedFiles.has(relativePath)) {
+                        matchedFiles.add(relativePath);
+                        matches.push({ path: relativePath });
+                    }
+                    break;
+                }
+                const entry = {
+                    path: relativePath,
+                    line: lineIndex + 1,
+                    content: lines[lineIndex].slice(0, 500)
+                };
+                if (includeContext > 0) {
+                    const before = [];
+                    const after = [];
+                    for (let offset = includeContext; offset > 0; offset -= 1) {
+                        const position = lineIndex - offset;
+                        if (position >= 0) before.push({ line: position + 1, content: lines[position].slice(0, 500) });
+                    }
+                    for (let offset = 1; offset <= includeContext; offset += 1) {
+                        const position = lineIndex + offset;
+                        if (position < lines.length) after.push({ line: position + 1, content: lines[position].slice(0, 500) });
+                    }
+                    if (before.length) entry.before = before;
+                    if (after.length) entry.after = after;
+                }
+                matches.push(entry);
+            }
+        };
+        const visit = async directory => {
             if (matches.length >= limit) { truncated = true; return; }
             let entries;
             try {
@@ -599,50 +1365,18 @@ async function grepFiles(workspacePath, args = {}) {
                     await visit(fullPath);
                     continue;
                 }
-                if (!entry.isFile()) continue;
-                if (includeMatch && !includeMatch.test(entry.name)) continue;
-                let content;
-                try {
-                    const fileStat = await fs.stat(fullPath);
-                    if (fileStat.size > 2 * 1024 * 1024) continue;
-                    content = await fs.readFile(fullPath, "utf8");
-                } catch {
-                    continue;
-                }
-                const lines = content.split(/\r?\n/);
-                for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
-                    if (matches.length >= limit) { truncated = true; break; }
-                    if (regex.test(lines[lineIndex])) {
-                        matches.push({
-                            path: path.relative(workspaceReal, fullPath).split(path.sep).join("/"),
-                            line: lineIndex + 1,
-                            content: lines[lineIndex].slice(0, 500)
-                        });
-                    }
-                }
+                if (entry.isFile()) await considerFile(fullPath);
             }
-        }
+        };
         const startStat = await fs.stat(targetPath);
-        if (startStat.isFile()) {
-            const content = await fs.readFile(targetPath, "utf8");
-            const lines = content.split(/\r?\n/);
-            for (let lineIndex = 0; lineIndex < lines.length && matches.length < limit; lineIndex += 1) {
-                if (regex.test(lines[lineIndex])) {
-                    matches.push({
-                        path: path.relative(workspaceReal, targetPath).split(path.sep).join("/"),
-                        line: lineIndex + 1,
-                        content: lines[lineIndex].slice(0, 500)
-                    });
-                }
-            }
-        } else {
-            await visit(targetPath);
-        }
+        if (startStat.isFile()) await considerFile(targetPath);
+        else await visit(targetPath);
         return {
             success: true,
             pattern,
             matches,
             totalCount: matches.length,
+            scannedFiles,
             truncated
         };
     } catch (error) {
@@ -704,6 +1438,10 @@ async function viewImage(workspacePath, args = {}) {
 module.exports = {
     DEFAULT_SHELL_TIMEOUT_MS,
     DEFAULT_MAX_OUTPUT_BYTES,
+    DEFAULT_READ_LINE_COUNT,
+    DEFAULT_GLOB_LIMIT,
+    DEFAULT_SEARCH_ENGINES,
+    BACKGROUND_SHELL_BUFFER_BYTES,
     normalizeCommandLine,
     normalizeCommandPrefix,
     hasUnsafeCommandComposition,
@@ -719,11 +1457,20 @@ module.exports = {
     readFileRange,
     writeFile,
     editFile,
+    multiEditFile,
+    globFiles,
+    deletePath,
+    movePath,
+    copyPath,
+    applyPatch,
+    parseApplyPatch,
+    globToRegExp,
     listDir,
     grepFiles,
     viewImage,
     AgentWorkspaceStore,
     AgentShellRunner,
+    AgentBackgroundShellManager,
     getEnvironmentDescription,
     scanWorkspaceTextFiles
 };

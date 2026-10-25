@@ -1458,6 +1458,60 @@
             transition: color 0.2s;
         }
 
+        /* Context window meter: shows how full the window is, turning amber then red
+           as it approaches the compaction threshold. */
+        #context-meter {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+
+        #context-meter.visible {
+            display: inline-flex;
+        }
+
+        .context-meter-track {
+            position: relative;
+            width: 96px;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.25);
+            overflow: hidden;
+            cursor: help;
+        }
+
+        .context-meter-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: #10b981;
+            transition: width 0.35s ease, background-color 0.35s ease;
+        }
+
+        #context-meter.level-warn .context-meter-fill {
+            background: #f59e0b;
+        }
+
+        #context-meter.level-critical .context-meter-fill {
+            background: #ef4444;
+        }
+
+        .context-meter-label {
+            font-size: 10px;
+            color: var(--text-secondary, #9ca3af);
+            font-variant-numeric: tabular-nums;
+        }
+
+        body.theme-light .context-meter-track {
+            background: rgba(100, 116, 139, 0.22);
+        }
+
+        body.theme-light .context-meter-label {
+            color: #64748b;
+        }
+
         #image-detail-container {
             display: none;
         }
@@ -2892,6 +2946,13 @@
                                     <option value="pic-ocr">pic-ocr</option>
                                 </select>
                                 <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"></span>
+                                <div id="context-meter" class="context-meter" role="progressbar" aria-label="上下文窗口使用情况"
+                                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                    <div class="context-meter-track" title="上下文窗口使用情况">
+                                        <div id="context-meter-fill" class="context-meter-fill"></div>
+                                    </div>
+                                    <span id="context-meter-label" class="context-meter-label"></span>
+                                </div>
                             </div>
                             <div id="agent-command-mode-bar">
                                 <label for="agent-command-mode-select">Command Mode</label>
@@ -3232,6 +3293,26 @@
                         <i data-lucide="key" class="w-4 h-4"></i>API 配置
                     </h3>
                     <p class="text-xs text-gray-400 mb-3">填入你的 Key 即可生效，在此处修改并保存，会持久存储。</p>
+                    <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <label class="block text-sm font-medium text-gray-200">配置档案</label>
+                            <button type="button" onclick="saveApiProfile()"
+                                class="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">保存当前为新档案</button>
+                        </div>
+                        <select id="api-profile-select" onchange="switchApiProfile(this.value)"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                            <option value="">（默认配置）</option>
+                        </select>
+                        <p class="text-[11px] text-gray-500 mt-2">每个档案独立保存 API Key、Base URL、请求端点与最大 Token，切换后立即生效并记住选择。</p>
+                        <div class="flex gap-2 mt-3">
+                            <input id="api-profile-name" type="text" placeholder="新档案名称，例如 Claude 官方"
+                                class="flex-1 bg-[#171717] border border-gray-700 rounded-lg p-2 text-xs outline-none focus:border-emerald-500 transition-colors">
+                            <button type="button" onclick="renameApiProfile()"
+                                class="px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">重命名</button>
+                            <button type="button" onclick="deleteApiProfile()"
+                                class="px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-red-500 hover:text-red-400 transition-colors">删除</button>
+                        </div>
+                    </div>
                     <div class="space-y-3">
                         <div>
                             <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
@@ -3297,8 +3378,16 @@
                                             class="block mt-1 text-xs text-gray-500">使用响应式接口，适合支持 Responses API
                                             的服务端。</small></span>
                                 </label>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/v1/messages"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">/v1/messages（Claude 原生）</strong><small
+                                            class="block mt-1 text-xs text-gray-500">Anthropic Messages API
+                                            格式，适用于 Claude 官方与 Claude 原生中转。使用独立密钥时请选择此端点。</small></span>
+                                </label>
                             </div>
-                            <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。</p>
+                            <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。任一端点返回 501 时会自动依次尝试其余端点。</p>
                         </div>
                         <div>
                             <div class="flex items-center justify-between gap-3 mb-2">
@@ -3677,6 +3766,16 @@
                         </select>
                     </div>
                     <div>
+                        <label for="agent-search-engine"
+                            class="block text-sm font-medium mb-2 text-gray-300">联网搜索默认引擎</label>
+                        <select id="agent-search-engine"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                            <option value="bing" selected>Bing</option>
+                            <option value="duckduckgo">DuckDuckGo</option>
+                        </select>
+                        <p class="text-[11px] text-gray-500 mt-2">模型调用 web_search 时未指定引擎则使用此选项。所选引擎无结果时会自动尝试另一个引擎。</p>
+                    </div>
+                    <div>
                         <label for="agent-detail-default-behavior"
                             class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
                         <select id="agent-detail-default-behavior"
@@ -3734,7 +3833,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V7.5.1 Release</span>
+                            <span id="app-version">V8.0.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -4871,7 +4970,151 @@
 
         function getRequestEndpoint() {
             const stored = String(localStorage.getItem('request_endpoint') || '').trim();
-            return stored === '/chat/completions' ? '/chat/completions' : '/responses';
+            if (stored === '/chat/completions') return '/chat/completions';
+            if (stored === '/v1/messages' || stored === '/messages') return '/v1/messages';
+            return '/responses';
+        }
+
+        // Anthropic's Messages API needs a version header; relays mirror the first-party
+        // value, so a fixed current version keeps both working.
+        const ANTHROPIC_API_VERSION = '2023-06-01';
+
+        /**
+         * Anthropic rejects sampling parameters on current models, so temperature is
+         * dropped here rather than forwarded. Callers get one informational log line
+         * instead of a hard 400 that looks like a credentials problem.
+         */
+        function buildMessagesPayloadFromBase(basePayload) {
+            const {
+                __aiuiStructuredResponsesInput,
+                messages: sourceMessages,
+                max_tokens,
+                max_output_tokens,
+                prompt_cache_key,
+                cache_control,
+                temperature,
+                top_p,
+                top_k,
+                ...rest
+            } = basePayload || {};
+            const messages = Array.isArray(sourceMessages) ? sourceMessages : [];
+            const payload = { ...rest };
+            if (max_tokens !== undefined || max_output_tokens !== undefined) {
+                payload.max_tokens = max_tokens ?? max_output_tokens;
+            }
+            const systemText = messages
+                .filter(message => message?.role === 'system')
+                .map(message => extractResponsesTextContent(message?.content))
+                .filter(Boolean)
+                .join('\n\n')
+                .trim();
+            if (systemText) {
+                payload.system = cacheControlEnabled(cache_control)
+                    ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }]
+                    : systemText;
+            }
+            payload.messages = messages
+                .filter(message => message?.role === 'user' || message?.role === 'assistant')
+                .map(message => ({
+                    role: message.role,
+                    content: buildMessagesContentBlocks(message?.content)
+                }))
+                .filter(message => message.content.length);
+            delete payload.cache_control;
+            return payload;
+        }
+
+        function cacheControlEnabled(value) {
+            const text = String(value || '').trim().toLowerCase();
+            return text === 'ephemeral' || text === 'true' || text === '1';
+        }
+
+        /** Converts the app's OpenAI-style content into Anthropic content blocks. */
+        function buildMessagesContentBlocks(content) {
+            if (typeof content === 'string') return content ? [{ type: 'text', text: content }] : [];
+            if (!Array.isArray(content)) {
+                const text = String(content || '');
+                return text ? [{ type: 'text', text }] : [];
+            }
+            const blocks = [];
+            for (const part of content) {
+                if (!part || typeof part !== 'object') continue;
+                if (part.type === 'image_url' || part.type === 'input_image') {
+                    const block = toAnthropicImageBlock(typeof part.image_url === 'string' ? part.image_url : part.image_url?.url);
+                    if (block) blocks.push(block);
+                    continue;
+                }
+                if (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text') {
+                    const text = String(part.text ?? extractResponsesTextContent(part));
+                    if (text) blocks.push({ type: 'text', text });
+                }
+            }
+            return blocks;
+        }
+
+        function toAnthropicImageBlock(url) {
+            const value = String(url || '').trim();
+            if (!value) return null;
+            const dataUrl = value.match(/^data:([^;,]+);base64,(.+)$/s);
+            if (dataUrl) {
+                return {
+                    type: 'image',
+                    source: { type: 'base64', media_type: dataUrl[1], data: dataUrl[2].replace(/\s/g, '') }
+                };
+            }
+            if (/^https?:\/\//i.test(value)) return { type: 'image', source: { type: 'url', url: value } };
+            return null;
+        }
+
+        function extractMessagesOutputText(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            const blocks = Array.isArray(payload.content) ? payload.content : [];
+            return blocks
+                .filter(block => block?.type === 'text' || (!block?.type && typeof block?.text === 'string'))
+                .map(block => String(block.text || ''))
+                .filter(Boolean)
+                .join('');
+        }
+
+        function extractMessagesReasoningText(payload) {
+            if (!payload || typeof payload !== 'object') return '';
+            const blocks = Array.isArray(payload.content) ? payload.content : [];
+            return blocks
+                .filter(block => block?.type === 'thinking' || block?.type === 'redacted_thinking')
+                .map(block => String(block.thinking || block.data || ''))
+                .filter(Boolean)
+                .join('');
+        }
+
+        function extractMessagesStreamUpdate(payload) {
+            const type = String(payload?.type || '');
+            const delta = payload?.delta && typeof payload.delta === 'object' ? payload.delta : {};
+            if (type === 'content_block_delta') {
+                if (delta.type === 'text_delta' || typeof delta.text === 'string') {
+                    return { contentDelta: String(delta.text || '') };
+                }
+                if (delta.type === 'thinking_delta' || typeof delta.thinking === 'string') {
+                    return { reasoningDelta: String(delta.thinking || '') };
+                }
+                return {};
+            }
+            if (type === 'content_block_start') {
+                const block = payload?.content_block || {};
+                if (block.type === 'text') return { contentSnapshot: String(block.text || '') };
+                if (block.type === 'thinking') return { reasoningSnapshot: String(block.thinking || '') };
+                return {};
+            }
+            if (type === 'message_start' || type === 'message_delta') {
+                // message_delta carries only stop_reason/usage, never user-visible text.
+                return {};
+            }
+            if (!type) {
+                return {
+                    contentSnapshot: extractMessagesOutputText(payload),
+                    reasoningSnapshot: extractMessagesReasoningText(payload)
+                };
+            }
+            return {};
         }
 
         function extractResponsesTextContent(contentValue) {
@@ -4962,6 +5205,7 @@
                 __aiuiStructuredResponsesInput,
                 ...publicBasePayload
             } = basePayload || {};
+            if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayloadFromBase(publicBasePayload);
             if (endpoint !== '/responses') return publicBasePayload;
             const messages = Array.isArray(publicBasePayload?.messages) ? publicBasePayload.messages : [];
             const systemMessage = messages.find(message => message?.role === 'system');
@@ -5034,6 +5278,7 @@
 
         function extractStreamingUpdate(payload, endpoint) {
             if (!payload || typeof payload !== 'object') return {};
+            if (endpoint === '/v1/messages' || endpoint === '/messages') return extractMessagesStreamUpdate(payload);
             if (endpoint === '/chat/completions' || Array.isArray(payload.choices)) {
                 return extractChatCompletionUpdate(payload);
             }
@@ -5097,6 +5342,10 @@
 
         function getStreamingErrorMessage(payload) {
             if (!payload || typeof payload !== 'object') return '';
+            // Anthropic signals mid-stream problems as a top-level error event.
+            if (payload.type === 'error') {
+                return payload?.error?.message || payload?.message || 'API stream error';
+            }
             if (payload.type === 'response.error' || payload.type === 'response.failed' || payload.error) {
                 return payload?.error?.message || payload?.response?.error?.message || payload?.message || 'API stream error';
             }
@@ -5104,6 +5353,7 @@
         }
 
         function extractNonStreamingResponseText(payload, endpoint) {
+            if (endpoint === '/v1/messages' || endpoint === '/messages') return extractMessagesOutputText(payload);
             if (endpoint === '/chat/completions' || Array.isArray(payload?.choices)) {
                 const update = extractChatCompletionUpdate(payload);
                 return update.contentSnapshot || update.contentDelta || '';
@@ -5114,12 +5364,18 @@
         async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, options = {}) {
             const send = async endpoint => {
                 const requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
+                const headers = {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getAPIKey()}`
+                };
+                // First-party Anthropic endpoints and most relays require the version
+                // header; sending it elsewhere is harmless.
+                if (endpoint === '/v1/messages' || endpoint === '/messages') {
+                    headers['anthropic-version'] = ANTHROPIC_API_VERSION;
+                }
                 const response = await fetch(`${getBaseURL()}${endpoint}`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${getAPIKey()}`
-                    },
+                    headers,
                     body: JSON.stringify(requestBody),
                     signal
                 });
@@ -5128,15 +5384,23 @@
 
             let result = await send(preferredEndpoint);
             if (result.response.status === 501) {
+                // Fall back through both remaining protocols so a relay that only
+                // implements one of them still works.
+                const fallbackOrder = ['/responses', '/chat/completions', '/v1/messages']
+                    .filter(endpoint => endpoint !== preferredEndpoint);
                 const detail = await result.response.text().catch(() => '');
-                const fallbackEndpoint = preferredEndpoint === '/responses' ? '/chat/completions' : '/responses';
-                appendLog('info', `${preferredEndpoint} 返回 501，自动转接到 ${fallbackEndpoint}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
-                showVoiceNotification(`接口返回 501，正在转接至 ${fallbackEndpoint}`, false, 3000, false, 'warning');
-                if (typeof options.onFallback === 'function') {
-                    options.onFallback({ from: preferredEndpoint, to: fallbackEndpoint, status: 501, detail });
+                for (const fallbackEndpoint of fallbackOrder) {
+                    appendLog('info', `${preferredEndpoint} 返回 501，自动转接到 ${fallbackEndpoint}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
+                    showVoiceNotification(`接口返回 501，正在转接至 ${fallbackEndpoint}`, false, 3000, false, 'warning');
+                    if (typeof options.onFallback === 'function') {
+                        options.onFallback({ from: preferredEndpoint, to: fallbackEndpoint, status: 501, detail });
+                    }
+                    const attempt = await send(fallbackEndpoint);
+                    attempt.fellBackFrom = preferredEndpoint;
+                    // A 501 means the relay rejects that path outright; keep trying the rest.
+                    if (attempt.response.status !== 501) return attempt;
+                    result = attempt;
                 }
-                result = await send(fallbackEndpoint);
-                result.fellBackFrom = preferredEndpoint;
             }
             return result;
         }
@@ -5385,8 +5649,7 @@
         }
 
         function populateRequestEndpointSettings() {
-            const endpoint = String(localStorage.getItem('request_endpoint') || '').trim();
-            const selectedValue = endpoint === '/chat/completions' ? '/chat/completions' : '/responses';
+            const selectedValue = getRequestEndpoint();
             document.querySelectorAll('input[name="request-endpoint"]').forEach(radio => {
                 radio.checked = radio.value === selectedValue;
             });
@@ -5737,6 +6000,77 @@
                 span.textContent = '';
                 span.style.display = 'none';
             }
+            updateContextMeter(tokenCount);
+        }
+
+        // Context windows are per-model; unknown models fall back to a conservative
+        // default so the meter stays meaningful instead of showing 0%.
+        const DEFAULT_CONTEXT_WINDOW = 1000000;
+        const MODEL_CONTEXT_WINDOWS = [
+            { test: /claude-(fable|mythos|opus-5|sonnet-5|haiku-5|opus-4-6|opus-4-7|opus-4-8|sonnet-4-6)/i, tokens: 1000000 },
+            { test: /claude-.*(haiku-4-5)/i, tokens: 200000 },
+            { test: /^claude-/i, tokens: 200000 },
+            { test: /(gpt-5|gpt-4\.1|o3|o4)/i, tokens: 400000 },
+            { test: /^gpt-/i, tokens: 128000 },
+            { test: /(gemini-2|gemini-3)/i, tokens: 1000000 },
+            { test: /(kimi|glm-5|qwen|deepseek)/i, tokens: 256000 }
+        ];
+        // Trigger compaction at 92% of the window, matching Claude Code's behaviour
+        // of compacting as the window approaches full rather than on a turn count.
+        const AGENT_COMPACTION_THRESHOLD = 0.92;
+
+        function getContextWindowForModel(model) {
+            const name = String(model || document.getElementById('model-select')?.value || '').trim();
+            if (!name) return DEFAULT_CONTEXT_WINDOW;
+            const match = MODEL_CONTEXT_WINDOWS.find(entry => entry.test.test(name));
+            return match ? match.tokens : DEFAULT_CONTEXT_WINDOW;
+        }
+
+        function formatTokenCount(value) {
+            const count = Number(value) || 0;
+            if (count >= 1000000) return `${(count / 1000000).toFixed(count % 1000000 === 0 ? 0 : 1)}M`;
+            if (count >= 1000) return `${Math.round(count / 1000)}K`;
+            return String(count);
+        }
+
+        /**
+         * Renders the context-window meter for the active chat. Only Agent chats get the
+         * window-based reading, because that is where threshold compaction applies.
+         */
+        function updateContextMeter(tokenCount) {
+            const meter = document.getElementById('context-meter');
+            const fill = document.getElementById('context-meter-fill');
+            const label = document.getElementById('context-meter-label');
+            if (!meter || !fill || !label) return;
+            const chat = activeChatId ? chats.find(item => item.id === activeChatId) : null;
+            if (!chat || !chat.agentEnabled || !(tokenCount > 0)) {
+                meter.classList.remove('visible', 'level-warn', 'level-critical');
+                return;
+            }
+            const windowSize = getContextWindowForModel(chat.agentModel || getSelectedModelName());
+            const ratio = windowSize > 0 ? Math.min(1, tokenCount / windowSize) : 0;
+            const percent = Math.round(ratio * 100);
+            fill.style.width = `${Math.max(ratio > 0 ? 2 : 0, percent)}%`;
+            label.textContent = `${percent}% · ${formatTokenCount(tokenCount)}/${formatTokenCount(windowSize)}`;
+            meter.classList.add('visible');
+            meter.classList.toggle('level-warn', ratio >= AGENT_COMPACTION_THRESHOLD * 0.75 && ratio < AGENT_COMPACTION_THRESHOLD);
+            meter.classList.toggle('level-critical', ratio >= AGENT_COMPACTION_THRESHOLD);
+            meter.setAttribute('aria-valuenow', String(percent));
+            meter.setAttribute('aria-label', `上下文窗口已使用 ${percent}%（${formatTokenCount(tokenCount)}/${formatTokenCount(windowSize)}）`);
+            const track = meter.querySelector('.context-meter-track');
+            if (track) {
+                track.title = [
+                    `上下文窗口：${formatTokenCount(tokenCount)} / ${formatTokenCount(windowSize)}（${percent}%）`,
+                    `模型：${chat.agentModel || getSelectedModelName() || '未知'}`,
+                    ratio >= AGENT_COMPACTION_THRESHOLD
+                        ? `已达 ${Math.round(AGENT_COMPACTION_THRESHOLD * 100)}% 压缩阈值，下一轮将自动压缩`
+                        : `达到 ${Math.round(AGENT_COMPACTION_THRESHOLD * 100)}% 时自动压缩上下文`
+                ].join('\n');
+            }
+        }
+
+        function getSelectedModelName() {
+            return String(document.getElementById('model-select')?.value || localStorage.getItem('selected_model') || '');
         }
 
         function triggerFileInput() {
@@ -6549,7 +6883,7 @@
             if (sectionId === 'api') {
                 populateModelListEditor();
                 populateRequestEndpointSettings();
-                populateRequestEndpointSettings();
+                renderApiProfileOptions();
             }
             if (sectionId === 'voice') {
                 populateVoiceModel();
@@ -6736,6 +7070,183 @@
             }, 3000);
         }
 
+        // ========== API 配置档案（多组 Key / 端点切换） ==========
+        const API_PROFILE_FIELDS = ['api_key', 'base_url', 'request_endpoint', 'max_tokens_limit', 'model_list', 'selected_model'];
+        const API_PROFILES_KEY = 'api_profiles';
+        const ACTIVE_PROFILE_KEY = 'active_api_profile';
+
+        function readApiProfiles() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(API_PROFILES_KEY) || '{}');
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+                const profiles = {};
+                for (const [name, value] of Object.entries(parsed)) {
+                    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+                    const settings = {};
+                    // Only known fields are restored, so a corrupted entry can never
+                    // overwrite unrelated localStorage keys.
+                    for (const field of API_PROFILE_FIELDS) {
+                        if (typeof value[field] === 'string') settings[field] = value[field];
+                    }
+                    profiles[String(name)] = { settings, updatedAt: Number(value.updatedAt) || 0 };
+                }
+                return profiles;
+            } catch (error) {
+                appendLog('error', `API 配置档案解析失败：${error.message}`);
+                return {};
+            }
+        }
+
+        function writeApiProfiles(profiles) {
+            try {
+                localStorage.setItem(API_PROFILES_KEY, JSON.stringify(profiles));
+                return true;
+            } catch (error) {
+                showVoiceNotification(`API 配置档案保存失败：${error.message}`, true, 4000);
+                return false;
+            }
+        }
+
+        function captureCurrentApiSettings() {
+            const settings = {};
+            for (const field of API_PROFILE_FIELDS) {
+                const value = localStorage.getItem(field);
+                if (value === null) continue;
+                settings[field] = value;
+            }
+            return settings;
+        }
+
+        function applyApiSettings(settings) {
+            for (const field of API_PROFILE_FIELDS) {
+                if (typeof settings?.[field] === 'string') localStorage.setItem(field, settings[field]);
+                else localStorage.removeItem(field);
+            }
+            // Push the restored values back into any visible controls.
+            const apiKeyInput = document.getElementById('api-key-input');
+            const baseUrlInput = document.getElementById('base-url-input');
+            const maxTokensInput = document.getElementById('max-tokens-input');
+            if (apiKeyInput) apiKeyInput.value = getAPIKey();
+            if (baseUrlInput) baseUrlInput.value = getBaseURL();
+            maxTokensLimit = parseInt(localStorage.getItem('max_tokens_limit') || '0') || 0;
+            if (maxTokensInput) maxTokensInput.value = String(maxTokensLimit);
+            populateRequestEndpointSettings();
+            loadModelList();
+            updateTokenEstimate();
+        }
+
+        function renderApiProfileOptions() {
+            const select = document.getElementById('api-profile-select');
+            if (!select) return;
+            const profiles = readApiProfiles();
+            const active = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
+            const names = Object.keys(profiles).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+            select.replaceChildren();
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = '（默认配置）';
+            select.appendChild(defaultOption);
+            for (const name of names) {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                select.appendChild(option);
+            }
+            select.value = names.includes(active) ? active : '';
+            const nameInput = document.getElementById('api-profile-name');
+            if (nameInput) nameInput.value = names.includes(active) ? active : '';
+        }
+
+        function switchApiProfile(name) {
+            const target = String(name || '');
+            const profiles = readApiProfiles();
+            if (target && !profiles[target]) {
+                showVoiceNotification(`配置档案不存在：${target}`, true, 3000);
+                renderApiProfileOptions();
+                return;
+            }
+            // Leaving a profile persists the edits made before switching, so switching
+            // tabs never silently discards the key that was just typed in.
+            const active = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
+            if (active && profiles[active]) {
+                profiles[active] = { settings: captureCurrentApiSettings(), updatedAt: Date.now() };
+            }
+            if (target) {
+                localStorage.setItem(ACTIVE_PROFILE_KEY, target);
+                applyApiSettings(profiles[target].settings);
+            } else {
+                localStorage.removeItem(ACTIVE_PROFILE_KEY);
+            }
+            writeApiProfiles(profiles);
+            renderApiProfileOptions();
+            showVoiceNotification(target ? `已切换到配置档案：${target}` : '已切换回默认配置', false, 2500);
+        }
+
+        function saveApiProfile() {
+            const select = document.getElementById('api-profile-select');
+            const nameInput = document.getElementById('api-profile-name');
+            const suggested = String(nameInput?.value || select?.value || '').trim();
+            if (!suggested) {
+                showVoiceNotification('请先在下方输入档案名称', true, 3000);
+                nameInput?.focus();
+                return;
+            }
+            const profiles = readApiProfiles();
+            const settings = captureCurrentApiSettings();
+            if (!settings.api_key && !settings.base_url) {
+                showVoiceNotification('当前没有可保存的 API 配置', true, 3000);
+                return;
+            }
+            const isOverwrite = Boolean(profiles[suggested]);
+            profiles[suggested] = { settings, updatedAt: Date.now() };
+            localStorage.setItem(ACTIVE_PROFILE_KEY, suggested);
+            if (!writeApiProfiles(profiles)) return;
+            renderApiProfileOptions();
+            showVoiceNotification(isOverwrite ? `已更新配置档案：${suggested}` : `已保存配置档案：${suggested}`, false, 2500);
+        }
+
+        function renameApiProfile() {
+            const active = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
+            const nameInput = document.getElementById('api-profile-name');
+            const next = String(nameInput?.value || '').trim();
+            if (!active) {
+                showVoiceNotification('请先在下拉框选择一个档案', true, 3000);
+                return;
+            }
+            if (!next) {
+                showVoiceNotification('请输入新的档案名称', true, 3000);
+                return;
+            }
+            if (next === active) return;
+            const profiles = readApiProfiles();
+            profiles[active] = { settings: captureCurrentApiSettings(), updatedAt: Date.now() };
+            if (profiles[next]) {
+                showVoiceNotification(`名称已存在：${next}`, true, 3000);
+                return;
+            }
+            profiles[next] = profiles[active];
+            delete profiles[active];
+            localStorage.setItem(ACTIVE_PROFILE_KEY, next);
+            if (!writeApiProfiles(profiles)) return;
+            renderApiProfileOptions();
+            showVoiceNotification(`已重命名为：${next}`, false, 2500);
+        }
+
+        async function deleteApiProfile() {
+            const active = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
+            if (!active) {
+                showVoiceNotification('请先在下拉框选择一个档案', true, 3000);
+                return;
+            }
+            if (!window.confirm(`确定要删除配置档案「${active}」吗？此操作不可撤销。`)) return;
+            const profiles = readApiProfiles();
+            delete profiles[active];
+            localStorage.removeItem(ACTIVE_PROFILE_KEY);
+            if (!writeApiProfiles(profiles)) return;
+            renderApiProfileOptions();
+            showVoiceNotification(`已删除配置档案：${active}`, false, 2500);
+        }
+
         function saveSettings(skipClose = false) {
             if (isGenerating || (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning())) {
                 showVoiceNotification('设置会在本轮流传输结束后应用', false, 3000, false, 'warning');
@@ -6778,6 +7289,17 @@
             if (savedContextModel) localStorage.setItem('context_compaction_model', savedContextModel);
             const selectedEndpoint = document.querySelector('input[name="request-endpoint"]:checked')?.value || '/responses';
             localStorage.setItem('request_endpoint', selectedEndpoint);
+            // Keep the active profile in step with edits made through the normal save
+            // flow, so switching away never restores stale credentials.
+            const activeProfileName = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
+            if (activeProfileName) {
+                const profiles = readApiProfiles();
+                if (profiles[activeProfileName]) {
+                    profiles[activeProfileName] = { settings: captureCurrentApiSettings(), updatedAt: Date.now() };
+                    writeApiProfiles(profiles);
+                }
+            }
+            renderApiProfileOptions();
             const voiceSelect = document.getElementById('voice-model-select');
             if (voiceSelect) {
                 voiceModel = voiceSelect.value;
@@ -6869,14 +7391,14 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V7.5.1 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V8.0.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[1, 2, 3, 4, 5, 6].map(x => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"><span class="block text-[11px] text-gray-400 mt-1">背景 ${x}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
                 setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode === 'classic' ? 'active' : ''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode === 'split' ? 'active' : ''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'small' ? 'active' : ''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'medium' ? 'active' : ''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'large' ? 'active' : ''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
                 setupGuidePage === 5 ? `<label class="block text-sm text-gray-300">语音对话模型<input id="guide-voice-model" value="${escapeHtml(localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL)}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label>` : '',
                 setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
-                setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
+                setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label><label class="block text-sm text-gray-300">联网搜索默认引擎<select id="guide-agent-search-engine" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="bing">Bing</option><option value="duckduckgo">DuckDuckGo</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
                 setupGuidePage === 8 ? `<label class="block text-sm text-gray-300">语音转文字模型<select id="guide-voice-transcribe" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="whisper-1">whisper-1</option><option value="whisper-base">whisper-base</option><option value="whisper-large">whisper-large</option></select><span class="block text-[11px] text-gray-500 mt-2">录音结束后使用此模型把语音识别为文字，模型越大通常越准确但速度更慢。</span></label>${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染', '开启后将数学公式、化学方程式渲染为排版结果；关闭后按原始文本显示。')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新', '仅 Setup 安装版会在启动时检查 GitHub Release；Portable 版本不会主动检查。')}` : '',
                 `</div>`
             ].join('');
@@ -6884,7 +7406,7 @@
             if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval'); if (i) i.value = String(autoSummaryInterval); const s = document.getElementById('guide-summary-model'); if (s) { renderModelOptions(s, textModelList.length ? textModelList : loadModelList()); s.value = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL; } }
             if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model'); if (v) v.value = localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL; }
             if (setupGuidePage === 6) { const q = document.getElementById('guide-desktop-quality'); if (q) q.value = localStorage.getItem('desktop_image_quality') || 'balanced'; }
-            if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = localStorage.getItem('agent_detail_default_behavior') || 'expanded'; const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const sc = document.getElementById('guide-agent-scroll'); if (sc) sc.checked = localStorage.getItem('agent_auto_scroll') !== 'false'; }
+            if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = localStorage.getItem('agent_detail_default_behavior') || 'expanded'; const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const se = document.getElementById('guide-agent-search-engine'); if (se) se.value = localStorage.getItem('agent_search_engine') === 'duckduckgo' ? 'duckduckgo' : 'bing'; const sc = document.getElementById('guide-agent-scroll'); if (sc) sc.checked = localStorage.getItem('agent_auto_scroll') !== 'false'; }
             if (setupGuidePage === 8) { const v = document.getElementById('guide-voice-transcribe'); if (v) v.value = localStorage.getItem('voice_model') || 'whisper-1'; }
             document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
             document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
@@ -6899,7 +7421,7 @@
             if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval')?.value; const m = document.getElementById('guide-summary-model')?.value; if (i) { autoSummaryInterval = Number(i); localStorage.setItem('auto_summary_interval', i); const radio = document.querySelector(`input[name="auto-summary-interval"][value="${i}"]`); if (radio) radio.checked = true; } if (m) { localStorage.setItem('context_compaction_model', m); const select = document.getElementById('context-compaction-model-select'); if (select) select.value = m; } }
             if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model')?.value.trim(); if (v) { localStorage.setItem('voice_chat_model', v); const input = document.getElementById('voice-chat-model-input'); if (input) input.value = v; } }
             if (setupGuidePage === 6) { const s = document.getElementById('guide-desktop-shortcut')?.value.trim(); const q = document.getElementById('guide-desktop-quality')?.value; if (s) { localStorage.setItem('desktop_shortcut', s); const input = document.getElementById('desktop-shortcut-input'); if (input) input.value = s; } if (q) { localStorage.setItem('desktop_image_quality', q); const select = document.getElementById('desktop-image-quality-input'); if (select) select.value = q; } const auto = document.getElementById('guide-desktop-auto')?.checked ? 'true' : 'false'; localStorage.setItem('desktop_auto_screenshot', auto); const toggle = document.getElementById('desktop-auto-screenshot-input'); if (toggle) toggle.checked = auto === 'true'; }
-            if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const autoScroll = document.getElementById('guide-agent-scroll')?.checked ? 'true' : 'false'; localStorage.setItem('agent_auto_scroll', autoScroll); const autoScrollInput = document.getElementById('agent-auto-scroll'); if (autoScrollInput) autoScrollInput.checked = autoScroll === 'true'; }
+            if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const guideEngine = document.getElementById('guide-agent-search-engine')?.value; if (guideEngine) localStorage.setItem('agent_search_engine', guideEngine === 'duckduckgo' ? 'duckduckgo' : 'bing'); const autoScroll = document.getElementById('guide-agent-scroll')?.checked ? 'true' : 'false'; localStorage.setItem('agent_auto_scroll', autoScroll); const autoScrollInput = document.getElementById('agent-auto-scroll'); if (autoScrollInput) autoScrollInput.checked = autoScroll === 'true'; }
             if (setupGuidePage === 8) { localStorage.setItem('voice_model', document.getElementById('guide-voice-transcribe')?.value || 'whisper-1'); mathRenderingEnabled = Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled = Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false'); localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false'); }
         }
         function setupGuideBack() { if (setupGuidePage === 0) closeSetupGuide(); else setupGuidePrev(); }

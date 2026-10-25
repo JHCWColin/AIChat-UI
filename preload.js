@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     checkAgentCommand: (command) => ipcRenderer.invoke("agent:check-command", command),
     executeAgentTool: (request) => ipcRenderer.invoke("agent:execute-tool", request),
     cancelAgentExecution: (executionId) => ipcRenderer.invoke("agent:cancel-execution", executionId),
+    listAgentProcesses: () => ipcRenderer.invoke("agent:list-processes"),
+    stopAllAgentProcesses: () => ipcRenderer.invoke("agent:stop-all-processes"),
     onAgentShellProgress: (callback) => {
         const listener = (_event, payload) => callback(payload);
         ipcRenderer.on("agent:shell-progress", listener);

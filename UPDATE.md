@@ -1,5 +1,17 @@
 # AIUI 更新日志
 
+## V8.0.0 Release · 2026-10-25
+
+- 新增 Claude 原生 `/v1/messages` 请求端点，可直接对接 Anthropic Messages API 及其原生中转；请求体自动转换 system/图片/采样参数，并携带 `anthropic-version` 头。
+- 端点回退改为依次尝试全部三种协议（/responses、/chat/completions、/v1/messages），任一端点返回 501 时自动转接。
+- API 配置新增「配置档案」：可保存并随时切换多组 API Key、Base URL、请求端点、Token 上限与模型列表，切换即时生效并记住当前选择。
+- Agent 新增上下文窗口可视化进度条，显示已用百分比与 token 用量，接近上限时转为黄色与红色提示。
+- Agent 模式的自动压缩改为按上下文窗口阈值触发（默认 92%），不再依赖固定轮次；Agent 任务计划会随会话持久化并注入模型上下文，重启后继续有效。
+- Agent 工具集扩充：新增 glob_files、multi_edit_file、delete_path、move_path、copy_path 五个文件工具，以及 start_process、read_process_output、stop_process、list_processes 四个后台进程工具。
+- 联网搜索新增 Bing 引擎并可在设置中选择默认引擎，无结果时自动回退到另一引擎，搜索结果包含摘要。
+- read_file_range 行号改为可选并返回 hasMore 续读提示；grep_files 支持上下文行、大小写敏感、排除与仅列文件；edit_file 失败返回可操作的修复提示。
+- 支持 Codex 与 Claude Code 风格的 `*** Begin Patch` 补丁格式；Agent 并行执行只读工具调用，多步探索显著提速。
+
 ## V7.5.1 Release · 2026-09-12
 
 - 更新模型列表。

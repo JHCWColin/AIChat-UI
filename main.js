@@ -20,9 +20,16 @@ const WebSocket = require("ws");
 const {
     AgentWorkspaceStore,
     AgentShellRunner,
+    AgentBackgroundShellManager,
     readFileRange,
     writeFile: writeAgentFile,
     editFile: editAgentFile,
+    multiEditFile: multiEditAgentFile,
+    applyPatch,
+    globFiles,
+    deletePath,
+    movePath,
+    copyPath,
     listDir,
     grepFiles,
     viewImage,
@@ -33,6 +40,7 @@ const {
     getEnvironmentDescription,
     scanWorkspaceTextFiles
 } = require("./agent-tools");
+const AgentSearch = require("./agent-search");
 
 const PRESET_TEXTS_A = ["嗯……", "哦？", "欸？", "哦！"];
 const PRESET_TEXTS_B = ["我想想……", "等一下啊……"];
@@ -57,19 +65,130 @@ let updateDownloadRequested = false;
 let agentWorkspaceStore = null;
 const pendingAgentWorkspaceSelections = new Map();
 const agentShellRunner = new AgentShellRunner();
+const agentBackgroundShells = new AgentBackgroundShellManager();
 
-function fetchPublicText(url) {
+const FETCH_PUBLIC_TIMEOUT_MS = 30000;
+const FETCH_PUBLIC_MAX_BYTES = 2000000;
+
+/**
+ * Fetches a public URL with a browser-like User-Agent, following redirects.
+ * Search engines and most sites reject unknown clients, so the UA matters here.
+ */
+function fetchPublicText(url, options = {}) {
+    const redirectsRemaining = Number.isFinite(options.redirects) ? Number(options.redirects) : 5;
+    const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : FETCH_PUBLIC_MAX_BYTES;
     return new Promise((resolve, reject) => {
-        https.get(url, { headers: { 'User-Agent': 'AIChat-UI/1.0' } }, res => {
-            let data = ''; res.setEncoding('utf8');
-            res.on('data', chunk => { data += chunk; if (data.length > 2000000) res.destroy(); });
-            res.on('end', () => resolve(data));
-            res.on('error', reject);
-        }).on('error', reject);
+        let settled = false;
+        const finish = (error, value) => {
+            if (settled) return;
+            settled = true;
+            if (error) reject(error);
+            else resolve(value);
+        };
+        let request;
+        try {
+            request = https.get(String(url), {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+                },
+                timeout: FETCH_PUBLIC_TIMEOUT_MS
+            }, response => {
+                intakePublicResponse(response, options, redirectsRemaining, maxBytes).then(
+                    value => finish(null, value),
+                    error => finish(error)
+                );
+            });
+        } catch (error) {
+            finish(error);
+            return;
+        }
+        request.on('timeout', () => {
+            request.destroy(new Error(`请求超时（${Math.round(FETCH_PUBLIC_TIMEOUT_MS / 1000)}秒）：${url}`));
+        });
+        request.on('error', error => finish(error));
+    });
+}
+
+async function intakePublicResponse(response, options, redirectsRemaining, maxBytes) {
+    const status = Number(response.statusCode) || 0;
+    const location = response.headers?.location;
+    if (status >= 300 && status < 400 && location && redirectsRemaining > 0) {
+        response.resume();
+        const nextUrl = new URL(location, options.baseUrl || response.headers?.referer || undefined).toString();
+        if (!/^https?:\/\//i.test(nextUrl)) throw new Error(`不支持的重定向地址：${nextUrl}`);
+        return fetchPublicText(nextUrl, { ...options, baseUrl: nextUrl, redirects: redirectsRemaining - 1, maxBytes });
+    }
+    if (options.raw === true) {
+        // Callers that need headers (Bing's API) read the body themselves.
+        return { status, headers: response.headers, body: await readPublicBody(response, maxBytes) };
+    }
+    if (status < 200 || status >= 300) {
+        response.resume();
+        throw new Error(`HTTP ${status}`);
+    }
+    return readPublicBody(response, maxBytes);
+}
+
+function readPublicBody(response, maxBytes) {
+    return new Promise((resolve, reject) => {
+        let data = '';
+        response.setEncoding('utf8');
+        response.on('data', chunk => {
+            data += chunk;
+            if (data.length > maxBytes) response.destroy();
+        });
+        response.on('end', () => resolve(data));
+        response.on('error', reject);
     });
 }
 
 function stripHtmlText(html) { return String(html || '').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim(); }
+
+/**
+ * Runs a keyless web search through the selected engine's public HTML endpoint and
+ * falls back to the other engine when the first one yields nothing usable, so a
+ * single blocked provider cannot silently break the agent's research ability.
+ */
+async function runAgentWebSearch(args = {}) {
+    const query = String(args.query || '').trim();
+    if (!query) return { success: false, error: 'query is required' };
+    const requestedEngine = AgentSearch.normalizeEngine(args.engine);
+    const limit = AgentSearch.normalizeLimit(args.limit);
+    const attempts = [requestedEngine, ...AgentSearch.SEARCH_ENGINES.map(engine => engine.id).filter(id => id !== requestedEngine)];
+    const failures = [];
+    for (const engine of attempts) {
+        try {
+            const html = await fetchPublicText(AgentSearch.buildSearchUrl(engine, query, {
+                market: args.market,
+                language: args.language
+            }), { baseUrl: engine === 'duckduckgo' ? 'https://duckduckgo.com' : 'https://www.bing.com' });
+            const results = AgentSearch.parseSearchHtml(engine, html, limit);
+            if (results.length) {
+                return {
+                    success: true,
+                    query,
+                    engine,
+                    requestedEngine,
+                    fellBack: engine !== requestedEngine,
+                    resultCount: results.length,
+                    results
+                };
+            }
+            failures.push(`${engine}: 没有解析到结果`);
+        } catch (error) {
+            failures.push(`${engine}: ${error.message}`);
+        }
+    }
+    return {
+        success: false,
+        query,
+        engine: requestedEngine,
+        error: `搜索失败或没有返回结果（${failures.join('；')}）`,
+        hint: 'Try a shorter or differently worded query, or pass a different engine argument.'
+    };
+}
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
@@ -921,16 +1040,35 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
     const source = request && typeof request === "object" ? request : {};
     const name = String(source.name || "");
     const args = source.arguments && typeof source.arguments === "object" ? source.arguments : {};
-    if (name === "web_search") {
-        const query = String(args.query || '').trim(); if (!query) return { success: false, error: 'query is required' };
-        const html = await fetchPublicText(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-        const matches = [...html.matchAll(/result__a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)].slice(0, Math.min(Number(args.limit) || 5, 10));
-        return { success: true, results: matches.map(m => ({ title: stripHtmlText(m[2]), url: m[1] })) };
-    }
+    if (name === "web_search") return runAgentWebSearch(args);
     if (name === "browse_web") {
-        const url = String(args.url || '').trim(); if (!/^https?:\/\//i.test(url)) return { success: false, error: 'valid http(s) url is required' };
-        const html = await fetchPublicText(url); return { success: true, url, text: stripHtmlText(html).slice(0, Math.min(Number(args.max_chars) || 12000, 50000)) };
+        const url = String(args.url || '').trim();
+        if (!/^https?:\/\//i.test(url)) return { success: false, error: 'valid http(s) url is required' };
+        try {
+            const html = await fetchPublicText(url, { baseUrl: url });
+            return {
+                success: true,
+                url,
+                text: stripHtmlText(html).slice(0, Math.min(Number(args.max_chars) || 12000, 50000))
+            };
+        } catch (error) {
+            return { success: false, url, error: `抓取失败：${error.message}` };
+        }
     }
+    // Background-process tools are session-scoped, not workspace-scoped: a server
+    // is started with its cwd in the workspace but must remain pollable afterwards.
+    if (name === "start_process") {
+        const binding = await getAgentWorkspaceStore().get(source.chatId);
+        if (!binding.bound || !binding.exists) return { success: false, error: "bound workspace is unavailable" };
+        return agentBackgroundShells.start({
+            command: args.command,
+            processId: args.process_id,
+            cwd: binding.realPath || binding.path
+        });
+    }
+    if (name === "read_process_output") return agentBackgroundShells.read(args.process_id, args);
+    if (name === "list_processes") return agentBackgroundShells.list();
+    if (name === "stop_process") return agentBackgroundShells.stopAndWait(args.process_id);
     const binding = await getAgentWorkspaceStore().get(source.chatId);
     if (!binding.bound || !binding.exists) {
         return { success: false, error: "bound workspace is unavailable" };
@@ -938,6 +1076,12 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
     if (name === "read_file_range") return readFileRange(binding.realPath || binding.path, args);
     if (name === "write_file") return writeAgentFile(binding.realPath || binding.path, args);
     if (name === "edit_file") return editAgentFile(binding.realPath || binding.path, args);
+    if (name === "multi_edit_file") return multiEditAgentFile(binding.realPath || binding.path, args);
+    if (name === "apply_patch") return applyPatch(binding.realPath || binding.path, args);
+    if (name === "glob_files") return globFiles(binding.realPath || binding.path, args);
+    if (name === "delete_path") return deletePath(binding.realPath || binding.path, args);
+    if (name === "move_path") return movePath(binding.realPath || binding.path, args);
+    if (name === "copy_path") return copyPath(binding.realPath || binding.path, args);
     if (name === "list_dir") return listDir(binding.realPath || binding.path, args);
     if (name === "grep_files") return grepFiles(binding.realPath || binding.path, args);
     if (name === "view_image") {
@@ -985,6 +1129,16 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
 ipcMain.handle("agent:cancel-execution", async (event, executionId) => {
     if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
     return { canceled: agentShellRunner.cancel(executionId) };
+});
+
+ipcMain.handle("agent:list-processes", async (event) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
+    return agentBackgroundShells.list();
+});
+
+ipcMain.handle("agent:stop-all-processes", async (event) => {
+    if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
+    return { stopped: await agentBackgroundShells.stopAllAndWait() };
 });
 
 ipcMain.handle("audio-chat:checkpoint", async (event, turns) => {
@@ -1183,6 +1337,8 @@ if (!gotTheLock) {
 app.on("before-quit", () => {
     isQuitting = true;
     clearDesktopShortcut();
+    // Background shells (dev servers, watchers) must not outlive the app.
+    agentBackgroundShells.stopAll();
 });
 
 app.on("window-all-closed", () => {});

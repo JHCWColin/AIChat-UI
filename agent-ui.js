@@ -8,11 +8,20 @@
         read_file_range: "file-search",
         write_file: "file-plus-2",
         edit_file: "file-pen-line",
+        multi_edit_file: "file-pen-line",
         run_shell: "terminal",
+        start_process: "play",
+        read_process_output: "activity",
+        stop_process: "square",
+        list_processes: "list",
         finish_task: "check-circle-2",
         agent_protocol: "shield-alert",
         list_dir: "folder-tree",
+        glob_files: "file-stack",
         grep_files: "search",
+        delete_path: "trash-2",
+        move_path: "folder-symlink",
+        copy_path: "copy",
         view_image: "image",
         update_plan: "list-checks",
         _claude_insert_text: "file-pen-line",
@@ -25,17 +34,39 @@
         read_file_range: "读取",
         write_file: "写入",
         edit_file: "编辑",
+        multi_edit_file: "批量编辑",
         run_shell: "运行",
+        start_process: "启动进程",
+        read_process_output: "读取进程输出",
+        stop_process: "停止进程",
+        list_processes: "进程列表",
         finish_task: "完成任务",
         agent_protocol: "协议提示",
         list_dir: "列目录",
+        glob_files: "查找文件",
         grep_files: "搜索",
+        delete_path: "删除",
+        move_path: "移动",
+        copy_path: "复制",
         view_image: "查看图片",
         update_plan: "更新计划",
         _claude_insert_text: "插入文本",
         _claude_undo_edit: "撤销编辑",
         _codex_apply_patch: "应用补丁"
     };
+    // Tools that only read state can run concurrently; anything that mutates the
+    // workspace, the shell, or the UI must stay in strict sequential order.
+    const READ_ONLY_TOOLS = new Set([
+        "read_file_range",
+        "list_dir",
+        "glob_files",
+        "grep_files",
+        "view_image",
+        "web_search",
+        "browse_web",
+        "read_process_output",
+        "list_processes"
+    ]);
 
     let agentTaskChatId = null;
     let agentStopRequested = false;
@@ -122,7 +153,13 @@
 
     async function hydrateAgentToolResults() {
         for (const chat of chats) {
-            if (!chat?.agentEnabled || !Array.isArray(chat.messages)) continue;
+            if (!chat?.agentEnabled) continue;
+            // Plans are per-chat state, not message state; restore them along with the
+            // persisted tool results so a reopened session keeps its task list.
+            if (chat.agentPlan && Array.isArray(chat.agentPlan.steps)) {
+                agentPlansByChat.set(chat.id, chat.agentPlan);
+            }
+            if (!Array.isArray(chat.messages)) continue;
             for (const message of chat.messages) {
                 if (message?.role !== "tool" || !message.contentRef || message.content) continue;
                 const content = await agentResultStore.get(message.contentRef);
@@ -529,6 +566,41 @@
         return seconds * 1000;
     }
 
+    function getAgentSearchEngine() {
+        return localStorage.getItem("agent_search_engine") === "duckduckgo" ? "duckduckgo" : "bing";
+    }
+
+    /**
+     * Compacts the Agent's history when the estimated context approaches the model's
+     * window, the way Claude Code does, instead of waiting for a fixed turn count.
+     * Agent internal loop calls are not counted as user turns, so the summary always
+     * lands on a completed task boundary.
+     */
+    async function compactAgentContextIfNeeded(chat) {
+        if (!chat?.agentEnabled) return false;
+        if (typeof estimateTotalTokens !== "function") return false;
+        if (typeof getContextWindowForModel !== "function") return false;
+        if (typeof performAutomaticCompaction !== "function") return false;
+        // A turn-count interval still wins when the user configured one explicitly.
+        if (typeof autoSummaryInterval !== "undefined" && autoSummaryInterval !== 0) return false;
+        const windowSize = getContextWindowForModel(chat.agentModel || getSelectedModelName());
+        if (!(windowSize > 0)) return false;
+        const threshold = typeof AGENT_COMPACTION_THRESHOLD === "number" ? AGENT_COMPACTION_THRESHOLD : 0.92;
+        const estimated = estimateTotalTokens();
+        if (!(estimated > 0) || estimated < windowSize * threshold) return false;
+        const percent = Math.round((estimated / windowSize) * 100);
+        appendLog("info", `Agent 上下文达到 ${percent}%（${estimated}/${windowSize}），开始自动压缩`);
+        showVoiceNotification(`上下文已用 ${percent}%，正在自动压缩以继续任务`, false, 0, true);
+        try {
+            await performAutomaticCompaction(chat);
+            if (typeof updateTokenEstimate === "function") updateTokenEstimate();
+            return true;
+        } catch (error) {
+            appendLog("error", `Agent 阈值压缩失败：${error.message}`);
+            return false;
+        }
+    }
+
     function splitAgentDisplayLines(content) {
         const text = String(content || "");
         if (!text) return [];
@@ -599,6 +671,46 @@
                 lines.push({ type: step.status === "in_progress" ? "error" : "output", text: `${marker} ${index + 1}. ${step.step}` });
             });
             return lines;
+        }
+        if ((message.toolName === "multi_edit_file" || message.toolName === "_codex_apply_patch") && message.result?.success) {
+            const diff = message.displayDiff || message.result.displayDiff;
+            return truncateAgentDisplayLines(Array.isArray(diff?.lines) ? diff.lines : []);
+        }
+        if (message.toolName === "glob_files" && message.result?.success) {
+            const items = Array.isArray(message.result.matches) ? message.result.matches : [];
+            const lines = items.map(item => ({
+                type: "output",
+                text: `${item.path}${item.size ? ` (${item.size} bytes)` : ""}`
+            }));
+            if (message.result.truncated) lines.push({ type: "output", text: "……结果已截断" });
+            return truncateAgentDisplayLines(lines);
+        }
+        if (message.toolName === "web_search" && message.result?.success) {
+            const items = Array.isArray(message.result.results) ? message.result.results : [];
+            return truncateAgentDisplayLines(items.map(item => ({
+                type: "output",
+                text: `${item.title}\n${item.url}${item.snippet ? `\n${item.snippet}` : ""}`
+            })));
+        }
+        if (message.toolName === "browse_web" && message.result?.success) {
+            return truncateAgentDisplayLines(splitAgentDisplayLines(message.result.text).map(text => ({ type: "output", text })));
+        }
+        if ((message.toolName === "read_process_output" || message.toolName === "stop_process") && message.result?.success) {
+            const output = [
+                ...splitAgentDisplayLines(message.result.stdout).map(text => ({ type: "output", text })),
+                ...splitAgentDisplayLines(message.result.stderr).map(text => ({ type: "error", text }))
+            ];
+            return truncateAgentDisplayLines(output);
+        }
+        if (message.toolName === "list_processes" && message.result?.success) {
+            const items = Array.isArray(message.result.processes) ? message.result.processes : [];
+            return items.map(item => ({
+                type: item.running ? "error" : "output",
+                text: `${item.processId} ${item.running ? "[running]" : `[exit ${item.exitCode ?? "?"}]`} ${item.command}`
+            }));
+        }
+        if ((message.toolName === "delete_path" || message.toolName === "move_path" || message.toolName === "copy_path") && message.result && !message.result.success) {
+            return message.result.hint ? [{ type: "error", text: message.result.hint }] : [];
         }
         return [];
     }
@@ -719,8 +831,92 @@
             if (status === "running") return `插入文本到 ${pathText} 第 ${args.insert_line ?? "?"} 行`;
             return message.result?.success ? `插入文本到 ${pathText} 完成` : `插入文本到 ${pathText} 失败`;
         }
+        if (name === "multi_edit_file") {
+            const pathText = String(args.path || "文件");
+            const count = Array.isArray(args.edits) ? args.edits.length : (args.old_text ? 1 : 0);
+            if (status === "running") return `批量编辑${pathText}，${count} 处改动`;
+            if (message.result?.success) return `批量编辑${message.result.path || pathText}，已应用 ${message.result.editCount ?? count} 处改动`;
+            const failed = Number.isInteger(message.result?.failedIndex) ? `（第 ${message.result.failedIndex + 1} 处失败）` : "";
+            return `批量编辑${pathText}失败${failed}，未写入任何改动`;
+        }
+        if (name === "glob_files") {
+            const patternText = String(args.pattern || "");
+            if (status === "running") return `查找文件 "${patternText}"`;
+            if (message.result?.success) return `查找文件 "${patternText}"，${message.result.totalCount ?? 0} 个结果${message.result.truncated ? "（已截断）" : ""}`;
+            return `查找文件 "${patternText}" 失败`;
+        }
+        if (name === "delete_path") {
+            const pathText = String(args.path || "目标");
+            if (status === "running") return `删除 ${pathText}`;
+            if (message.result?.success) return `已删除 ${message.result.type === "directory" ? "目录" : "文件"} ${message.result.path || pathText}`;
+            return `删除 ${pathText} 失败`;
+        }
+        if (name === "move_path") {
+            if (status === "running") return `移动 ${String(args.from || "来源")} → ${String(args.to || "目标")}`;
+            if (message.result?.success) return `已移动 ${message.result.from} → ${message.result.to}`;
+            return `移动 ${String(args.from || "来源")} 失败`;
+        }
+        if (name === "copy_path") {
+            if (status === "running") return `复制 ${String(args.from || "来源")} → ${String(args.to || "目标")}`;
+            if (message.result?.success) return `已复制 ${message.result.from} → ${message.result.to}`;
+            return `复制 ${String(args.from || "来源")} 失败`;
+        }
+        if (name === "web_search") {
+            const queryText = String(args.query || "");
+            if (status === "running") return `联网搜索 "${queryText}"`;
+            if (message.result?.success) {
+                const engine = message.result.engine ? `（${message.result.engine}）` : "";
+                const fallback = message.result.fellBack ? "，已自动切换引擎" : "";
+                return `联网搜索 "${queryText}"${engine}，${message.result.resultCount ?? 0} 条结果${fallback}`;
+            }
+            return `联网搜索 "${queryText}" 失败`;
+        }
+        if (name === "browse_web") {
+            const urlText = String(args.url || "");
+            if (status === "running") return `浏览 ${urlText}`;
+            if (message.result?.success) return `浏览 ${message.result.url || urlText}，${String(message.result.text || "").length} 字符`;
+            return `浏览 ${urlText} 失败`;
+        }
+        if (name === "start_process") {
+            const commandText = String(args.command || "");
+            if (status === "running") return `后台启动：${commandText}`;
+            if (message.result?.success) return `后台进程已启动 ${message.result.processId}：${commandText}`;
+            return `后台启动失败：${commandText}`;
+        }
+        if (name === "read_process_output") {
+            const idText = String(args.process_id || "");
+            if (status === "running") return `读取进程输出 ${idText}`;
+            if (message.result?.success) {
+                const state = message.result.running ? "运行中" : `已退出（exitCode ${message.result.exitCode ?? "?"}）`;
+                return `进程 ${idText} ${state}，输出 ${message.result.stdoutBytes ?? 0}/${message.result.stderrBytes ?? 0} 字节`;
+            }
+            return `读取进程 ${idText} 输出失败`;
+        }
+        if (name === "stop_process") {
+            const idText = String(args.process_id || "");
+            if (status === "running") return `停止进程 ${idText}`;
+            return message.result?.success ? `已停止进程 ${idText}` : `停止进程 ${idText} 失败`;
+        }
+        if (name === "list_processes") {
+            if (status === "running") return "列出后台进程";
+            if (message.result?.success) {
+                const list = Array.isArray(message.result.processes) ? message.result.processes : [];
+                const running = list.filter(item => item.running).length;
+                return `后台进程 ${list.length} 个（运行中 ${running}）`;
+            }
+            return "列出后台进程失败";
+        }
         if (name === "_claude_undo_edit") return status === "running" ? "撤销编辑" : "撤销编辑不支持";
-        if (name === "_codex_apply_patch") return status === "running" ? "应用补丁" : "补丁格式不支持";
+        if (name === "_codex_apply_patch") {
+            if (status === "running") return "应用补丁";
+            if (message.result?.success) {
+                const ops = Array.isArray(message.result.operations) ? message.result.operations : [];
+                const paths = ops.map(op => op.path).filter(Boolean);
+                const summary = paths.length > 2 ? `${paths.slice(0, 2).join("、")} 等 ${paths.length} 个文件` : paths.join("、");
+                return `已应用补丁（${ops.length} 个操作${summary ? `：${summary}` : ""}）`;
+            }
+            return `应用补丁失败：${String(message.result?.error || "").slice(0, 80)}`;
+        }
         return status === "running" ? `执行 ${name}` : `${name} 已返回结果`;
     }
 
@@ -824,6 +1020,10 @@
             }
         }
         if (latestUser) result.push(await buildSingleApiMessage(latestUser, chat, true));
+        // The live plan changes every few turns, so it goes after the cached history
+        // prefix (immediately before the newest turn) rather than inside it.
+        const planContext = formatAgentPlanForContext(chat);
+        if (planContext) result.push({ role: "user", content: planContext });
         return result;
     }
 
@@ -1030,7 +1230,11 @@
         return message;
     }
 
-    async function executeAgentToolCall(chat, call) {
+    // Returned by the resolver when the user stopped the task mid-tool; the caller
+    // must abort the loop without recording a result.
+    const STOP_SENTINEL = Symbol("agent-stop");
+
+    function prepareAgentToolMessage(chat, call) {
         const message = {
             role: "tool",
             name: call.name,
@@ -1044,65 +1248,78 @@
         chat.messages.push(message);
         appendAgentToolMessageToUI(message);
         persistAgentChats();
+        return message;
+    }
 
-        let result;
+    async function resolveAgentToolResult(chat, call, message) {
         if (call.name === "update_plan") {
-            result = handleUpdatePlan(chat, call.arguments || {});
-        } else if (call.name === "run_shell") {
+            return handleUpdatePlan(chat, call.arguments || {});
+        }
+        if (call.name === "run_shell") {
             const command = String(call.arguments?.command || "");
-            if (!command.trim()) result = { success: false, error: "command is required" };
-            else if (agentCommandMode !== "yolo") {
+            if (!command.trim()) return { success: false, error: "command is required" };
+            if (agentCommandMode !== "yolo") {
                 const policy = await window.electronAPI.checkAgentCommand(command);
                 if (!policy.allowed) {
                     const decision = await requestAgentCommandApproval(command, policy.suggestedPrefix);
-                    if (agentStopRequested) return false;
+                    if (agentStopRequested) return STOP_SENTINEL;
                     if (decision === "reject") {
-                        result = { success: false, rejected: true, error: `[${command}]被用户拒绝，尝试更换方法。` };
-                    } else if (decision === "always") {
+                        return { success: false, rejected: true, error: `[${command}]被用户拒绝，尝试更换方法。` };
+                    }
+                    if (decision === "always") {
                         const prefix = agentApprovalPrefix || policy.suggestedPrefix;
                         if (prefix) await window.electronAPI.addAgentAllowedCommand(prefix);
                     }
                 }
             }
-            if (!result) {
-                agentCurrentExecutionId = message.executionId;
-                const startedAt = Date.now();
-                const progressTimer = setInterval(() => {
-                    const current = agentShellProgressByExecution.get(message.executionId) || { stdoutBytes: 0, stderrBytes: 0 };
-                    agentShellProgressByExecution.set(message.executionId, { ...current, elapsedMs: Date.now() - startedAt });
-                    updateAgentToolMessageUI(message);
-                }, 250);
-                try {
-                    result = await window.electronAPI.executeAgentTool({
-                        chatId: chat.id,
-                        name: call.name,
-                        arguments: call.arguments || {},
-                        executionId: message.executionId,
-                        timeoutMs: getAgentShellTimeoutMs()
-                    });
-                } finally {
-                    clearInterval(progressTimer);
-                    agentCurrentExecutionId = "";
-                }
+            agentCurrentExecutionId = message.executionId;
+            const startedAt = Date.now();
+            const progressTimer = setInterval(() => {
+                const current = agentShellProgressByExecution.get(message.executionId) || { stdoutBytes: 0, stderrBytes: 0 };
+                agentShellProgressByExecution.set(message.executionId, { ...current, elapsedMs: Date.now() - startedAt });
+                updateAgentToolMessageUI(message);
+            }, 250);
+            try {
+                return await window.electronAPI.executeAgentTool({
+                    chatId: chat.id,
+                    name: call.name,
+                    arguments: call.arguments || {},
+                    executionId: message.executionId,
+                    timeoutMs: getAgentShellTimeoutMs()
+                });
+            } finally {
+                clearInterval(progressTimer);
+                agentCurrentExecutionId = "";
             }
-        } else if (call.name === "web_search" || call.name === "browse_web" || call.name === "read_file_range" || call.name === "write_file" || call.name === "edit_file" || call.name === "list_dir" || call.name === "grep_files" || call.name === "view_image") {
-            const toolArguments = call.name === "view_image"
-                ? { ...(call.arguments || {}), detail: call.arguments?.detail || localStorage.getItem("agent_view_image_detail") || "medium" }
-                : (call.arguments || {});
-            result = await window.electronAPI.executeAgentTool({
-                chatId: chat.id,
-                name: call.name,
-                arguments: toolArguments
-            });
-        } else if (call.name === "_claude_insert_text") {
-            result = await handleClaudeInsertText(chat, call.arguments || {});
-        } else if (call.name === "_claude_undo_edit") {
-            result = { success: false, error: "undo_edit is not supported in this environment. Use edit_file to manually revert the previous change by swapping old_text and new_text." };
-        } else if (call.name === "_codex_apply_patch") {
-            result = { success: false, error: "apply_patch freeform syntax is not supported in this environment. Use edit_file for precise string replacements or write_file for full file overwrites." };
-        } else {
-            result = { success: false, error: `unknown tool: ${call.name}` };
         }
+        if (call.name === "_claude_insert_text") return handleClaudeInsertText(chat, call.arguments || {});
+        if (call.name === "_claude_undo_edit") {
+            return { success: false, error: "undo_edit is not supported in this environment. Use edit_file to manually revert the previous change by swapping old_text and new_text." };
+        }
+        if (call.name === "_codex_apply_patch") {
+            const patch = String(call.arguments?.input || call.arguments?.patch || call.arguments?.diff || "");
+            if (!patch.trim()) {
+                return { success: false, error: "apply_patch input is empty. Provide a patch containing *** Begin Patch sections, or use edit_file / multi_edit_file instead." };
+            }
+            return window.electronAPI.executeAgentTool({
+                chatId: chat.id,
+                name: "apply_patch",
+                arguments: { input: patch }
+            });
+        }
+        const toolArguments = call.name === "view_image"
+            ? { ...(call.arguments || {}), detail: call.arguments?.detail || localStorage.getItem("agent_view_image_detail") || "medium" }
+            : (call.name === "web_search"
+                ? { ...(call.arguments || {}), engine: call.arguments?.engine || localStorage.getItem("agent_search_engine") || "" }
+                : (call.arguments || {}));
+        return window.electronAPI.executeAgentTool({
+            chatId: chat.id,
+            name: call.name,
+            arguments: toolArguments
+        });
+    }
+
+    async function finalizeAgentToolResult(chat, call, message, result) {
         message.result = result || { success: false, error: "tool did not return a result" };
         if (message.result.displayDiff) {
             message.displayDiff = message.result.displayDiff;
@@ -1114,7 +1331,39 @@
             : JSON.stringify(message.result);
         await persistAgentToolMessage(chat, message);
         updateAgentToolMessageUI(message);
-        return true;
+    }
+
+    /**
+     * Runs a group of already-rendered tool calls from one model response. Read-only
+     * calls are dispatched concurrently because they cannot interfere with each
+     * other; any mutating call runs alone, in order, and drains the pending read
+     * batch first so "later calls see earlier effects" still holds.
+     */
+    async function executeAgentToolBatch(chat, items) {
+        let pendingReads = [];
+        const flushReads = async () => {
+            if (!pendingReads.length) return true;
+            const batch = pendingReads;
+            pendingReads = [];
+            await Promise.all(batch.map(async item => {
+                const result = await resolveAgentToolResult(chat, item.call, item.message);
+                if (result === STOP_SENTINEL) return;
+                await finalizeAgentToolResult(chat, item.call, item.message, result);
+            }));
+            return !agentStopRequested;
+        };
+        for (const item of items) {
+            if (READ_ONLY_TOOLS.has(item.call.name)) {
+                pendingReads.push(item);
+                continue;
+            }
+            if (!(await flushReads())) return false;
+            const result = await resolveAgentToolResult(chat, item.call, item.message);
+            if (result === STOP_SENTINEL) return false;
+            await finalizeAgentToolResult(chat, item.call, item.message, result);
+            if (agentStopRequested) return false;
+        }
+        return flushReads();
     }
 
     function handleUpdatePlan(chat, args) {
@@ -1129,6 +1378,10 @@
             return { success: false, error: `at most one plan step may be in_progress, got ${inProgressCount}` };
         }
         agentPlansByChat.set(chat.id, { explanation, steps: sanitized, updatedAt: Date.now() });
+        // Mirror onto the chat so the plan survives a reload instead of living only
+        // in this tab's memory.
+        chat.agentPlan = { explanation, steps: sanitized, updatedAt: Date.now() };
+        persistAgentChats();
         return { success: true, explanation, plan: sanitized, stepCount: sanitized.length };
     }
 
@@ -1170,6 +1423,25 @@
             lines.push({ type: step.status === "completed" ? "output" : step.status === "in_progress" ? "error" : "output", text: `${marker} ${index + 1}. ${step.step}` });
         });
         return lines;
+    }
+
+    function formatAgentPlanForContext(chat) {
+        const plan = agentPlansByChat.get(chat.id) || chat.agentPlan;
+        const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+        if (!steps.length) return "";
+        const lines = steps.map((step, index) => {
+            const marker = step.status === "completed" ? "[x]" : step.status === "in_progress" ? "[>]" : "[ ]";
+            return `${marker} ${index + 1}. ${String(step.step || "")}`;
+        });
+        const explanation = String(plan?.explanation || "").trim();
+        return [
+            "Current Task Plan",
+            "",
+            explanation,
+            lines.join("\n"),
+            "",
+            "Keep this plan accurate: mark a step in_progress before starting it and completed only once it is verified. Use update_plan to revise it whenever the plan changes."
+        ].filter(part => part !== "").join("\n");
     }
 
     async function requestAgentProtocolCorrection(chat, model, rawText) {
@@ -1219,8 +1491,16 @@
         let thinkingRow = appendAgentThinkingRow();
         let invalidResponses = 0;
         let emptyResponses = 0;
+        let compactionCheckedAt = 0;
         try {
             while (!agentStopRequested) {
+                // Check the context budget once per user-visible turn boundary rather
+                // than on every internal loop iteration.
+                if (Date.now() - compactionCheckedAt > 3000) {
+                    compactionCheckedAt = Date.now();
+                    await compactAgentContextIfNeeded(chat);
+                    if (agentStopRequested) break;
+                }
                 let result;
                 for (let attempt = 1; attempt <= 6; attempt += 1) {
                     try {
@@ -1312,6 +1592,9 @@
                         .join("\n\n")
                     : "";
                 let finalTextAdded = false;
+                // Tool rows are rendered immediately in segment order so the transcript
+                // stays readable, then executed as one batch (reads in parallel).
+                const pendingToolItems = [];
                 for (let index = 0; index < parsed.segments.length; index += 1) {
                     const segment = parsed.segments[index];
                     if (segment.type === "text") {
@@ -1323,6 +1606,10 @@
                     }
                     const call = segment.call;
                     if (call.name === "finish_task") {
+                        // Reads emitted before finish_task still run; the model may batch
+                        // its last inspections with the terminal call.
+                        if (!(await executeAgentToolBatch(chat, pendingToolItems))) return;
+                        pendingToolItems.length = 0;
                         const finishMessage = {
                             role: "tool",
                             name: "finish_task",
@@ -1348,9 +1635,10 @@
                         await renderMessagesWithResolvedRefs(chat.messages);
                         return;
                     }
-                    if (!(await executeAgentToolCall(chat, call))) return;
-                    if (agentStopRequested) return;
+                    pendingToolItems.push({ call, message: prepareAgentToolMessage(chat, call) });
                 }
+                if (!(await executeAgentToolBatch(chat, pendingToolItems))) return;
+                if (agentStopRequested) return;
                 thinkingRow = appendAgentThinkingRow();
             }
             if (agentStopRequested) {
@@ -1397,6 +1685,9 @@
         for (const executionId of agentShellProgressByExecution.keys()) {
             window.electronAPI?.cancelAgentExecution?.(executionId).catch(() => {});
         }
+        // Servers and watchers belong to the task that started them; stopping the
+        // task must not leave them holding ports in the background.
+        window.electronAPI?.stopAllAgentProcesses?.().catch(() => {});
         resolveAgentCommandApproval("reject");
         resolveAgentYoloWarning(false);
     }
@@ -1406,10 +1697,12 @@
         const detailBehavior = document.getElementById("agent-detail-default-behavior");
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
         const imageDetail = document.getElementById("agent-view-image-detail");
+        const searchEngine = document.getElementById("agent-search-engine");
         if (diffMaxLines) diffMaxLines.value = String(getAgentDiffMaxLines());
         if (detailBehavior) detailBehavior.value = getAgentDetailDefaultBehavior();
         if (shellTimeout) shellTimeout.value = String(Math.round(getAgentShellTimeoutMs() / 1000));
         if (imageDetail) imageDetail.value = localStorage.getItem("agent_view_image_detail") || "medium";
+        if (searchEngine) searchEngine.value = getAgentSearchEngine();
         if (!window.electronAPI?.getAgentCommandSettings) return;
         try {
             const settings = await window.electronAPI.getAgentCommandSettings();
@@ -1427,6 +1720,7 @@
         const detailBehavior = document.getElementById("agent-detail-default-behavior");
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
         const imageDetail = document.getElementById("agent-view-image-detail");
+        const searchEngine = document.getElementById("agent-search-engine");
         const selectedDiffLimit = Number(diffMaxLines?.value);
         localStorage.setItem("agent_diff_max_lines", String([10, 20, 50, 0].includes(selectedDiffLimit) ? selectedDiffLimit : DEFAULT_AGENT_DIFF_MAX_LINES));
         localStorage.setItem("agent_detail_default_behavior", detailBehavior?.value === "collapsed" ? "collapsed" : "expanded");
@@ -1436,6 +1730,7 @@
             : DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS;
         localStorage.setItem("agent_shell_timeout_seconds", String(timeoutSeconds));
         localStorage.setItem("agent_view_image_detail", ["low", "medium", "high", "original"].includes(imageDetail?.value) ? imageDetail.value : "medium");
+        localStorage.setItem("agent_search_engine", searchEngine?.value === "duckduckgo" ? "duckduckgo" : "bing");
         if (!window.electronAPI?.saveAgentCommandAdditions) return;
         const additions = document.getElementById("agent-command-additions")?.value || "";
         try {
