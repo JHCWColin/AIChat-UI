@@ -122,6 +122,7 @@ jobs:
             --exclude='dist' \
             --exclude='build-tokenizer.cjs' \
             --exclude='tokenizer-entry.js' \
+            --exclude='*.keystore' \
             --exclude='release' \
             ./ www/
 
@@ -183,10 +184,13 @@ jobs:
 
       - name: Locate keystore file
         id: keystore
+        env:
+          ANDROID_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           KEYSTORE=./1.keystore
-          if [ ! -f "$KEYSTORE" ]; then
-            echo "::warning::Android signing keystore is not configured; skipping signed APK publication."
+          if [ ! -f "$KEYSTORE" ] || [ -z "$ANDROID_STORE_PASS" ] || [ -z "$ANDROID_KEY_PASS" ]; then
+            echo "::warning::Android signing file or secrets are not configured; skipping signed APK publication."
             echo "available=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -289,6 +293,7 @@ jobs:
             --exclude='dist' \
             --exclude='build-tokenizer.cjs' \
             --exclude='tokenizer-entry.js' \
+            --exclude='*.keystore' \
             --exclude='release' \
             ./ www/
 
