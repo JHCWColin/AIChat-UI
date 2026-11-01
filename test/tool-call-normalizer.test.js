@@ -4,6 +4,128 @@ const { normalizeToolCalls, parseAgentResponse, stripReasoningSections, extractT
 
 const expected = { name: "read_file", arguments: { path: "test.txt" } };
 
+// Exact protocol shape captured from the live Agent's final update_plan reply.
+const liveDsmlPlan = [
+    { step: "用 list_dir 列出工作区结构", status: "completed" },
+    { step: "用 glob_files/grep_files/read_file_range 探索 src/计算器.cjs 与 verify.cjs", status: "completed" },
+    { step: "用 edit_file 修复 add 加法错误", status: "completed" },
+    { step: "用 multi_edit_file 同时改 label 与 version", status: "completed" },
+    { step: "新建 docs/补丁记录.md（PATCH_OK）", status: "completed" },
+    { step: "用 write_file 新建 docs/结果.md（验证通过）", status: "completed" },
+    { step: "run_shell 执行 node verify.cjs，确认 VERIFY_OK 且 exitCode 0", status: "completed" },
+    { step: "给出中文总结并 finish_task", status: "completed" }
+];
+const liveDsmlExplanation = "node verify.cjs 实际输出 VERIFY_OK，退出码 0，验证通过。";
+const liveDsmlReply = [
+    '<｜｜DSML｜｜ calls>',
+    '<｜｜DSML｜｜ invoke name="update_plan">',
+    `<｜｜DSML｜｜ parameter name="explanation" string="true">${liveDsmlExplanation}</｜｜DSML｜｜ parameter>`,
+    `<｜｜DSML｜｜ parameter name="plan" string="false">${JSON.stringify(liveDsmlPlan)}</｜｜DSML｜｜ parameter>`,
+    '</｜｜DSML｜｜ invoke>',
+    '</｜｜DSML｜｜ calls>'
+].join("\n");
+
+test("normalizes the captured DSML update_plan with typed Chinese parameters", () => {
+    const parsed = parseAgentResponse(liveDsmlReply);
+    assert.deepEqual(parsed.calls, [{ name: "update_plan", arguments: { explanation: liveDsmlExplanation, plan: liveDsmlPlan } }]);
+    assert.deepEqual(normalizeToolCalls(liveDsmlReply), parsed.calls);
+    assert.equal(parsed.hasMalformedToolCall, false);
+    assert.equal(parsed.text, "");
+    assert.deepEqual(parsed.segments.map(segment => segment.type), ["tool_call"]);
+});
+
+test("preserves Chinese prose around DSML without displaying invocation parameters", () => {
+    const parsed = parseAgentResponse(`检查已经完成。\n${liveDsmlReply}\n下面给出最终总结。`);
+    assert.deepEqual(parsed.segments.map(segment => segment.type === "text" ? segment.text : segment.call.name), [
+        "检查已经完成。", "update_plan", "下面给出最终总结。"
+    ]);
+    assert.match(parsed.text, /检查已经完成。/);
+    assert.match(parsed.text, /下面给出最终总结。/);
+    assert.doesNotMatch(parsed.text, /DSML|dsml_|explanation|VERIFY_OK|completed|parameter/);
+});
+
+test("DSML string=true parameters remain strings even when they look like JSON", () => {
+    const response = [
+        '<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name="inspect_value">',
+        '<｜｜DSML｜｜ parameter name="literal" string="true">[1,2]</｜｜DSML｜｜ parameter>',
+        '<｜｜DSML｜｜ parameter name="structured" string="false">{"count":2,"enabled":true}</｜｜DSML｜｜ parameter>',
+        '</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>'
+    ].join("\n");
+    assert.deepEqual(parseAgentResponse(response).calls, [{ name: "inspect_value", arguments: {
+        literal: "[1,2]", structured: { count: 2, enabled: true }
+    } }]);
+});
+
+test("recovers the captured typed process-output call with an unnamed parameter close", () => {
+    const response = [
+        '<｜｜DSML｜｜ calls>',
+        '<｜｜DSML｜｜ invoke name="read_process_output">',
+        '<｜｜DSML｜｜ parameter name="process_id" string="true">live-worker</｜｜DSML｜｜ parameter>',
+        '<｜｜DSML｜｜ parameter name="tail_bytes" string="false">4096</｜｜DSML｜｜>',
+        '</｜｜DSML｜｜ invoke>',
+        '<｜｜DSML｜｜ invoke name="list_processes">',
+        '</｜｜DSML｜｜ invoke>',
+        '</｜｜DSML｜｜ calls>'
+    ].join("\n");
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls, [
+        { name: "read_process_output", arguments: { process_id: "live-worker", tail_bytes: 4096 } },
+        { name: "list_processes", arguments: {} }
+    ]);
+    assert.equal(parsed.hasMalformedToolCall, false);
+    assert.equal(parsed.text, "");
+    assert.deepEqual(parseAgentResponse(response.replace(/<｜｜DSML｜｜ invoke name="list_processes">[\s\S]*?<\/｜｜DSML｜｜ invoke>\n/, "")).calls,
+        [{ name: "read_process_output", arguments: { process_id: "live-worker", tail_bytes: 4096 } }]);
+});
+
+test("does not repair unnamed closes with invalid typed values or extra structural closes", () => {
+    const valid = [
+        '<｜｜DSML｜｜ calls><｜｜DSML｜｜ invoke name="read_process_output">',
+        '<｜｜DSML｜｜ parameter name="tail_bytes" string="false">4096</｜｜DSML｜｜>',
+        '</｜｜DSML｜｜ invoke></｜｜DSML｜｜ calls>'
+    ].join("\n");
+    for (const response of [
+        valid.replace('4096', '{"not":"complete"'),
+        valid.replace('string="false"', 'string="true"'),
+        valid.replace('</｜｜DSML｜｜ invoke>', '</｜｜DSML｜｜></｜｜DSML｜｜ invoke>')
+    ]) {
+        const parsed = parseAgentResponse(response);
+        assert.equal(parsed.hasMalformedToolCall, true);
+        assert.equal(parsed.text, "");
+    }
+});
+
+test("malformed DSML parameters are flagged and never treated as visible answers", () => {
+    const response = liveDsmlReply.replace(JSON.stringify(liveDsmlPlan), '[{"step":"BROKEN_PLAN_SECRET",}]');
+    const parsed = parseAgentResponse(`可辨认的前文。\n${response}\n可辨认的后文。`);
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.hasMalformedToolCall, true);
+    assert.match(parsed.text, /可辨认的前文。/);
+    assert.match(parsed.text, /可辨认的后文。/);
+    assert.doesNotMatch(parsed.text, /DSML|dsml_|BROKEN_PLAN_SECRET|explanation|parameter|VERIFY_OK/);
+});
+
+test("truncated DSML invocations cannot leak protocol fragments into final prose", () => {
+    const response = liveDsmlReply.replace('</｜｜DSML｜｜ invoke>', '');
+    const parsed = parseAgentResponse(`任务前文。\n${response}\n任务后文。`);
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.hasMalformedToolCall, true);
+    assert.match(parsed.text, /任务前文。/);
+    assert.match(parsed.text, /任务后文。/);
+    assert.doesNotMatch(parsed.text, /DSML|dsml_|VERIFY_OK|completed|parameter/);
+});
+
+test("ordinary HTML calls and parameter words are not mistaken for DSML", () => {
+    const html = '<section><h2>调用说明</h2><p>calls invoke parameter</p><code>string="false"</code></section>';
+    const parsed = parseAgentResponse(html);
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.hasMalformedToolCall, false);
+    assert.equal(parsed.text, html);
+    const { canonicalizeDsmlMarkers, stripDsmlProtocol } = require("../tool-call-normalizer");
+    assert.equal(canonicalizeDsmlMarkers(html), html);
+    assert.equal(stripDsmlProtocol(html), html);
+});
+
 test("normalizes OpenAI Chat Completions tool_calls", () => {
     assert.deepEqual(normalizeToolCalls({
         tool_calls: [{ id: "call_xxx", type: "function", function: { name: "read_file", arguments: '{"path":"test.txt"}' } }]
@@ -154,4 +276,74 @@ test("returns actionable diagnostics for malformed tool calls", () => {
     assert.match(diagnostics.location, /tool-call/);
     assert.match(diagnostics.suggestion, /Close|complete/i);
     assert.match(diagnostics.evidence, /中文/);
+});
+
+test("does not strip Markdown fences from a code-only final response", () => {
+    const response = '```javascript\nconst total = 3;\n```';
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.text, response);
+    assert.equal(parsed.hasMalformedToolCall, false);
+});
+
+test("retains ordinary fenced code together with its surrounding prose", () => {
+    const response = '计算结果如下：\n\n```javascript\nconst total = 3;\n```\n\n可以继续使用。';
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.text, response);
+});
+
+test("strips a complete JSON tool fence while retaining its executable call", () => {
+    const response = '```json\n{"tool_call":{"name":"read_file_range","arguments":{"path":"a.js","start_line":1,"end_line":3}}}\n```';
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls, [{ name: "read_file_range", arguments: { path: "a.js", start_line: 1, end_line: 3 } }]);
+    assert.equal(parsed.text, "");
+    assert.doesNotMatch(parsed.text, /```/);
+});
+
+test("extracts all tool calls from a shared JSON fence without visible remnants", () => {
+    const response = [
+        '```json',
+        '{"tool_call":{"name":"read_file_range","arguments":{"path":"a.js"}}}',
+        '{"tool_call":{"name":"finish_task","arguments":{}}}',
+        '```'
+    ].join("\n");
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls.map(call => call.name), ["read_file_range", "finish_task"]);
+    assert.equal(parsed.text, "");
+    assert.equal(parsed.hasMalformedToolCall, false);
+});
+
+test("keeps a normal code fence when a separate tool fence is consumed", () => {
+    const answer = '下面是结果：\n\n```javascript\nconst total = 3;\n```';
+    const response = `${answer}\n\n\`\`\`json\n{"tool_call":{"name":"finish_task","arguments":{}}}\n\`\`\``;
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls.map(call => call.name), ["finish_task"]);
+    assert.equal(parsed.text, answer);
+});
+
+test("retains non-tool JSON examples inside Markdown fences", () => {
+    const response = '```json\n{"total":3,"label":"中文结果"}\n```';
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls, []);
+    assert.equal(parsed.text, response);
+});
+
+test("parses the live web-summary finish after Chinese and English quotation marks", () => {
+    const answer = '联网工具测试结果：web_search 搜索“Electron BrowserWindow docs”成功，返回 5 条结果；browse_web 读取 https://example.com 成功，页面文本为“Example Domain — This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.” 两个工具都没有失败、超时或空结果，以上内容均为真实返回。';
+    const parsed = parseAgentResponse([answer, '{"tool_call":{"name":"finish_task","arguments":{}}}'].join(String.fromCharCode(10, 10)));
+    assert.deepEqual(parsed.calls.map(call => call.name), ["finish_task"]);
+    assert.equal(parsed.hasMalformedToolCall, false);
+    assert.deepEqual(parsed.segments.map(segment => segment.type), ["text", "tool_call"]);
+    assert.equal(parsed.text, answer);
+});
+
+test("ordinary prose punctuation does not conceal a fenced finish call", () => {
+    const answer = '搜索词 “Electron” 与页面引文 "Example Domain" 均已核实。';
+    const fence = String.fromCharCode(96).repeat(3);
+    const response = [answer, fence + 'json', '{"tool_call":{"name":"finish_task","arguments":{}}}', fence].join(String.fromCharCode(10));
+    const parsed = parseAgentResponse(response);
+    assert.deepEqual(parsed.calls.map(call => call.name), ["finish_task"]);
+    assert.equal(parsed.hasMalformedToolCall, false);
+    assert.equal(parsed.text, answer);
 });

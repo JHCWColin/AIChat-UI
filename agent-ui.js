@@ -1,6 +1,6 @@
 (function () {
     const MAX_TOOL_CALLS_PER_RESPONSE = 30;
-    const MAX_CONSECUTIVE_EMPTY_RESPONSES = 10;
+    const MAX_CONSECUTIVE_EMPTY_RESPONSES = 3;
     const MAX_CONSECUTIVE_INVALID_RESPONSES = 3;
     const DEFAULT_AGENT_DIFF_MAX_LINES = 10;
     const DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS = 120;
@@ -69,6 +69,9 @@
     ]);
 
     let agentTaskChatId = null;
+    let agentTaskPreparing = false;
+    let agentLiveThinkingRow = null;
+    let agentThinkingSequence = 0;
     let agentStopRequested = false;
     let agentApprovalResolver = null;
     let agentApprovalRow = null;
@@ -468,7 +471,9 @@
         const summary = row.querySelector(".agent-tool-summary");
         const thinkingText = row.querySelector(".thinking-text");
         row.thinkingStartedAt = Number(options.startedAt || Date.now());
+        row.gatewayThinkingId = options.gatewayThinkingId || `${agentTaskChatId || activeChatId}:thinking:${row.thinkingStartedAt}:${agentThinkingSequence += 1}`;
         row.reasoningText = "";
+        if (running && options.activate !== false) agentLiveThinkingRow = row;
         row.updateReasoning = reasoning => {
             const hasReasoning = Boolean(String(reasoning || ""));
             row.reasoningText = String(reasoning || "");
@@ -486,6 +491,7 @@
             summary.setAttribute("aria-expanded", String(hasReasoning && !toolRow.classList.contains("collapsed")));
         };
         row.finishThinking = durationMs => {
+            if (agentLiveThinkingRow === row) agentLiveThinkingRow = null;
             if (!row.reasoningText) {
                 if (agentActiveStatusRow === row) setAgentActiveStatusRow(null);
                 row.remove();
@@ -527,7 +533,8 @@
             running: false,
             activate: false,
             reasoning: message.reasoning,
-            durationMs: message.thinkingDurationMs
+            durationMs: message.thinkingDurationMs,
+            gatewayThinkingId: message.gatewayThinkingId
         });
     }
 
@@ -983,10 +990,9 @@
         lucide.createIcons();
     }
 
-    async function buildAgentMessages(chat) {
+    async function buildAgentMessages(chat, options = {}) {
         const latestUser = [...(chat.messages || [])].reverse().find(message => message?.role === "user" && message.hidden !== true);
         const compacted = buildCompactedChatMessages(chat);
-        const history = compacted.filter(message => message !== latestUser);
         if (!chat.agentFixedPrompt) {
             chat.agentSessionStartedAt = chat.agentSessionStartedAt || Date.now();
             chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({
@@ -996,32 +1002,51 @@
                     `Session started: ${AgentProtocol.formatCurrentTime(new Date(chat.agentSessionStartedAt))}`
                 ].filter(Boolean).join("\n")
             });
-            persistAgentChats();
+            if (options.estimateOnly !== true) persistAgentChats();
         }
         const requiredToolInstruction = "严格按照工具定义来调用，你现在不身处于你的官方cli环境！";
         if (!chat.agentFixedPrompt.includes(requiredToolInstruction)) {
             chat.agentFixedPrompt = `${chat.agentFixedPrompt}\n\n${requiredToolInstruction}`;
-            persistAgentChats();
+            if (options.estimateOnly !== true) persistAgentChats();
         }
         const result = [{
             role: "system",
             content: chat.agentFixedPrompt
         }];
-        for (const message of history) {
+        for (const message of compacted) {
             if (message?.agentDisplayOnly === true) continue;
             if (message?.role === "tool") {
                 const content = message.content || (message.contentRef ? await agentResultStore.get(message.contentRef) : "");
+                let imageResult = message.result;
+                if (message.toolName === "view_image" && !imageResult && content) {
+                    try { imageResult = JSON.parse(content); } catch (_) { /* retain legacy plain-text results */ }
+                }
+                if (message.toolName === "view_image" && imageResult && typeof imageResult === "object") {
+                    const { dataUrl, ...metadata } = imageResult;
+                    const summary = `[Tool Result: view_image]\n${JSON.stringify(metadata)}`;
+                    const imageUrl = imageResult.success !== false && typeof dataUrl === "string"
+                        && /^data:image\/[^;,]+;base64,/i.test(dataUrl) ? dataUrl : "";
+                    result.push({ role: "user", content: imageUrl ? [
+                        { type: "text", text: summary },
+                        { type: "image_url", image_url: { url: imageUrl } }
+                    ] : summary });
+                    continue;
+                }
                 result.push({
                     role: "user",
                     content: `[Tool Result: ${String(message.toolName || "unknown")}]\n${String(content || "")}`
                 });
             } else if (message?.role === "user" || message?.role === "assistant" || message?.role === "system") {
-                result.push(await buildSingleApiMessage(message, chat, false));
+                const built = await buildSingleApiMessage(message, chat, message === latestUser);
+                if (message.role === "assistant") {
+                    built.content = AgentProtocol.stripAssistantReasoningContent(built.content);
+                    if (message.responsesReasoning) built.__aiuiResponsesReasoning = message.responsesReasoning;
+                }
+                result.push(built);
             }
         }
-        if (latestUser) result.push(await buildSingleApiMessage(latestUser, chat, true));
         // The live plan changes every few turns, so it goes after the cached history
-        // prefix (immediately before the newest turn) rather than inside it.
+        // prefix rather than inside the fixed prompt or reordering prior turns.
         const planContext = formatAgentPlanForContext(chat);
         if (planContext) result.push({ role: "user", content: planContext });
         return result;
@@ -1030,13 +1055,20 @@
     async function requestAgentModel(chat, model, options = {}) {
         if (Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
             const queued = window.queuedAgentMessages.splice(0);
-            queued.forEach(content => {
+            let consumedUserMessages = 0;
+            queued.forEach(entry => {
+                // Remote additions stay bound to the chat that accepted them,
+                // including if the user stops the task before the next model turn.
+                if (entry && typeof entry === "object" && String(entry.gatewayChatId || "") !== String(chat.id)) return;
+                const content = entry && typeof entry === "object" ? entry.content : entry;
                 const message = { role: "user", content: String(content || ""), agentQueued: true };
                 chat.messages.push(message);
+                consumedUserMessages += 1;
                 if (typeof appendMessageToUI === "function") appendMessageToUI("user", message.content, null, false, "", []);
             });
             if (typeof persistAgentChats === "function") persistAgentChats();
             if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
+            if (consumedUserMessages) options.onUserMessagesConsumed?.();
         }
         const messages = await buildAgentMessages(chat);
         const promptCacheKey = typeof getPromptCacheKeyForChat === "function"
@@ -1082,6 +1114,8 @@
             return {
                 text: extractNonStreamingResponseText(payload, endpoint),
                 reasoning,
+                responsesReasoning: AgentProtocol.createResponsesReasoningState(payload, { endpoint, model, baseURL: getBaseURL() }),
+                completion: collectAgentCompletionInfo(payload),
                 toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(payload))
             };
         }
@@ -1096,6 +1130,7 @@
         let sawSSE = false;
         let streamBytesReceived = 0;
         const seenStreamEvents = new Set();
+        let completion = {};
         const consume = block => {
             const event = parseSSEEventBlock(block);
             if (!event.data) return;
@@ -1103,13 +1138,16 @@
             if (event.data === "[DONE]") return;
             const payload = JSON.parse(event.data);
             const normalizedPayload = !payload.type && event.eventType ? { ...payload, type: event.eventType } : payload;
-            responsePayloads.push(normalizedPayload);
             const sequence = normalizedPayload.sequence_number;
-            const eventKey = event.eventId || (sequence !== undefined && sequence !== null
-                ? `${normalizedPayload.type || endpoint}:${sequence}`
-                : "");
+            // Relays can reuse one SSE id for a response, including identical
+            // consecutive token deltas. Only a protocol sequence number can
+            // distinguish a replay from an intentional repeated token.
+            const eventKey = Number.isSafeInteger(sequence) && sequence >= 0
+                ? `${normalizedPayload.type || endpoint}:${sequence}:${event.data}` : "";
             if (eventKey && seenStreamEvents.has(eventKey)) return;
             if (eventKey) seenStreamEvents.add(eventKey);
+            responsePayloads.push(normalizedPayload);
+            completion = collectAgentCompletionInfo(normalizedPayload, completion);
             const streamError = getStreamingErrorMessage(normalizedPayload);
             if (streamError) throw new Error(streamError);
             const update = extractStreamingUpdate(normalizedPayload, endpoint);
@@ -1151,6 +1189,7 @@
             else if (!sawSSE) {
                 const payload = JSON.parse(sseBuffer.trim());
                 responsePayloads.push(payload);
+                completion = collectAgentCompletionInfo(payload, completion);
                 fullText = mergeStreamingText(fullText, "", extractNonStreamingResponseText(payload, endpoint));
                 const update = extractStreamingUpdate(payload, endpoint);
                 reasoningText = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
@@ -1165,20 +1204,40 @@
         return {
             text: fullText,
             reasoning: reasoningText,
+            responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint, model, baseURL: getBaseURL() }),
+            completion,
             toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(responsePayloads))
         };
     }
 
+    function collectAgentCompletionInfo(payload, previous = {}) {
+        const response = payload?.response && typeof payload.response === "object" ? payload.response : payload;
+        const usage = response?.usage || payload?.message?.usage || {};
+        const finishReason = payload?.choices?.[0]?.finish_reason || payload?.delta?.stop_reason
+            || payload?.stop_reason || payload?.message?.stop_reason || previous.finishReason || "";
+        const incompleteReason = response?.incomplete_details?.reason || previous.incompleteReason || "";
+        const outputTokens = usage.output_tokens ?? usage.completion_tokens ?? previous.outputTokens;
+        const reasoningTokens = usage.output_tokens_details?.reasoning_tokens
+            ?? usage.completion_tokens_details?.reasoning_tokens ?? previous.reasoningTokens;
+        return { ...previous, finishReason, incompleteReason, status: response?.status || previous.status || "",
+            ...(Number.isFinite(outputTokens) ? { outputTokens } : {}),
+            ...(Number.isFinite(reasoningTokens) ? { reasoningTokens } : {}),
+            tokenLimited: ["length", "max_tokens", "max_output_tokens"].includes(finishReason)
+                || ["max_tokens", "max_output_tokens"].includes(incompleteReason) };
+    }
+
     function appendAgentHiddenAssistant(chat, rawText, model, reasoning, options = {}) {
-        if (!rawText && !reasoning) return;
+        if (!rawText && !reasoning && !options.responsesReasoning) return;
         const message = {
             role: "assistant",
             content: String(rawText || ""),
             model,
             reasoning: ToolCallNormalizer.stripReasoningSections(String(reasoning || "")),
+            ...(options.responsesReasoning ? { responsesReasoning: options.responsesReasoning } : {}),
             hidden: true,
             agentToolResponse: true,
             agentThinking: options.agentThinking === true,
+            ...(options.gatewayThinkingId ? { gatewayThinkingId: options.gatewayThinkingId } : {}),
             thinkingDurationMs: Math.max(0, Number(options.thinkingDurationMs || 0))
         };
         chat.messages.push(message);
@@ -1194,7 +1253,9 @@
         const durationMs = Math.max(0, Date.now() - Number(row.thinkingStartedAt || Date.now()));
         const agentThinking = row.finishThinking(durationMs);
         return appendAgentHiddenAssistant(chat, result.text || "", model, reasoning, {
+            responsesReasoning: result.responsesReasoning,
             agentThinking,
+            gatewayThinkingId: row.gatewayThinkingId,
             thinkingDurationMs: durationMs
         });
     }
@@ -1227,6 +1288,20 @@
             const wrapper = document.getElementById("messages-wrapper");
             if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
         }
+        return message;
+    }
+
+    function appendAgentRecoveryStatus(chat, text, model, failed = false) {
+        // Fixed application messages must remain visible even when the model's
+        // malformed protocol text cannot safely pass the normal prose renderer.
+        const message = { role: "assistant", content: text, model, agentDisplayOnly: true,
+            agentRecovery: true, agentSegment: !failed, agentFinal: failed, ...(failed ? { failed: true } : {}) };
+        chat.messages.push(message);
+        appendMessageToUI("assistant", text, model, failed, "", [], [], "", {
+            agentFinal: failed, agentSegment: !failed, agentMessage: true
+        });
+        chat.updatedAt = Date.now();
+        persistAgentChats();
         return message;
     }
 
@@ -1444,24 +1519,49 @@
         ].filter(part => part !== "").join("\n");
     }
 
-    async function requestAgentProtocolCorrection(chat, model, rawText) {
-        const evidence = typeof ToolCallNormalizer.extractToolCallEvidence === "function"
+    async function requestAgentProtocolCorrection(chat, model, rawText, recovery = {}) {
+        const evidence = recovery.malformedProtocol && typeof ToolCallNormalizer.extractToolCallEvidence === "function"
             ? ToolCallNormalizer.extractToolCallEvidence(rawText)
-            : String(rawText || "").trim().slice(0, 2000);
-        const diagnostics = typeof ToolCallNormalizer.diagnoseToolCallResponse === "function"
+            : "";
+        const knownRecovery = !recovery.malformedProtocol && (recovery.toolFailure ? {
+            issue: "tool_execution_failed", location: "tool results",
+            suggestion: "根据实际失败的工具结果修复问题；成功声明必须以已验证的执行结果为依据。"
+        } : recovery.missingFinal ? {
+            issue: "missing_final_answer", location: "assistant output",
+            suggestion: "工具调用已被识别，但用户还没有收到完整结果；先输出实际最终答复，再调用 finish_task。"
+        } : recovery.planOnly ? {
+            issue: "repeated_plan_without_progress", location: "agent plan",
+            suggestion: "计划已经成功更新；继续执行下一步实际工作，或直接输出最终结果，不必重新修复已成功的工具语法。"
+        } : recovery.tokenLimited ? {
+            issue: "output_token_limit", location: "model response",
+            suggestion: "输出受到服务长度限制；减少重复思考并继续提供尚未输出的实际结果。"
+        } : recovery.reasoningOnly ? {
+            issue: "reasoning_without_output", location: "assistant output",
+            suggestion: "思考已接收，但正文和可执行工具均为空；请在实际输出通道提供答案或调用工具。"
+        } : {
+            issue: "empty_response", location: "assistant output",
+            suggestion: "尚未收到可显示的正文或可执行工具；请提供实际输出。"
+        });
+        const diagnostics = knownRecovery || (typeof ToolCallNormalizer.diagnoseToolCallResponse === "function"
             ? ToolCallNormalizer.diagnoseToolCallResponse(rawText)
             : {
                 issue: evidence ? "malformed_or_unsupported_tool_call" : "no_tool_call",
                 location: evidence ? "tool-call fragment" : "response",
                 suggestion: "Return a complete standalone JSON tool call using the exact local tool name and argument schema."
-            };
+            });
         const errorText = [
-            "Agent 协议诊断：模型返回内容未能执行。请根据以下诊断修复后重试。",
+            recovery.malformedProtocol ? "Agent 协议诊断：模型返回内容未能执行。请根据以下诊断修复后重试。" : "Agent 执行状态提示：请根据当前实际结果继续完成任务。",
+            recovery.reasoningOnly ? "上一轮只返回了思考，没有实际正文或工具调用。不要继续仅在思考通道讨论计划；请在实际正文通道输出用户所需的答案，必要时发出真实工具调用。" : "",
+            recovery.missingFinal ? "你请求结束任务，但尚未提供可显示的最终答复。请实际输出完整答案，再发出终止调用；不要只描述接下来打算如何回答。" : "",
+            recovery.planOnly ? "更新计划只是记录步骤，不代表已完成用户任务。请继续执行实际工作或直接给出最终答复，不要重复更新同一计划。" : "",
+            recovery.tokenLimited ? "服务返回了输出长度限制标记。请减少重复思考，继续输出尚未提供的实际答案；不要把被截断的输出当成已完成。" : "",
+            recovery.toolFailure ? `本轮结束调用之前的实际工具失败：${recovery.toolFailure}。请先根据真实失败结果修复或说明无法完成的原因，再输出经结果核实的最终答复；不要重复之前未经验证的成功声明。` : "",
+            "下一轮必须产生实际用户可见的结果或可执行工具输出。思考中的工具意图不会被执行，思考本身也不会替代最终答案。",
             `错误类型：${diagnostics.issue}`,
             `错误位置：${diagnostics.location}`,
             `修复建议：${diagnostics.suggestion}`,
-            evidence ? `本次错误的工具调用具体内容：\n${evidence}` : `本次模型原始响应（未检测到工具标记）：\n${String(rawText || "").trim().slice(0, 4000) || "（空响应）"}`
-        ].join("\n\n");
+            recovery.malformedProtocol ? (evidence ? `本次错误的工具调用具体内容：\n${evidence}` : `本次模型原始响应：\n${String(rawText || "").trim().slice(0, 4000) || "（空响应）"}`) : ""
+        ].filter(Boolean).join("\n\n");
         chat.messages.push({
             role: "tool",
             name: "agent_protocol",
@@ -1477,20 +1577,72 @@
         await persistAgentToolMessage(chat, message);
     }
 
-    async function requestAgentLoop(model, chat) {
+    async function requestAgentLoop(model, chat, options = {}) {
         if (!chat?.agentEnabled) return requestAI("", model, chat);
-        if (isAgentTaskRunning()) return;
-        if (!(await refreshAgentWorkspace(chat))) return;
-            agentTaskChatId = chat.id;
-            if (typeof updateSettingsLocks === "function") updateSettingsLocks();
+        if (isAgentTaskRunning()) {
+            options.onReady?.(false);
+            return;
+        }
+        // Reserve the active chat before awaiting IPC so a second send or chat
+        // switch cannot start a competing task during workspace validation.
+        agentTaskChatId = chat.id;
+        agentTaskPreparing = true;
         agentStopRequested = false;
-        startAgentTaskTimer();
         isGenerating = true;
+        if (typeof updateSettingsLocks === "function") updateSettingsLocks();
+        let workspaceReady = false;
+        try { workspaceReady = await refreshAgentWorkspace(chat); }
+        catch (error) { appendLog("error", `Agent 工作区检查失败：${error.message}`); }
+        if (!workspaceReady || agentStopRequested || currentAgentChat() !== chat) {
+            agentTaskChatId = null;
+            agentTaskPreparing = false;
+            isGenerating = false;
+            if (typeof updateSettingsLocks === "function") updateSettingsLocks();
+            options.onReady?.(false);
+            return;
+        }
+        agentTaskPreparing = false;
+        if (options.onReady?.(true) === false) {
+            agentTaskChatId = null;
+            isGenerating = false;
+            if (typeof updateSettingsLocks === "function") updateSettingsLocks();
+            return;
+        }
+        startAgentTaskTimer();
         document.getElementById("send-btn")?.classList.add("hidden");
         document.getElementById("stop-btn")?.classList.remove("hidden");
         let thinkingRow = appendAgentThinkingRow();
         let invalidResponses = 0;
         let emptyResponses = 0;
+        let missingFinalResponses = 0;
+        let planOnlyResponses = 0;
+        let finishBatchFailures = 0;
+        let answerFloorIndex = 0;
+        const resetUserTurn = () => {
+            invalidResponses = 0;
+            emptyResponses = 0;
+            missingFinalResponses = 0;
+            planOnlyResponses = 0;
+            finishBatchFailures = 0;
+            answerFloorIndex = chat.messages.reduce((latest, message, index) => message?.role === "user" ? index + 1 : latest, 0);
+        };
+        const latestVisibleAnswer = () => {
+            for (let index = chat.messages.length - 1; index >= answerFloorIndex; index -= 1) {
+                const message = chat.messages[index];
+                if (message?.role === "user") break;
+                // A prior status update cannot become the final answer after
+                // subsequent real work. Plans and protocol reminders do not
+                // change the result, but every other tool needs fresh prose.
+                if (message?.role === "tool" && !["update_plan", "agent_protocol", "finish_task"]
+                    .includes(String(message.toolName || message.name || ""))) break;
+                if (message?.role === "assistant" && !message.hidden && !message.agentRecovery && !message.failed
+                    && String(message.content || "").trim()
+                    && !ToolCallNormalizer.hasMalformedToolCall(message.content)
+                    && AgentProtocol.stripToolCallsForDisplay(message.content)) return message;
+            }
+            return null;
+        };
+        resetUserTurn();
         let compactionCheckedAt = 0;
         try {
             while (!agentStopRequested) {
@@ -1506,6 +1658,7 @@
                     try {
                         result = await requestAgentModel(chat, model, {
                     statusRow: thinkingRow,
+                    onUserMessagesConsumed: resetUserTurn,
                     onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
                         });
                         window.agentReconnectNotice = "";
@@ -1540,12 +1693,14 @@
                 if (parsed.calls.length > MAX_TOOL_CALLS_PER_RESPONSE) {
                     throw new Error(`单次模型回复包含 ${parsed.calls.length} 个工具调用，超过 30 个上限，Agent 已终止`);
                 }
-                if (!parsed.calls.length) {
+                if (!parsed.calls.length || parsed.hasMalformedToolCall) {
+                    planOnlyResponses = 0;
                     const responseText = parsed.hasMalformedToolCall
                         ? ""
                         : String(parsed.text || "").trim();
-                    if (responseText && !parsed.hasMalformedToolCall) {
-                        appendAgentVisibleText(chat, responseText, model, "", true);
+                    const visibleResponse = responseText && !parsed.hasMalformedToolCall
+                        ? appendAgentVisibleText(chat, responseText, model, "", !result.completion?.tokenLimited) : null;
+                    if (visibleResponse && !result.completion?.tokenLimited) {
                         const finishMessage = {
                             role: "tool",
                             name: "finish_task",
@@ -1560,25 +1715,32 @@
                         await persistAgentToolMessage(chat, finishMessage);
                         break;
                     }
-                    const isEmptyResponse = !parsed.hasMalformedToolCall && !responseText;
+                    const isEmptyResponse = !parsed.hasMalformedToolCall && (!visibleResponse || result.completion?.tokenLimited);
                     if (isEmptyResponse) {
                         emptyResponses += 1;
                         invalidResponses = 0;
                         if (emptyResponses >= MAX_CONSECUTIVE_EMPTY_RESPONSES) {
-                            appendAgentVisibleText(chat, `模型连续 ${MAX_CONSECUTIVE_EMPTY_RESPONSES} 次返回空回复，Agent 重试失败，循环已终止。`, model, "", true);
+                            const cause = result.completion?.tokenLimited ? "输出因长度限制提前结束"
+                                : result.reasoning ? "只返回思考，未提供实际答复" : "未提供可显示的正文或可执行工具";
+                            appendAgentRecoveryStatus(chat, `模型连续 ${MAX_CONSECUTIVE_EMPTY_RESPONSES} 次${cause}，本轮任务未完成。请重试或检查当前模型接口。`, model, true);
                             break;
                         }
+                        const cause = result.completion?.tokenLimited ? "模型输出因长度限制提前结束"
+                            : result.reasoning ? "模型只返回了思考，尚未提供实际答复" : "模型尚未返回可显示的正文或可执行工具";
+                        appendAgentRecoveryStatus(chat, `${cause}，正在请求实际输出（${emptyResponses}/${MAX_CONSECUTIVE_EMPTY_RESPONSES}）。`, model);
                     } else {
                         emptyResponses = 0;
                         invalidResponses += 1;
                     }
                     if (invalidResponses >= MAX_CONSECUTIVE_INVALID_RESPONSES) {
-                        const finalResponseText = parsed.text || "模型连续返回无效回复。";
-                        appendAgentVisibleText(chat, `${finalResponseText}\n\nAgent 协议错误：模型未调用 finish_task，循环已终止。`, model, "", true);
+                        appendAgentRecoveryStatus(chat, "模型连续返回无法执行的工具协议，本轮任务未完成。请重试或检查模型兼容性。", model, true);
                         break;
                     }
-                    if (responseText && invalidResponses < MAX_CONSECUTIVE_INVALID_RESPONSES) appendAgentVisibleText(chat, responseText, model, "", false);
-                    await requestAgentProtocolCorrection(chat, model, result.text);
+                    await requestAgentProtocolCorrection(chat, model, result.text, {
+                        malformedProtocol: Boolean(parsed.hasMalformedToolCall),
+                        reasoningOnly: Boolean(result.reasoning) && !ToolCallNormalizer.stripReasoningSections(String(result.text || "")).trim(),
+                        tokenLimited: result.completion?.tokenLimited
+                    });
                     thinkingRow = appendAgentThinkingRow();
                     continue;
                 }
@@ -1592,6 +1754,11 @@
                         .join("\n\n")
                     : "";
                 let finalTextAdded = false;
+                let lastVisibleText = null;
+                let retryMissingFinal = false;
+                const deferredAnswerSegments = [];
+                const deferAnswer = finishSegmentIndex >= 0 && parsed.segments.slice(0, finishSegmentIndex)
+                    .some(segment => segment.type === "tool_call" && segment.call?.name !== "finish_task");
                 // Tool rows are rendered immediately in segment order so the transcript
                 // stays readable, then executed as one batch (reads in parallel).
                 const pendingToolItems = [];
@@ -1600,8 +1767,13 @@
                     if (segment.type === "text") {
                         const nextSegment = parsed.segments[index + 1];
                         const isFinalText = !trailingFinalText && nextSegment?.type === "tool_call" && nextSegment.call?.name === "finish_task";
-                        appendAgentVisibleText(chat, segment.text, model, "", isFinalText);
-                        if (isFinalText) finalTextAdded = true;
+                        if (deferAnswer) {
+                            deferredAnswerSegments.push({ text: segment.text, final: isFinalText });
+                            continue;
+                        }
+                        const displayed = appendAgentVisibleText(chat, segment.text, model, "", isFinalText);
+                        if (displayed) lastVisibleText = displayed;
+                        if (isFinalText && displayed) finalTextAdded = true;
                         continue;
                     }
                     const call = segment.call;
@@ -1609,7 +1781,59 @@
                         // Reads emitted before finish_task still run; the model may batch
                         // its last inspections with the terminal call.
                         if (!(await executeAgentToolBatch(chat, pendingToolItems))) return;
+                        const failedTools = pendingToolItems.filter(item => item.message.status === "error" || item.message.result?.success === false);
                         pendingToolItems.length = 0;
+                        if (failedTools.length) {
+                            finishBatchFailures += 1;
+                            const failedNames = [...new Set(failedTools.map(item => item.call.name))].join("、");
+                            const rejectedFinish = prepareAgentToolMessage(chat, call);
+                            await finalizeAgentToolResult(chat, call, rejectedFinish, { success: false, incomplete: true,
+                                error: `本轮实际工具失败（${failedNames}），未接受未经结果核实的结束请求` });
+                            const exhausted = finishBatchFailures >= MAX_CONSECUTIVE_INVALID_RESPONSES;
+                            appendAgentRecoveryStatus(chat, exhausted
+                                ? `实际工具连续执行失败（${failedNames}），本轮任务未完成。请检查失败信息后重试。`
+                                : `实际工具执行失败（${failedNames}），此前的成功声明尚未验证，正在请求根据失败结果重新处理。`, model, exhausted);
+                            // A stale answer from before this failure cannot justify
+                            // a later bare finish. Require a fresh result explanation.
+                            answerFloorIndex = chat.messages.length;
+                            if (exhausted) return;
+                            await requestAgentProtocolCorrection(chat, model, result.text, { toolFailure: failedNames });
+                            thinkingRow = appendAgentThinkingRow();
+                            retryMissingFinal = true;
+                            break;
+                        }
+                        for (const segment of deferredAnswerSegments) {
+                            const displayed = appendAgentVisibleText(chat, segment.text, model, "", segment.final);
+                            if (displayed) lastVisibleText = displayed;
+                            if (segment.final && displayed) finalTextAdded = true;
+                        }
+                        if (trailingFinalText) {
+                            const displayed = appendAgentVisibleText(chat, trailingFinalText, model, "", true);
+                            if (displayed) { lastVisibleText = displayed; finalTextAdded = true; }
+                        }
+                        const existingAnswer = lastVisibleText || latestVisibleAnswer();
+                        if (!finalTextAdded && existingAnswer) {
+                            existingAnswer.agentFinal = true;
+                            existingAnswer.agentSegment = false;
+                            finalTextAdded = true;
+                        }
+                        if (!finalTextAdded) {
+                            missingFinalResponses += 1;
+                            const rejectedFinish = prepareAgentToolMessage(chat, call);
+                            await finalizeAgentToolResult(chat, call, rejectedFinish, { success: false, incomplete: true,
+                                error: "模型未提供实际最终答复，未接受本次结束请求" });
+                            if (missingFinalResponses >= MAX_CONSECUTIVE_INVALID_RESPONSES) {
+                                appendAgentRecoveryStatus(chat, "模型反复请求结束任务，但没有提供可显示的最终答复，本轮任务未完成。请重试或更换兼容模型。", model, true);
+                                return;
+                            }
+                            appendAgentRecoveryStatus(chat, `模型发出了结束信号，但尚未提供最终答复，正在请求补全（${missingFinalResponses}/${MAX_CONSECUTIVE_INVALID_RESPONSES}）。`, model);
+                            await requestAgentProtocolCorrection(chat, model, result.text, { missingFinal: true,
+                                reasoningOnly: Boolean(result.reasoning) && !ToolCallNormalizer.stripReasoningSections(String(result.text || "")).trim(),
+                                tokenLimited: result.completion?.tokenLimited });
+                            thinkingRow = appendAgentThinkingRow();
+                            retryMissingFinal = true;
+                            break;
+                        }
                         const finishMessage = {
                             role: "tool",
                             name: "finish_task",
@@ -1622,11 +1846,6 @@
                         };
                         finishMessage.taskDurationMs = finishAgentTaskTimer(chat, finishMessage);
                         chat.messages.push(finishMessage);
-                        if (trailingFinalText) {
-                            appendAgentVisibleText(chat, trailingFinalText, model, "", true);
-                            finalTextAdded = true;
-                        }
-                        if (!finalTextAdded) appendAgentVisibleText(chat, "任务已完成。", model, "", true);
                         appendFinishTaskToFinalRow(finishMessage);
                         await persistAgentToolMessage(chat, finishMessage);
                         chat.updatedAt = Date.now();
@@ -1637,8 +1856,17 @@
                     }
                     pendingToolItems.push({ call, message: prepareAgentToolMessage(chat, call) });
                 }
+                if (retryMissingFinal) continue;
                 if (!(await executeAgentToolBatch(chat, pendingToolItems))) return;
                 if (agentStopRequested) return;
+                if (parsed.calls.every(call => call.name === "update_plan")) {
+                    planOnlyResponses += 1;
+                    if (planOnlyResponses >= MAX_CONSECUTIVE_INVALID_RESPONSES) {
+                        appendAgentRecoveryStatus(chat, "模型反复更新计划，但没有执行实际工作或提供最终答复，本轮任务未完成。请重试。", model, true);
+                        return;
+                    }
+                    if (planOnlyResponses >= 2) await requestAgentProtocolCorrection(chat, model, result.text, { planOnly: true });
+                } else planOnlyResponses = 0;
                 thinkingRow = appendAgentThinkingRow();
             }
             if (agentStopRequested) {
@@ -1666,6 +1894,7 @@
             abortController = null;
             isGenerating = false;
             agentTaskChatId = null;
+            agentTaskPreparing = false;
             if (typeof updateSettingsLocks === "function") updateSettingsLocks();
             document.getElementById("send-btn")?.classList.remove("hidden");
             document.getElementById("stop-btn")?.classList.add("hidden");
@@ -1678,8 +1907,80 @@
         }
     }
 
+    function submitGatewayAgentMessage(request = {}) {
+        const chat = currentAgentChat();
+        const text = typeof request.text === "string" ? request.text.trim() : "";
+        const reject = error => Promise.resolve({ accepted: false, error });
+        const expired = () => Number.isFinite(request.expiresAt) && Date.now() > request.expiresAt;
+        if (expired()) return reject("消息投递已超时，请刷新后重试");
+        if (request.device?.role !== "write") return reject("该设备没有追加消息权限");
+        if (!chat?.agentEnabled || String(request.chatId || "") !== String(chat.id)) {
+            return reject("电脑端当前会话已改变，请刷新后重试");
+        }
+        if (!text || text.length > 8000) return reject("消息须为 1 至 8000 个字符");
+        if (contextCompactionRunning || isImageMode || window._audioChatRunning || window._desktopWorkRunning) {
+            return reject("电脑端正在执行其他操作，请稍后重试");
+        }
+        if (agentTaskPreparing || (isGenerating && !isAgentTaskRunning(chat.id))) {
+            return reject("电脑端正在准备任务，请稍后重试");
+        }
+        if (Array.isArray(window.queuedAgentMessages)) {
+            for (let index = window.queuedAgentMessages.length - 1; index >= 0; index -= 1) {
+                const entry = window.queuedAgentMessages[index];
+                if (entry && typeof entry === "object" && String(entry.gatewayChatId || "") !== String(chat.id)) {
+                    window.queuedAgentMessages.splice(index, 1);
+                }
+            }
+        }
+        if (!Array.isArray(window.queuedAgentMessages) || window.queuedAgentMessages.length >= 20) {
+            return reject("待处理消息已达上限，请等待 Agent 处理");
+        }
+        const queueText = () => {
+            window.queuedAgentMessages.push({ content: text, gatewayChatId: String(chat.id) });
+            if (!chat.messages.length) {
+                chat.title = text.slice(0, 20);
+                setActiveChatTitle(chat);
+            }
+            if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
+        };
+        if (isAgentTaskRunning(chat.id)) {
+            if (expired()) return reject("消息投递已超时，请刷新后重试");
+            queueText();
+            return Promise.resolve({ accepted: true, queued: true });
+        }
+        const model = document.getElementById("model-select")?.value;
+        if (!model) return reject("请先在电脑端选择模型");
+        // The original Agent queue consumes plain task text. It never touches the
+        // local composer or interprets /compact, /canvas and other UI commands.
+        return new Promise(resolve => {
+            requestAgentLoop(model, chat, {
+                onReady: ready => {
+                    if (!ready) { resolve({ accepted: false, error: "电脑端工作区不可用或任务已取消" }); return; }
+                    if (expired()) { resolve({ accepted: false, error: "消息投递已超时，请刷新后重试" }); return false; }
+                    queueText();
+                    resolve({ accepted: true, queued: false });
+                    return true;
+                }
+            }).catch(() => resolve({ accepted: false, error: "电脑端未能启动 Agent 任务" }));
+        });
+    }
+
     function stopAgentTask() {
         agentStopRequested = true;
+        if (Array.isArray(window.queuedAgentMessages)) {
+            let cancelled = 0;
+            for (let index = window.queuedAgentMessages.length - 1; index >= 0; index -= 1) {
+                const entry = window.queuedAgentMessages[index];
+                if (entry && typeof entry === "object" && entry.gatewayChatId) {
+                    window.queuedAgentMessages.splice(index, 1);
+                    cancelled += 1;
+                }
+            }
+            if (cancelled) {
+                if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
+                showVoiceNotification(`已取消 ${cancelled} 条待处理远程消息`, false, 3000);
+            }
+        }
         if (abortController) abortController.abort();
         if (agentCurrentExecutionId) window.electronAPI?.cancelAgentExecution?.(agentCurrentExecutionId).catch(() => {});
         for (const executionId of agentShellProgressByExecution.keys()) {
@@ -1781,4 +2082,12 @@
     window.populateAgentSettings = populateAgentSettings;
     window.saveAgentCommandSettings = saveAgentCommandSettings;
     window.requestAgentLoop = requestAgentLoop;
+    window.buildAgentMessagesForContextEstimate = chat => buildAgentMessages(chat, { estimateOnly: true });
+    window.submitGatewayAgentMessage = submitGatewayAgentMessage;
+    // The gateway reads only the active reasoning text, never raw model payloads.
+    window.getGatewayAgentThinkingState = () => agentLiveThinkingRow && agentTaskChatId ? {
+        chatId: String(agentTaskChatId), id: agentLiveThinkingRow.gatewayThinkingId,
+        reasoning: agentLiveThinkingRow.reasoningText,
+        durationMs: Math.max(0, Date.now() - agentLiveThinkingRow.thinkingStartedAt), status: "running"
+    } : null;
 })();

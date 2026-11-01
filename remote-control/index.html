@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#171b19">
+    <title>AIUI · 远程 Agent</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="/marked.js" defer></script>
+    <script src="/dompurify.min.js" defer></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <section id="login-view" class="login-view">
+        <div class="login-top"><span class="brand-word">AIUI<span class="brand-dot"></span></span><button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题">◐</button></div>
+        <main class="login-card">
+            <p class="eyebrow">AIUI / 局域网网关</p>
+            <h1>连接桌面 Agent</h1>
+            <p class="login-description">查看电脑端当前任务，或追加一条消息。</p>
+            <form id="login-form">
+                <label for="device-name">设备名称</label><input id="device-name" name="deviceName" maxlength="60" placeholder="例如：我的手机" autocomplete="nickname" required>
+                <label for="access-code">网关访问码</label><input id="access-code" name="code" type="password" maxlength="128" placeholder="输入电脑端控制台中的访问码" autocomplete="current-password" required spellcheck="false" autocapitalize="none">
+                <div id="login-error" class="form-error" role="alert" hidden></div>
+                <button id="login-button" class="button primary" type="submit">验证并连接 <span aria-hidden="true">→</span></button>
+            </form>
+            <p class="login-footnote">访问码由电脑端网关控制台提供。权限由电脑端管理。</p>
+        </main>
+        <footer class="login-footer">AIUI V8.1.0</footer>
+    </section>
+    <section id="workspace-view" class="workspace-view" hidden>
+        <header class="workspace-header"><div class="header-brand"><span class="brand-word">AIUI<span class="brand-dot"></span></span><span id="device-label" class="remote-label" title="局域网安全验证已完成">远程 Agent</span></div><div class="header-actions"><span id="permission-badge" class="permission-badge">只读</span><button class="theme-toggle" type="button" aria-label="切换主题" title="切换主题">◐</button><button id="logout-button" class="button quiet" type="button">断开</button></div></header>
+        <main class="workspace-main">
+            <div class="session-heading"><h1 id="session-title" title="等待电脑端会话">等待电脑端会话</h1></div>
+            <div class="activity-bar"><span id="connection-state" class="connection-state"><i></i>已连接</span><span id="activity-indicator" hidden></span><strong id="activity-title" class="sr-only">等待当前会话</strong><span id="activity-detail" class="activity-detail">等待电脑端打开 Agent 会话</span><span id="last-sync" class="last-sync">正在同步</span></div>
+            <div id="connection-error" class="connection-error" role="status" aria-live="polite" hidden></div>
+            <div id="send-result" class="send-result" role="status" aria-live="polite" hidden></div>
+            <div class="conversation-container"><div id="messages" class="messages" tabindex="0" aria-label="当前会话消息"><div class="conversation-empty"><h2>等待电脑端的当前会话</h2><p>在电脑端打开 Agent 会话后自动同步。</p></div></div><button id="scroll-latest" type="button" class="scroll-latest" hidden>回到最新 ↓</button></div>
+            <div id="readonly-notice" class="readonly-notice">只读连接</div>
+            <form id="message-form" class="message-form" hidden>
+                <div class="composer"><textarea id="message-input" placeholder="追加消息，或继续下一轮任务…" rows="1" maxlength="8000" aria-label="追加消息"></textarea><button id="send-button" class="send-button" type="submit" aria-label="发送消息">↑</button></div>
+            </form>
+        </main>
+    </section>
+</body>
+</html>

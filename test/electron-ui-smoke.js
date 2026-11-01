@@ -49,6 +49,7 @@ async function captureWindow(width, height, fileName, prepare) {
         opacity: 0,
         webPreferences: {
             preload: path.join(projectRoot, "preload.js"),
+            backgroundThrottling: false,
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: false
@@ -84,13 +85,32 @@ async function captureWindow(width, height, fileName, prepare) {
         hasAgentTimeoutSetting: Boolean(document.getElementById('agent-shell-timeout-seconds')),
         hasLegacyApprovalPrefixInput: Boolean(document.getElementById('agent-command-approval-prefix')),
         attachMenuClass: document.getElementById('attach-menu')?.className || '',
+        contextEstimateText: document.getElementById('token-estimate')?.textContent || '',
+        contextBreakdownRows: document.querySelectorAll('#context-breakdown-rows .context-breakdown-row').length,
+        contextBreakdownVisible: getComputedStyle(document.getElementById('context-breakdown')).visibility === 'visible',
+        contextBreakdownInBody: document.getElementById('context-breakdown').parentElement === document.body,
+        contextEstimateExpanded: document.getElementById('token-estimate')?.getAttribute('aria-expanded') === 'true',
+        contextBreakdownWithinViewport: (() => {
+            const rect = document.getElementById('context-breakdown').getBoundingClientRect();
+            return rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth + 1 && rect.bottom <= window.innerHeight + 1;
+        })(),
+        contextBreakdownRect: (() => {
+            const rect = document.getElementById('context-breakdown').getBoundingClientRect();
+            return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+        })(),
+        contextBreakdownStyle: (() => {
+            const element = document.getElementById('context-breakdown');
+            const style = getComputedStyle(element);
+            return { left: style.left, top: style.top, visibility: style.visibility, opacity: style.opacity, zIndex: style.zIndex };
+        })(),
+        contextBreakdownHasReasoningNote: (document.getElementById('context-breakdown-note')?.textContent || '').includes('reasoning'),
         settingsModalClass: document.getElementById('settings-modal')?.className || '',
         agentSettingsClass: document.getElementById('section-agent')?.className || '',
         commandModeVisible: document.getElementById('agent-command-mode-bar')?.classList.contains('visible') || false,
         workspaceText: document.getElementById('active-chat-workspace')?.textContent || '',
         canvasDisplay: getComputedStyle(document.getElementById('canvas-toggle-btn')).display,
         inputTopRightRadius: getComputedStyle(document.querySelector('.input-area')).borderTopRightRadius,
-        agentToolRows: document.querySelectorAll('.agent-tool-row-wrapper').length,
+        agentToolRows: document.querySelectorAll('.agent-tool-row-wrapper:not(.agent-thinking-row)').length,
         agentSegmentRows: document.querySelectorAll('.agent-segment-row').length,
         agentPreviewLines: document.querySelectorAll('.agent-tool-preview-line').length,
         agentToolCollapsed: document.querySelector('.agent-tool-row.collapsed') !== null,
@@ -209,8 +229,21 @@ app.whenReady().then(async () => {
         });
         await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
         baseUrl = `http://127.0.0.1:${server.address().port}`;
-        const main = await captureWindow(1200, 800, "agent-main.png", function () {
-            toggleAttachMenu({ stopPropagation() {} });
+        const main = await captureWindow(1200, 800, "agent-main.png", async function () {
+            closeSetupGuide();
+            const input = document.getElementById('user-input');
+            input.value = '验证上下文 token 估算';
+            updateTokenEstimate();
+            await new Promise(resolve => setTimeout(resolve, 450));
+            document.getElementById('token-estimate')?.focus();
+        });
+        const contextMobile = await captureWindow(390, 844, "context-breakdown-mobile.png", async function () {
+            closeSetupGuide();
+            const input = document.getElementById('user-input');
+            input.value = '移动端上下文估算';
+            updateTokenEstimate();
+            await new Promise(resolve => setTimeout(resolve, 450));
+            document.getElementById('token-estimate')?.focus();
         });
         const settings = await captureWindow(390, 844, "agent-settings-mobile.png", function () {
             toggleSettings();
@@ -412,7 +445,7 @@ app.whenReady().then(async () => {
             window.__agentFallbackRequests = requests;
             window.__agentFallbackHasProtocolError = chat.messages.some(message => message?.toolName === 'agent_protocol');
         });
-        const result = { main, settings, workspaceTrust, autoCompaction, active, mixedProtocol, fallback, consoleErrors };
+        const result = { main, contextMobile, settings, workspaceTrust, autoCompaction, active, mixedProtocol, fallback, consoleErrors };
         console.log(JSON.stringify(result, null, 2));
         if (!main.state.hasProtocol || !main.state.hasAgentEntry || !main.state.hasCommandMode || main.state.hasLegacyApprovalPrefixInput || !settings.state.hasAgentSettings || !settings.state.hasAgentDiffSetting || !settings.state.hasAgentDetailBehaviorSetting || !settings.state.hasAgentTimeoutSetting) {
             process.exitCode = 1;
@@ -424,6 +457,12 @@ app.whenReady().then(async () => {
             process.exitCode = 1;
         }
         if (main.state.canvasDisplay !== "none" || main.state.inputTopRightRadius === "0px") {
+            process.exitCode = 1;
+        }
+        if (!main.state.contextEstimateText.includes('预估 tokens:') || main.state.contextBreakdownRows < 2 || !main.state.contextBreakdownVisible || !main.state.contextBreakdownWithinViewport || !main.state.contextBreakdownInBody || !main.state.contextEstimateExpanded || !main.state.contextBreakdownHasReasoningNote) {
+            process.exitCode = 1;
+        }
+        if (!contextMobile.state.contextBreakdownVisible || !contextMobile.state.contextBreakdownWithinViewport || !contextMobile.state.contextBreakdownInBody || contextMobile.state.bodyWidth > contextMobile.state.viewportWidth + 2 || contextMobile.state.contextBreakdownRows < 2) {
             process.exitCode = 1;
         }
         if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {

@@ -41,6 +41,7 @@ const {
     scanWorkspaceTextFiles
 } = require("./agent-tools");
 const AgentSearch = require("./agent-search");
+const { registerAgentGateway } = require("./gateway-electron");
 
 const PRESET_TEXTS_A = ["嗯……", "哦？", "欸？", "哦！"];
 const PRESET_TEXTS_B = ["我想想……", "等一下啊……"];
@@ -69,6 +70,14 @@ const agentBackgroundShells = new AgentBackgroundShellManager();
 
 const FETCH_PUBLIC_TIMEOUT_MS = 30000;
 const FETCH_PUBLIC_MAX_BYTES = 2000000;
+
+const agentGateway = registerAgentGateway({
+    app, BrowserWindow, ipcMain,
+    getMainWindow: () => mainWindow,
+    isMainSender,
+    isRendererReady: () => mainRendererReady,
+    hasConversationWindow
+});
 
 /**
  * Fetches a public URL with a browser-like User-Agent, following redirects.
@@ -437,6 +446,7 @@ function showMainWindow() {
 function createMainWindow(show = true) {
     mainRendererReady = false;
     mainWindow = createWindow("index.html", { show });
+    agentGateway.bindMainWindow(mainWindow);
     mainWindow.on("close", (event) => {
         if (isQuitting) return;
         event.preventDefault();
@@ -1268,6 +1278,7 @@ function trayTemplate() {
     const collaborationDisabled = hasConversationWindow();
     return [
         { label: "打开主页面", click: showMainWindow },
+        { label: "Agent 网关", click: () => agentGateway.openConsole().catch(error => console.warn(`[AgentGateway] ${error.message}`)) },
         { label: "开启新语音聊天", enabled: !collaborationDisabled, click: () => sendMainCommand("new-audio-chat") },
         { label: "开启新桌面协作", enabled: !collaborationDisabled, click: () => sendMainCommand("new-desktop-work") },
         { label: "从最近会话开启语音聊天", enabled: !collaborationDisabled, click: () => sendMainCommand("recent-audio-chat") },
@@ -1336,6 +1347,7 @@ if (!gotTheLock) {
 
 app.on("before-quit", () => {
     isQuitting = true;
+    agentGateway.dispose();
     clearDesktopShortcut();
     // Background shells (dev servers, watchers) must not outlive the app.
     agentBackgroundShells.stopAll();

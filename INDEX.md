@@ -14,6 +14,11 @@
 | `desktopwork.html` | 只是 `location.replace('./audiochat.html?mode=desktop')` 的空壳重定向 |
 | `main.js` | Electron 主进程：窗口管理、托盘、自动更新、科大讯飞 STT、Fish Audio TTS、IPC |
 | `preload.js` | 预加载桥，把主进程能力暴露为 `window.electronAPI.*` |
+| `agent-gateway.js` | 独立 HTTP 网关：网卡排序、认证、轮询、权限、设备管理与配置持久化 |
+| `gateway-electron.js` / `gateway-preload.js` | 网关与 Electron 的受限 IPC、独立控制台窗口与生命周期 |
+| `gateway-renderer.js` | 当前 Agent 会话的脱敏摘要投影、远程追加消息桥接 |
+| `gateway-console.html` / `.js` / `.css` | 桌面网关控制台（独立窗口，仅本机管理） |
+| `remote-control/` | 独立局域网浏览器界面，仅通过网关 HTTP API 工作 |
 
 **核心结论**：`index.html` 是独立、自包含的前端（浏览器直接打开也能跑基础功能）；它通过 `window.electronAPI` 与 Electron 主进程通信。`voicechat-api.js` 只被 `audiochat.html` 使用，**不被** `index.html` 直接引用，但它复刻了 `index.html` 内部的流式请求逻辑（见下文「代码之间的联系」）。
 
@@ -253,7 +258,7 @@
 | AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`（约 4882–5300） |
 | Claude `/v1/messages` 协议转换 | `index.html` `buildMessagesPayloadFromBase` / `extractMessagesStreamUpdate`；语音窗口对应 `voicechat-api.js` 的 `buildMessagesPayload` / `extractUpdate` |
 | API 配置档案（多组 Key 切换） | `index.html` `readApiProfiles` / `switchApiProfile` / `saveApiProfile`（约 7073 起）+ HTML `#api-profile-select` |
-| 上下文窗口进度条 | `index.html` `updateContextMeter` / `getContextWindowForModel`（约 5923 起）+ `#context-meter` |
+| 上下文 token 统计与悬停分解 | `context-estimator.js` / `tokenizer-entry.js` / `build-tokenizer.cjs`；`index.html` `updateContextMeter` / `getContextWindowForModel` + `#context-meter` |
 | Agent 阈值压缩触发 | `agent-ui.js` `compactAgentContextIfNeeded`（在 Agent Loop 每轮开头调用） |
 | AI 回复如何渲染 / Markdown / 防 XSS | `renderAssistantMarkdown` + `sanitizeHtml`（约 4610–4642） |
 | 发送消息流程 | `sendMessage`（6081）+ `requestAI`（7158） |
@@ -285,6 +290,8 @@
 | `agent-ui.js` | Agent 会话绑定、上下文组装、正文/工具顺序渲染、模型请求循环、工具结果 IndexedDB 持久化、正文内命令授权、阈值上下文压缩、可折叠 diff/命令输出和绿竖线工具状态。 |
 | `alwaysAllowedCommand.txt` | 发布包内置安全命令前缀；用户增项写入 Electron `userData/alwaysAllowedCommand.user.txt`。 |
 | `test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单、搜索解析和 Shell 单元测试。 |
+| `test/agent-live-smoke.js` | 显式启用的真实模型与工具回归；复制连接设置到临时档案，仅操作隔离工作区，退出后清理。 |
+| `test/gateway-electron-smoke.js` | 真实 Electron 网关、移动端亮暗主题、安全 Markdown、桌面队列与设备权限集成测试。 |
 
 ### 7.1.1 Agent 工具清单
 
@@ -308,9 +315,8 @@
 
 ```
 固定 system 前缀（Tool Definitions → Core Rules → 用户提示 → Environment）
-        → 历史消息与完整 Tool Result
-        → Current Time
-        → Latest User Message
+        → 按原顺序保留用户消息、模型调用与完整 Tool Result
+        → 当前计划上下文（如有）
         → 模型连续独立 JSON Tool Call
         → 主进程执行并追加 role=tool 历史
         → 再次请求模型
@@ -320,6 +326,10 @@
 单次模型回复中的工具会先在界面上按正文顺序渲染，再成批执行：标记为只读的工具（read_file_range、list_dir、glob_files、grep_files、view_image、web_search、browse_web、read_process_output、list_processes）并发运行，写操作与 shell 仍逐个串行，并在遇到写操作前先排空已积攒的只读批次，以保证"后续调用能看到先前改动"的语义。
 
 Agent 工具 JSON 不直接渲染给用户。Agent 的 `/responses` 请求使用结构化消息数组保留角色边界，不会把上下文压成带 `user:`/`assistant:` 标签的字符串。解析器将单次回复拆成有序正文段和工具段，兼容标准对象、扁平 `tool_call`、`<.../>` 和 DSML 包装，并丢弃回显的 `ToolResult` 与工具结果正文；可见 Agent 文本在进入 Markdown/KaTeX 前还会再次剥离工具对象。模型 SSE 事件按 `id` 或 `sequence_number` 去重，因此正文、工具提示和 reasoning 思考过程可以流式显示且不会在后续任务中重复 JSON。每次含 reasoning 的 Agent 模型轮次会保留独立思考记录，运行时显示文字扫描高光，完成后标题改为“思考了 N 秒”；思考详情只解析 `**加粗**`，与工具详情共用行数与默认折叠设置。固定 Agent 提示词强制所有完成任务以 `finish_task` 结束，包括无需其他工具的纯文本回答。开发者模式会记录 Agent 流数据累计字节；任一接口返回 501 时转接另一端点并显示黄色提示。工具消息不会被上下文压缩删除；Agent 自动压缩按已完成的用户任务轮次统计，内部循环调用不计数。
+
+V8.2.0 将可见思考文字与实际模型上下文分离：普通 `reasoning` / `reasoning_content` 仅用于界面展示，不回灌后续请求；Responses 端点返回的原生 `type: reasoning` item（含需原样回传的 opaque / encrypted 协议数据）仍按顺序保留。不可读取的协议数据无法在本地精确分词，界面明确标记其限制。
+
+`context-estimator.js` 按实际请求消息划分消息、工具结果、系统工具、系统提示、附件、图片与 Reasoning 项，并由 `tokenizer-entry.js` 提供对应文本计数：OpenAI 本地编码、DeepSeek V4 / V4.1 官方离线词表、Claude 旧词表参考估算及其他厂商通用参考估算。`build-tokenizer.cjs` 生成打包用的 `tokenizer-runtime.cjs`；运行所需 WASM、词表 gzip 与许可证随应用保留。图片、封装和不可读取的 reasoning 数据仍为预估，实际用量以 API 返回的 usage 为准，不根据没有依据的比例校准。
 
 ### 7.3 Electron IPC
 

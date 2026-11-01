@@ -1,17 +1,25 @@
 {
   "name": "aiui",
-  "version": "8.0.0",
+  "version": "8.2.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "prebuild": "npm run build:tokenizer",
     "build": "electron-builder --win portable nsis",
-    "test": "node --test test/agent-protocol.test.js test/agent-tools.test.js test/agent-search.test.js test/messages-endpoint.test.js test/tool-call-normalizer.test.js"
+    "build:tokenizer": "node build-tokenizer.cjs",
+    "test": "node --test test/*.test.js",
+    "test:gateway-ui": "electron test/gateway-electron-smoke.js",
+    "test:agent-live": "electron test/agent-live-smoke.js"
   },
   "devDependencies": {
+    "@anthropic-ai/tokenizer": "^0.0.4",
+    "@huggingface/tokenizers": "^0.2.0",
     "electron": "^36.9.5",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.7",
+    "gpt-tokenizer": "^4.1.0"
   },
   "build": {
     "appId": "com.jhcwcolin.aiui",
@@ -31,13 +39,22 @@
     ],
     "files": [
       "**/*",
+      "!.claude/**",
+      "!.github/**",
       "!test/**",
       "!参考.html",
       "!README.md",
+      "!INDEX.md",
+      "!package-lock.json",
+      "!build-tokenizer.cjs",
+      "!tokenizer-entry.js",
       "!screenshot/**",
       "!1.keystore",
       "!*.bat",
-      "!*.ps1"
+      "!*.ps1",
+      "!*.zip",
+      "!*.tar.*",
+      "!*.tmp"
     ],
     "win": {
       "target": [
@@ -70,12 +87,12 @@
       "artifactName": "AIUI-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "AIUI8.0.0-Release-Portable.exe"
+      "artifactName": "AIUI${version}-Release-Portable.exe"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "AIUI8.0.0-Release-Setup.exe"
+      "artifactName": "AIUI${version}-Release-Setup.exe"
     }
   },
   "dependencies": {

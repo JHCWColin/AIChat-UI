@@ -43,6 +43,84 @@
             .replace(/&gt;/gi, ">").replace(/&amp;/gi, "&");
     }
 
+    // Relays emit both <｜DSML｜invoke> and <｜｜DSML｜｜ invoke>.
+    // Keep a dedicated tag prefix so ordinary HTML is never a tool protocol.
+    function canonicalizeDsmlMarkers(value) {
+        const source = String(value || "").replace(/(?:<|&lt;)\s*(\/?)\s*[|｜]+\s*DSML\s*[|｜]+\s*([\w.-]*)([\s\S]*?)(?:>|&gt;|$)/gi,
+            (_, close, name, attrs) => `<${close}dsml${name ? `_${name.toLowerCase()}` : ""}${attrs}>`);
+        return source.replace(/(<dsml_parameter\b[^>]*\bstring\s*=\s*["']?false["']?[^>]*>)([\s\S]*?)<\/dsml>(?=\s*(?:<dsml_parameter\b|<\/dsml_invoke\b))/gi,
+            (whole, open, body) => {
+                // Repair a missing parameter name only when its typed value is
+                // valid JSON and the next structural boundary is explicit.
+                try { JSON.parse(decodeEntities(body.trim())); }
+                catch (_) { return whole; }
+                return open + body + "</dsml_parameter>";
+            });
+    }
+
+    function dsmlProtocolRanges(source) {
+        const ranges = [];
+        const stack = [];
+        const tags = /<(\/?)dsml(?:_([\w.-]+))?\b[^>]*>/gi;
+        let match;
+        while ((match = tags.exec(source))) {
+            if (!match[2] || /\/\s*>$/.test(match[0])) {
+                if (!stack.length) ranges.push({ start: match.index, end: tags.lastIndex });
+                continue;
+            }
+            const name = match[2].toLowerCase();
+            if (!match[1]) stack.push({ name, start: match.index });
+            else {
+                const index = stack.map(item => item.name).lastIndexOf(name);
+                if (index >= 0) {
+                    const root = stack[0];
+                    stack.length = index;
+                    if (!stack.length) ranges.push({ start: root.start, end: tags.lastIndex });
+                } else if (!stack.length) ranges.push({ start: match.index, end: tags.lastIndex });
+            }
+        }
+        if (stack.length) ranges.push({ start: stack[0].start, end: source.length });
+        return ranges;
+    }
+
+    function stripDsmlProtocol(value, preserveOffsets = false) {
+        const source = canonicalizeDsmlMarkers(value);
+        const ranges = dsmlProtocolRanges(source);
+        let cursor = 0;
+        let text = "";
+        for (const range of ranges) {
+            text += source.slice(cursor, range.start);
+            if (preserveOffsets) text += source.slice(range.start, range.end).replace(/[^\r\n]/g, " ");
+            cursor = range.end;
+        }
+        return text + source.slice(cursor);
+    }
+
+    function hasMalformedDsmlProtocol(source, acceptedCalls) {
+        const stack = [];
+        const tags = /<(\/?)dsml(?:_([\w.-]+))?\b[^>]*>/gi;
+        let match;
+        let invokes = 0;
+        let hasProtocol = false;
+        const hasInvoke = /<dsml_invoke\b/i.test(source);
+        while ((match = tags.exec(source))) {
+            if (!match[2]) {
+                if (hasInvoke && match[1]) return true;
+                continue;
+            }
+            hasProtocol = true;
+            const name = match[2].toLowerCase();
+            if (!["calls", "function_calls", "invoke", "parameter"].includes(name)) return true;
+            if (match[1]) {
+                if (stack.pop() !== name) return true;
+            } else {
+                if (name === "invoke") invokes += 1;
+                stack.push(name);
+            }
+        }
+        return stack.length > 0 || invokes > acceptedCalls || (hasProtocol && invokes === 0);
+    }
+
     function normalizeJsonPunctuation(value) {
         return String(value || "")
             .replace(/[｛]/g, "{").replace(/[｝]/g, "}")
@@ -76,7 +154,8 @@
         while ((match = namedParameter.exec(text))) {
             const attrs = match[1].match(/(?:name|key)\s*=\s*["']([^"']+)["']/i);
             if (!attrs) continue;
-            result[decodeEntities(attrs[1]).trim()] = parseScalar(decodeEntities(match[2]).trim());
+            const raw = decodeEntities(match[2]).trim();
+            result[decodeEntities(attrs[1]).trim()] = /\bstring\s*=\s*["']true["']/i.test(match[1]) ? raw : parseScalar(raw);
         }
         return result;
     }
@@ -102,7 +181,9 @@
                 else if (char === '"') inString = false;
                 continue;
             }
-            if (char === '"' || char === '＂' || char === '“' || char === '”') { inString = true; continue; }
+            // Quotes in surrounding prose are not JSON delimiters. Otherwise
+            // a natural-language quote can hide every later tool object.
+            if (depth > 0 && (char === '"' || char === '＂' || char === '“' || char === '”')) { inString = true; continue; }
             if (char === "{" || char === "[" || char === "｛" || char === "［") {
                 if (depth === 0) start = index;
                 depth += 1;
@@ -341,16 +422,40 @@
     }
 
     function cleanText(value) {
-        return String(value || "")
+        return stripDsmlProtocol(value)
             .replace(/<\/?json\b[^>]*>/gi, "")
             .replace(/&lt;\/?json\b[^&]*&gt;/gi, "")
-            .replace(/```(?:json)?/gi, "")
+            .replace(/```(?:json)?\s*```/gi, "")
             .replace(/<\/?tool_call\b[^>]*>/gi, "")
             .replace(/<\/?function(?:\s*=\s*[^>]+)?\b[^>]*>/gi, "")
             .replace(/<\/?(?:parameter|arg|argument)(?:\s+[^>]*)?>/gi, "")
             .replace(/[ \t]+\n/g, "\n")
             .replace(/\n{3,}/g, "\n\n")
             .trim();
+    }
+
+    function maskToolCallFences(source, calls) {
+        const ranges = [];
+        const fences = /```(?:json)?[ \t]*(?:\r?\n)?([\s\S]*?)```/gi;
+        let match;
+        while ((match = fences.exec(source))) {
+            const bodyStart = match.index + match[0].length - match[1].length - 3;
+            const bodyEnd = fences.lastIndex - 3;
+            const enclosed = calls.filter(call => call.start >= bodyStart && call.end <= bodyEnd);
+            let cursor = bodyStart;
+            let remainder = "";
+            for (const call of enclosed) { remainder += source.slice(cursor, call.start); cursor = call.end; }
+            remainder += source.slice(cursor, bodyEnd);
+            if (!enclosed.length || remainder.trim()) continue;
+            ranges.push({ start: match.index, end: bodyStart }, { start: bodyEnd, end: fences.lastIndex });
+        }
+        let cursor = 0;
+        let result = "";
+        for (const range of ranges) {
+            result += source.slice(cursor, range.start) + source.slice(range.start, range.end).replace(/[^\r\n]/g, " ");
+            cursor = range.end;
+        }
+        return result + source.slice(cursor);
     }
 
     // Reasoning/scratchpad channels are never executable output.  Some relays
@@ -368,7 +473,7 @@
     }
 
     function extractToolCallEvidence(value, maxLength = 2000) {
-        const source = normalizeJsonPunctuation(stripReasoningSections(value)).trim();
+        const source = canonicalizeDsmlMarkers(normalizeJsonPunctuation(stripReasoningSections(value))).trim();
         if (!source) return "";
         const candidates = [];
         for (const item of scanJsonValues(source)) {
@@ -376,6 +481,8 @@
         }
         const xml = source.match(/<(?:tool_call|function|tool|recipient)\b[\s\S]*?(?:<\/\s*(?:tool_call|function|tool|recipient)>|$)/i);
         if (xml) candidates.push(xml[0]);
+        const dsml = source.match(/<dsml(?:_[\w.-]+)?\b[\s\S]*/i);
+        if (dsml) candidates.push(dsml[0]);
         const action = source.match(/(?:^|\n)\s*Action\s*:[\s\S]*?(?:\n\s*Action\s*Input\s*:[\s\S]*?(?=\n\s*Action\s*:|$)|$)/i);
         if (action) candidates.push(action[0].trim());
         const evidence = candidates.length ? candidates.join("\n") : source;
@@ -383,8 +490,8 @@
     }
 
     function hasMalformedToolCall(value) {
-        const source = normalizeJsonPunctuation(stripReasoningSections(value));
-        return /(?:"tool_call"\s*:|"tool_calls"\s*:|"function_call"\s*:|<tool_call\b|<function\s*=|<tool\s*=|(?:^|\n)\s*(?:to|recipient)\s*[=:])/i.test(source);
+        const source = canonicalizeDsmlMarkers(normalizeJsonPunctuation(stripReasoningSections(value)));
+        return /(?:"tool_call"\s*:|"tool_calls"\s*:|"function_call"\s*:|<tool_call\b|<function\s*=|<tool\s*=|<\/?dsml(?:_[\w.-]+)?\b|(?:^|\n)\s*(?:to|recipient)\s*[=:])/i.test(source);
     }
 
     function diagnoseToolCallResponse(value) {
@@ -415,7 +522,7 @@
     }
 
     function parseText(text) {
-        const source = stripReasoningSections(text);
+        const source = canonicalizeDsmlMarkers(stripReasoningSections(text));
         if (/^\s*"(?:\\.|[^"\\])*"\s*$/.test(source)) {
             try {
                 const decoded = parseJsonValue(source);
@@ -425,10 +532,14 @@
         }
         const found = [];
         const add = (call, start, end) => { if (call) found.push({ call, start, end }); };
+        const displaySource = stripDsmlProtocol(source, true);
+        const dsmlRanges = dsmlProtocolRanges(source);
+        const insideDsml = candidate => dsmlRanges.some(range => candidate.start < range.end && candidate.end > range.start);
         let match;
 
         let structuredPriority = Infinity;
         for (const candidate of scanJsonValues(source)) {
+            if (insideDsml(candidate)) continue;
             let parsed;
             parsed = parseJsonValue(candidate.raw);
             if (parsed === null) continue;
@@ -444,6 +555,37 @@
                 end += suffix[0].length;
             }
             classified.calls.forEach(call => add({ ...call, _priority: classified.priority }, start, end));
+        }
+        let acceptedDsmlCalls = 0;
+        const dsmlInvoke = /<dsml_invoke\b([^>]*)>([\s\S]*?)<\/dsml_invoke\s*>/gi;
+        while ((match = dsmlInvoke.exec(source))) {
+            const attrs = match[1].match(/\bname\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+            if (!attrs) continue;
+            const args = {};
+            const parameters = /<dsml_parameter\b([^>]*)>([\s\S]*?)<\/dsml_parameter\s*>/gi;
+            let parameter;
+            let parameterCount = 0;
+            let valid = true;
+            while ((parameter = parameters.exec(match[2]))) {
+                parameterCount += 1;
+                const key = parameter[1].match(/\bname\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+                if (!key) { valid = false; break; }
+                const raw = decodeEntities(parameter[2]).trim();
+                const stringFlag = parameter[1].match(/\bstring\s*=\s*["']?(true|false)["']?/i)?.[1]?.toLowerCase();
+                let value = stringFlag === "true" ? raw : parseScalar(raw);
+                if (stringFlag === "false") {
+                    try { value = JSON.parse(raw); } catch (_) { valid = false; break; }
+                }
+                args[decodeEntities(key[1] || key[2] || key[3]).trim()] = value;
+            }
+            if ((match[2].match(/<dsml_parameter\b/gi) || []).length !== parameterCount) valid = false;
+            // Only parameter elements (or a valid empty body) are executable.
+            if (match[2].replace(/<dsml_parameter\b[^>]*>[\s\S]*?<\/dsml_parameter\s*>/gi, "").trim()) valid = false;
+            const call = valid && makeCall(decodeEntities(attrs[1] || attrs[2] || attrs[3]), args);
+            if (call) {
+                acceptedDsmlCalls += 1;
+                add({ ...call, _priority: 4 }, match.index, dsmlInvoke.lastIndex);
+            }
         }
         // XML tool calling variants emitted by OpenAI-compatible and Codex relays.
         const xmlPatterns = [
@@ -497,12 +639,13 @@
             const key = `${item.start}:${item.end}:${item.call.name}:${JSON.stringify(item.call.arguments)}`;
             if (!keys.has(key)) { keys.add(key); unique.push(item); }
         }
+        const proseSource = maskToolCallFences(displaySource, unique);
         const segments = [];
         const emittedCalls = [];
         let cursor = 0;
         for (const item of unique) {
             if (item.start < cursor) continue;
-            const before = cleanText(source.slice(cursor, item.start));
+            const before = cleanText(proseSource.slice(cursor, item.start));
             if (before) segments.push({ type: "text", text: before });
             const call = { ...item.call };
             delete call._priority;
@@ -510,10 +653,10 @@
             emittedCalls.push(call);
             cursor = Math.max(cursor, item.end);
         }
-        const tail = cleanText(source.slice(cursor));
+        const tail = cleanText(proseSource.slice(cursor));
         if (tail) segments.push({ type: "text", text: tail });
         const visibleText = segments.filter(item => item.type === "text").map(item => item.text).join("\n\n");
-        const malformed = emittedCalls.length === 0 && hasMalformedToolCall(source);
+        const malformed = (emittedCalls.length === 0 && hasMalformedToolCall(source)) || hasMalformedDsmlProtocol(source, acceptedDsmlCalls);
         return { calls: emittedCalls, segments, text: visibleText, hasMalformedToolCall: malformed, diagnostics: diagnoseToolCallResponse(source) };
     }
 
@@ -570,14 +713,14 @@
             if (Array.isArray(command)) command = command.join(" ");
             return { ...call, name: "run_shell", arguments: { command: String(command || "") } };
         }
-        if (name === "read_file_range" && (originalName !== "read_file_range" || args.offset !== undefined || args.limit !== undefined || args.file_path !== undefined || args.path !== undefined && (args.start_line === undefined || args.end_line === undefined))) {
+        if (name === "read_file_range" && (originalName !== "read_file_range" || args.offset !== undefined || args.limit !== undefined || args.file_path !== undefined)) {
             const filePath = String(args.file_path || args.path || "");
-            const offset = Number(args.offset) > 0 ? Number(args.offset) : 1;
+            const offset = args.start_line !== undefined ? args.start_line : Number(args.offset) > 0 ? Number(args.offset) : 1;
             const limit = Number(args.limit) > 0 ? Number(args.limit) : 0;
             return {
                 ...call,
                 name: "read_file_range",
-                arguments: { path: filePath, start_line: offset, end_line: limit > 0 ? offset + limit - 1 : FALLBACK_END_LINE }
+                arguments: { path: filePath, start_line: offset, end_line: args.end_line !== undefined ? args.end_line : limit > 0 ? Number(offset) + limit - 1 : FALLBACK_END_LINE }
             };
         }
         if (name === "str_replace_based_edit_tool" || name === "str_replace_editor" || name === "text_editor") {
@@ -609,10 +752,10 @@
             return { ...call, name: "list_dir", arguments: { dir_path: String(args.dir_path || args.path || "."), offset: Number(args.offset) || 0, limit: Number(args.limit) || 0, depth: Number(args.depth) || 1 } };
         }
         if (name === "grep_files" || name === "search_files" || name === "grep") {
-            return { ...call, name: "grep_files", arguments: { pattern: String(args.pattern || ""), include: String(args.include || ""), path: String(args.path || "."), limit: Number(args.limit) || 100 } };
+            return { ...call, name: "grep_files", arguments: { ...args, pattern: String(args.pattern || ""), include: String(args.include || ""), path: String(args.path || "."), limit: Number(args.limit) || 100 } };
         }
         if (name === "view_image" || name === "read_image" || name === "show_image") {
-            return { ...call, name: "view_image", arguments: { path: String(args.path || args.file_path || "") } };
+            return { ...call, name: "view_image", arguments: { ...args, path: String(args.path || args.file_path || "") } };
         }
         if (name === "update_plan" || name === "plan" || name === "set_plan") {
             return { ...call, name: "update_plan", arguments: { explanation: String(args.explanation || ""), plan: Array.isArray(args.plan) ? args.plan : [] } };
@@ -721,12 +864,16 @@
     }
 
     function parseAgentResponse(text, structuredCalls) {
-        const calls = Array.isArray(structuredCalls) && structuredCalls.length ? structuredCalls : parseText(text).calls;
+        const parsedText = parseText(text);
+        const calls = Array.isArray(structuredCalls) && structuredCalls.length ? structuredCalls : parsedText.calls;
         if (Array.isArray(structuredCalls) && structuredCalls.length) {
-            const prose = String(text || "").trim();
-            return { calls, segments: [...(prose ? [{ type: "text", text: prose }] : []), ...calls.map(call => ({ type: "tool_call", call }))], text: prose, diagnostics: diagnoseToolCallResponse(prose) };
+            // Native tool calls already have their own payload. Preserve the
+            // original Markdown while removing any relay-only DSML envelope.
+            const prose = stripDsmlProtocol(String(text || "")).trim();
+            return { calls, segments: [...(prose ? [{ type: "text", text: prose }] : []), ...calls.map(call => ({ type: "tool_call", call }))], text: prose,
+                hasMalformedToolCall: parsedText.hasMalformedToolCall, diagnostics: parsedText.diagnostics };
         }
-        return parseText(text);
+        return parsedText;
     }
 
     return {
@@ -736,6 +883,8 @@
         parseText,
         parseAgentResponse,
         parseArguments,
+        canonicalizeDsmlMarkers,
+        stripDsmlProtocol,
         stripReasoningSections,
         extractToolCallEvidence,
         diagnoseToolCallResponse,

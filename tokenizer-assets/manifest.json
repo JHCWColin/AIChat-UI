@@ -1,0 +1,16 @@
+{
+  "deepseek-v4": {
+    "uncompressedBytes": 4363757,
+    "compressedBytes": 1747179,
+    "sha256": "585dd278a3c3f791e487ebbc686c2cb804f69cd37d29bb6b5ea411efaec52edd",
+    "vocabularySize": 128000,
+    "addedTokenCount": 1283
+  },
+  "deepseek-v41": {
+    "uncompressedBytes": 4363917,
+    "compressedBytes": 1747193,
+    "sha256": "d61b8c48a04783579ecd50467a4a8eaa511b1d32e596209e18234c02fc0f393c",
+    "vocabularySize": 128000,
+    "addedTokenCount": 1283
+  }
+}

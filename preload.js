@@ -2,6 +2,16 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
     isElectron: true,
+    countContextTokens: (text, model) => require("./tokenizer-runtime.cjs").count(text, model),
+    describeContextTokenizer: model => require("./tokenizer-runtime.cjs").describe(model),
+    openAgentGateway: () => ipcRenderer.invoke("agent-gateway:open"),
+    publishGatewaySnapshot: snapshot => ipcRenderer.send("agent-gateway:snapshot", snapshot),
+    completeGatewayMessage: (requestId, result) => ipcRenderer.send("agent-gateway:message-result", requestId, result),
+    onGatewayMessage: callback => {
+        const listener = (_event, payload) => callback(payload);
+        ipcRenderer.on("agent-gateway:message", listener);
+        return () => ipcRenderer.removeListener("agent-gateway:message", listener);
+    },
     openAudioChat: (payload) => ipcRenderer.invoke("audio-chat:open", payload),
     openDesktopWork: (payload) => ipcRenderer.invoke("desktop-work:open", payload),
     getAudioChatSession: () => ipcRenderer.invoke("audio-chat:get-session"),

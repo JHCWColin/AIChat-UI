@@ -1458,6 +1458,163 @@
             transition: color 0.2s;
         }
 
+        .context-estimate-shell {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        #token-estimate {
+            cursor: help;
+            outline-offset: 3px;
+        }
+
+        .context-breakdown {
+            position: fixed;
+            z-index: 120;
+            left: 12px;
+            top: 12px;
+            width: min(360px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            padding: 14px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 8px;
+            background: rgba(20, 24, 28, 0.98);
+            color: #e5e7eb;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(4px);
+            transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s;
+            white-space: normal;
+        }
+
+        .context-breakdown.is-open {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            transform: translateY(0);
+        }
+
+        .context-breakdown-heading,
+        .context-breakdown-usage,
+        .context-breakdown-row {
+            display: flex;
+            align-items: center;
+        }
+
+        .context-breakdown-heading,
+        .context-breakdown-usage {
+            justify-content: space-between;
+        }
+
+        .context-breakdown-heading {
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .context-breakdown-usage {
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #context-breakdown-used {
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        #context-breakdown-window {
+            color: #9ca3af;
+        }
+
+        .context-breakdown-track {
+            display: flex;
+            width: 100%;
+            height: 7px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.2);
+        }
+
+        .context-breakdown-segment {
+            height: 100%;
+            min-width: 0;
+            transition: width 0.2s ease;
+        }
+
+        .context-breakdown-rows {
+            display: grid;
+            gap: 4px;
+        }
+
+        .context-breakdown-row {
+            min-width: 0;
+            gap: 8px;
+            min-height: 22px;
+            font-size: 12px;
+            color: #bfc4c9;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .context-breakdown-swatch {
+            flex: 0 0 10px;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        .context-breakdown-name {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .context-breakdown-count {
+            flex: 0 0 auto;
+            color: #9ca3af;
+        }
+
+        .context-breakdown-percent {
+            flex: 0 0 44px;
+            color: #e5e7eb;
+            text-align: right;
+        }
+
+        .context-breakdown-note {
+            margin: 9px 0 0;
+            padding-top: 8px;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+            color: #9ca3af;
+            font-size: 10px;
+            line-height: 1.45;
+        }
+
+        body.theme-light .context-breakdown {
+            border-color: rgba(71, 85, 105, 0.22);
+            background: rgba(255, 255, 255, 0.98);
+            color: #1f2937;
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+        }
+
+        body.theme-light #context-breakdown-used,
+        body.theme-light .context-breakdown-percent {
+            color: #1f2937;
+        }
+
+        body.theme-light .context-breakdown-row,
+        body.theme-light .context-breakdown-count,
+        body.theme-light .context-breakdown-note,
+        body.theme-light #context-breakdown-window {
+            color: #64748b;
+        }
+
         /* Context window meter: shows how full the window is, turning amber then red
            as it approaches the compaction threshold. */
         #context-meter {
@@ -2852,6 +3009,10 @@
         </button>
         <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
         <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
+            <button id="agent-gateway-btn" hidden style="display:none"
+                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
+                <i data-lucide="radio-tower" class="w-5 h-5"></i><span class="text-sm">Agent网关</span>
+            </button>
             <button onclick="openSetupGuide()"
                 class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
                 <i data-lucide="book-open" class="w-5 h-5"></i><span class="text-sm">配置指引</span>
@@ -2945,13 +3106,26 @@
                                     <option value="qwen-vl-ocr">qwen-vl-ocr</option>
                                     <option value="pic-ocr">pic-ocr</option>
                                 </select>
-                                <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"></span>
-                                <div id="context-meter" class="context-meter" role="progressbar" aria-label="上下文窗口使用情况"
-                                    aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                                    <div class="context-meter-track" title="上下文窗口使用情况">
-                                        <div id="context-meter-fill" class="context-meter-fill"></div>
+                                <div id="context-estimate-shell" class="context-estimate-shell">
+                                    <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"
+                                        tabindex="0" aria-describedby="context-breakdown" aria-controls="context-breakdown" aria-expanded="false"></span>
+                                    <div id="context-meter" class="context-meter" role="progressbar" aria-label="上下文窗口使用情况"
+                                        aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                        <div class="context-meter-track" title="上下文窗口使用情况">
+                                            <div id="context-meter-fill" class="context-meter-fill"></div>
+                                        </div>
+                                        <span id="context-meter-label" class="context-meter-label"></span>
                                     </div>
-                                    <span id="context-meter-label" class="context-meter-label"></span>
+                                    <div id="context-breakdown" class="context-breakdown" role="tooltip">
+                                        <div class="context-breakdown-heading"><span>Context</span><span id="context-breakdown-model"></span></div>
+                                        <div class="context-breakdown-usage">
+                                            <span id="context-breakdown-used">0% used</span>
+                                            <span id="context-breakdown-window">0 / 0</span>
+                                        </div>
+                                        <div id="context-breakdown-track" class="context-breakdown-track" aria-hidden="true"></div>
+                                        <div id="context-breakdown-rows" class="context-breakdown-rows"></div>
+                                        <p id="context-breakdown-note" class="context-breakdown-note"></p>
+                                    </div>
                                 </div>
                             </div>
                             <div id="agent-command-mode-bar">
@@ -3833,7 +4007,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V8.0.0 Release</span>
+                            <span id="app-version">V8.2.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -4919,7 +5093,10 @@
             }
             return {
                 role: msg.role,
-                content: msg.content || ''
+                content: msg.role === 'assistant' && typeof AgentProtocol !== 'undefined'
+                    ? AgentProtocol.stripAssistantReasoningContent(msg.content || '') : (msg.content || ''),
+                ...(msg.role === 'assistant' && msg.responsesReasoning
+                    ? { __aiuiResponsesReasoning: msg.responsesReasoning } : {})
             };
         }
 
@@ -5139,7 +5316,7 @@
             return String(contentValue || '');
         }
 
-        function buildResponsesInputFromMessages(messages, preserveMessageRoles = false) {
+        function buildResponsesInputFromMessages(messages, preserveMessageRoles = false, options = {}) {
             const sourceMessages = Array.isArray(messages) ? messages : [];
             const firstSystemIndex = sourceMessages.findIndex(message => message?.role === 'system');
             const filteredMessages = sourceMessages.filter((_message, index) => index !== firstSystemIndex);
@@ -5150,7 +5327,9 @@
                 return false;
             });
 
-            if (!hasImageContent && !preserveMessageRoles) {
+            const hasReasoningItems = filteredMessages.some(message => typeof AgentProtocol !== 'undefined'
+                && AgentProtocol.getResponsesReasoningItems(message, options).length);
+            if (!hasImageContent && !preserveMessageRoles && !hasReasoningItems) {
                 return filteredMessages
                     .map(message => {
                         const text = extractResponsesTextContent(message?.content).trim();
@@ -5162,7 +5341,9 @@
                     .join('\n\n');
             }
 
-            return filteredMessages.map(message => {
+            return filteredMessages.flatMap(message => {
+                const reasoningItems = typeof AgentProtocol !== 'undefined'
+                    ? AgentProtocol.getResponsesReasoningItems(message, options) : [];
                 const messageRole = message?.role === 'assistant' ? 'assistant' : 'user';
                 const textPartType = messageRole === 'assistant' ? 'output_text' : 'input_text';
                 const content = (() => {
@@ -5193,10 +5374,11 @@
                     }
                     return [{ type: textPartType, text: String(message?.content || '') }];
                 })();
-                return {
+                const result = {
                     role: messageRole,
                     content
                 };
+                return [...reasoningItems, ...(content.some(part => part.type !== textPartType || part.text) ? [result] : [])];
             });
         }
 
@@ -5205,14 +5387,30 @@
                 __aiuiStructuredResponsesInput,
                 ...publicBasePayload
             } = basePayload || {};
-            if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayloadFromBase(publicBasePayload);
-            if (endpoint !== '/responses') return publicBasePayload;
+            const reasoningOptions = { endpoint, model: publicBasePayload.model,
+                baseURL: typeof getBaseURL === 'function' ? getBaseURL() : '' };
+            const sourceMessages = Array.isArray(publicBasePayload.messages) ? publicBasePayload.messages : [];
+            const cleanMessages = sourceMessages.map(message => {
+                const { __aiuiResponsesReasoning, responsesReasoning, reasoning, reasoning_content, ...clean } = message || {};
+                if (clean.role === 'assistant' && typeof AgentProtocol !== 'undefined') {
+                    clean.content = AgentProtocol.stripAssistantReasoningContent(clean.content);
+                }
+                return clean;
+            }).filter(message => message.role !== 'assistant' || (Array.isArray(message.content)
+                ? message.content.length > 0 : Boolean(String(message.content || '').trim())));
+            if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
+            if (endpoint !== '/responses') return { ...publicBasePayload, messages: cleanMessages };
             const messages = Array.isArray(publicBasePayload?.messages) ? publicBasePayload.messages : [];
             const systemMessage = messages.find(message => message?.role === 'system');
             const { messages: _, max_tokens, prompt_cache_key, cache_control, ...rest } = publicBasePayload;
             const payload = {
                 ...rest,
-                input: buildResponsesInputFromMessages(messages, __aiuiStructuredResponsesInput === true),
+                input: buildResponsesInputFromMessages(messages.map(message => ({ ...message,
+                    ...(message.role === 'assistant' && typeof AgentProtocol !== 'undefined'
+                        ? { content: AgentProtocol.stripAssistantReasoningContent(message.content) } : {})
+                })), __aiuiStructuredResponsesInput === true, reasoningOptions),
+                store: false,
+                include: Array.from(new Set([...(Array.isArray(rest.include) ? rest.include : []), 'reasoning.encrypted_content'])),
                 ...(max_tokens !== undefined ? { max_output_tokens: max_tokens } : {}),
                 ...(prompt_cache_key ? { prompt_cache_key } : {}),
                 ...(cache_control ? { cache_control } : {})
@@ -5666,6 +5864,7 @@
                 localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, select.value);
             }
             syncRetrySelect();
+            updateTokenEstimate();
         }
 
         const IMAGE_MODELS = [
@@ -5950,62 +6149,100 @@
             });
         }
 
-        function estimateTotalTokens() {
-            const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
-            const messages = chat ? chat.messages.slice() : [];
-            const systemContent = (systemPrompt || "");
-            const inputText = document.getElementById('user-input')?.value || '';
-            let currentAttachmentText = '';
-            for (const att of currentAttachments) {
-                if (att.isText && att.data) currentAttachmentText +=
-                    `\n\n[文件: ${att.name}]\n${att.data}\n[/文件: ${att.name}]`;
+        let tokenEstimateRunId = 0;
+        let tokenEstimateTimer = null;
+
+        async function buildContextMessagesForEstimate() {
+            const source = activeChatId ? chats.find(item => item.id === activeChatId) : null;
+            const chat = source ? {
+                ...source,
+                messages: (source.messages || []).map(message => ({
+                    ...message,
+                    ...(Array.isArray(message.attachments) ? { attachments: message.attachments.map(attachment => ({ ...attachment })) } : {})
+                }))
+            } : { messages: [], agentEnabled: false };
+            const input = document.getElementById('user-input')?.value || '';
+            const model = String(chat.agentEnabled ? chat.agentModel || getSelectedModelName() : getSelectedModelName());
+            const normalize = messages => {
+                const payload = buildRequestPayloadForEndpoint({ model, messages, __aiuiStructuredResponsesInput: true }, getRequestEndpoint());
+                return Array.isArray(payload.input)
+                    ? [...(payload.instructions ? [{ role: 'system', content: payload.instructions }] : []), ...payload.input]
+                    : [...(payload.system ? [{ role: 'system', content: payload.system }] : []), ...(payload.messages || [])];
+            };
+            if (input.trim() || currentAttachments.length) {
+                chat.messages.push({
+                    role: 'user',
+                    content: input,
+                    _tempAttachments: currentAttachments.map(attachment => ({ ...attachment }))
+                });
             }
-            const currentFullInput = inputText + currentAttachmentText;
-            let allText = systemContent;
-            for (const msg of messages) {
-                allText += '\n' + (msg.content || '');
-                if (msg.attachments && Array.isArray(msg.attachments)) {
-                    for (const att of msg.attachments) {
-                        if (att.isText && att.data) allText += '\n' + att.data;
+
+            if (chat.agentEnabled && typeof window.buildAgentMessagesForContextEstimate === 'function') {
+                return normalize(await window.buildAgentMessagesForContextEstimate(chat));
+            }
+
+            const messages = await buildAPIMessagesWithContext(chat);
+            if (chat.canvasEnabled && messages.length) {
+                const lastMessage = messages[messages.length - 1];
+                if (lastMessage.role === 'user') {
+                    const canvasContext = buildCanvasContextString(chat);
+                    if (canvasContext) {
+                        if (typeof lastMessage.content === 'string') lastMessage.content += canvasContext;
+                        else if (Array.isArray(lastMessage.content)) {
+                            const textPart = lastMessage.content.find(part => part.type === 'text');
+                            if (textPart) textPart.text += canvasContext;
+                            else lastMessage.content.push({ type: 'text', text: canvasContext });
+                        }
                     }
                 }
             }
-            if (currentFullInput.trim()) allText += '\n' + currentFullInput;
-            if (!allText.trim()) return 0;
-            try {
-                if (typeof encode !== 'undefined') return encode(allText).length;
-            } catch (e) { }
-            const chineseChars = (allText.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
-            const nonChinese = allText.replace(/[\u4e00-\u9fff\u3400-\u4dbf]/g, '');
-            const words = nonChinese.match(/\b\w+\b/g) || [];
-            const remaining = nonChinese.length - words.join('').length;
-            return Math.round(chineseChars * 2 + words.length * 1.3 + remaining * 0.2);
+            const prompt = typeof chat.promptPrefix === 'string' ? chat.promptPrefix : (systemPrompt || '');
+            return normalize([{ role: 'system', content: prompt }, ...messages]);
         }
 
         function updateTokenEstimate() {
             const span = document.getElementById('token-estimate');
             if (!span) return;
-            const tokenCount = estimateTotalTokens();
-            const max = maxTokensLimit || 0;
-            if (tokenCount > 0) {
-                if (max > 0 && tokenCount >= max) {
-                    span.textContent = `预估tokens: ${tokenCount} 已达到最大token限制`;
-                    span.style.color = 'red';
-                } else {
-                    span.textContent = `预估tokens: ${tokenCount}`;
-                    span.style.color = '';
+            const runId = ++tokenEstimateRunId;
+            clearTimeout(tokenEstimateTimer);
+            tokenEstimateTimer = setTimeout(async () => {
+                try {
+                    const chat = activeChatId ? chats.find(item => item.id === activeChatId) : null;
+                    const model = String(chat?.agentEnabled ? chat.agentModel || getSelectedModelName() : getSelectedModelName());
+                    const messages = await buildContextMessagesForEstimate();
+                    const tokenizer = window.electronAPI?.countContextTokens ? {
+                        count: (text, selectedModel) => window.electronAPI.countContextTokens(text, selectedModel),
+                        describe: selectedModel => window.electronAPI.describeContextTokenizer?.(selectedModel) || '本地 tokenizer'
+                    } : null;
+                    const breakdown = await window.AIUIContextEstimator.estimate(messages, {
+                        model,
+                        tokenizer,
+                        contextWindow: getContextWindowForModel(model),
+                        agent: chat?.agentEnabled === true
+                    });
+                    if (runId !== tokenEstimateRunId) return;
+                    if (breakdown.usedTokens > 0) {
+                        span.textContent = `预估 tokens: ${breakdown.usedTokens.toLocaleString('zh-CN')}`;
+                        span.style.color = breakdown.overWindow ? '#ef4444' : '';
+                        span.style.display = 'inline';
+                    } else {
+                        span.textContent = '';
+                        span.style.display = 'none';
+                    }
+                    renderContextBreakdown(breakdown);
+                    updateContextMeter(breakdown);
+                } catch (error) {
+                    if (runId !== tokenEstimateRunId) return;
+                    span.textContent = 'Token 估算暂不可用';
+                    span.style.display = 'inline';
+                    document.getElementById('context-meter')?.classList.remove('visible');
                 }
-                span.style.display = 'inline';
-            } else {
-                span.textContent = '';
-                span.style.display = 'none';
-            }
-            updateContextMeter(tokenCount);
+            }, 90);
         }
 
         // Context windows are per-model; unknown models fall back to a conservative
         // default so the meter stays meaningful instead of showing 0%.
-        const DEFAULT_CONTEXT_WINDOW = 1000000;
+        const DEFAULT_CONTEXT_WINDOW = 128000;
         const MODEL_CONTEXT_WINDOWS = [
             { test: /claude-(fable|mythos|opus-5|sonnet-5|haiku-5|opus-4-6|opus-4-7|opus-4-8|sonnet-4-6)/i, tokens: 1000000 },
             { test: /claude-.*(haiku-4-5)/i, tokens: 200000 },
@@ -6013,6 +6250,7 @@
             { test: /(gpt-5|gpt-4\.1|o3|o4)/i, tokens: 400000 },
             { test: /^gpt-/i, tokens: 128000 },
             { test: /(gemini-2|gemini-3)/i, tokens: 1000000 },
+            { test: /(deepseek-(?:v4-)?pro|deepseek-v4(?:\.1)?-flash|deepseek-flash)/i, tokens: 1000000 },
             { test: /(kimi|glm-5|qwen|deepseek)/i, tokens: 256000 }
         ];
         // Trigger compaction at 92% of the window, matching Claude Code's behaviour
@@ -6033,39 +6271,168 @@
             return String(count);
         }
 
-        /**
-         * Renders the context-window meter for the active chat. Only Agent chats get the
-         * window-based reading, because that is where threshold compaction applies.
-         */
-        function updateContextMeter(tokenCount) {
+        const CONTEXT_CATEGORY_COLORS = {
+            systemTools: '#3b82f6',
+            systemPrompt: '#16a085',
+            messages: '#3b82f6',
+            toolResults: '#e4572e',
+            attachments: '#d99a00',
+            images: '#ca8a04',
+            reasoningItems: '#7c8a96',
+            messageOverhead: '#737373',
+            compactionBuffer: '#525252',
+            freeSpace: '#292929'
+        };
+
+        function formatContextPercent(tokens, windowSize) {
+            const percent = windowSize > 0 ? tokens / windowSize * 100 : 0;
+            if (percent > 0 && percent < 0.05) return '<0.1%';
+            return `${percent.toFixed(percent > 0 && percent < 10 ? 1 : 0)}%`;
+        }
+
+        function positionContextBreakdown() {
+            const trigger = document.getElementById('token-estimate');
+            const popover = document.getElementById('context-breakdown');
+            if (!trigger || !popover) return;
+            const triggerRect = trigger.getBoundingClientRect();
+            const width = Math.min(360, Math.max(0, window.innerWidth - 24));
+            const left = Math.max(12, Math.min(triggerRect.left, window.innerWidth - width - 12));
+            popover.style.width = `${width}px`;
+            popover.style.left = `${left}px`;
+            const height = popover.offsetHeight || 220;
+            let top = triggerRect.top - height - 10;
+            if (top < 12) top = Math.min(window.innerHeight - height - 12, triggerRect.bottom + 10);
+            popover.style.top = `${Math.max(12, top)}px`;
+        }
+
+        const contextEstimateShell = document.getElementById('context-estimate-shell');
+        const contextBreakdownPopover = document.getElementById('context-breakdown');
+        // Transformed composer ancestors otherwise trap fixed positioning and clip the popup.
+        if (contextBreakdownPopover) document.body.appendChild(contextBreakdownPopover);
+        let contextBreakdownCloseTimer = null;
+        function showContextBreakdown() {
+            clearTimeout(contextBreakdownCloseTimer);
+            positionContextBreakdown();
+            contextBreakdownPopover?.classList.add('is-open');
+            document.getElementById('token-estimate')?.setAttribute('aria-expanded', 'true');
+        }
+        function hideContextBreakdown() {
+            clearTimeout(contextBreakdownCloseTimer);
+            contextBreakdownPopover?.classList.remove('is-open');
+            document.getElementById('token-estimate')?.setAttribute('aria-expanded', 'false');
+        }
+        function scheduleContextBreakdownClose() {
+            clearTimeout(contextBreakdownCloseTimer);
+            contextBreakdownCloseTimer = setTimeout(() => {
+                const active = document.activeElement;
+                if (contextEstimateShell?.matches(':hover') || contextBreakdownPopover?.matches(':hover')
+                    || contextEstimateShell?.contains(active) || contextBreakdownPopover?.contains(active)) return;
+                hideContextBreakdown();
+            }, 150);
+        }
+        contextEstimateShell?.addEventListener('mouseenter', showContextBreakdown);
+        contextEstimateShell?.addEventListener('mouseleave', scheduleContextBreakdownClose);
+        contextEstimateShell?.addEventListener('focusin', showContextBreakdown);
+        contextEstimateShell?.addEventListener('focusout', scheduleContextBreakdownClose);
+        document.getElementById('token-estimate')?.addEventListener('click', showContextBreakdown);
+        contextBreakdownPopover?.addEventListener('mouseenter', showContextBreakdown);
+        contextBreakdownPopover?.addEventListener('mouseleave', scheduleContextBreakdownClose);
+        contextBreakdownPopover?.addEventListener('focusout', scheduleContextBreakdownClose);
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') hideContextBreakdown();
+        });
+        document.addEventListener('pointerdown', event => {
+            if (!contextEstimateShell?.contains(event.target) && !contextBreakdownPopover?.contains(event.target)) {
+                hideContextBreakdown();
+            }
+        });
+        window.addEventListener('resize', positionContextBreakdown);
+        window.addEventListener('scroll', positionContextBreakdown, true);
+
+        function renderContextBreakdown(breakdown) {
+            const track = document.getElementById('context-breakdown-track');
+            const rows = document.getElementById('context-breakdown-rows');
+            const used = document.getElementById('context-breakdown-used');
+            const windowLabel = document.getElementById('context-breakdown-window');
+            const modelLabel = document.getElementById('context-breakdown-model');
+            const note = document.getElementById('context-breakdown-note');
+            if (!track || !rows || !used || !windowLabel || !modelLabel || !note) return;
+            const windowSize = breakdown.contextWindow;
+            const totalPercent = breakdown.usedPercent;
+            used.textContent = `${totalPercent}% used`;
+            windowLabel.textContent = `${formatTokenCount(breakdown.usedTokens)} / ${formatTokenCount(windowSize)}`;
+            modelLabel.textContent = breakdown.model || '未知模型';
+            track.replaceChildren();
+            rows.replaceChildren();
+            for (const entry of breakdown.categoryEntries) {
+                const color = CONTEXT_CATEGORY_COLORS[entry.key] || '#737373';
+                const segmentColor = entry.key === 'freeSpace'
+                    ? (document.body.classList.contains('theme-light') ? '#e5e7eb' : '#454545')
+                    : color;
+                const share = windowSize > 0 ? Math.min(100, entry.tokens / windowSize * 100) : 0;
+                const segment = document.createElement('div');
+                segment.className = 'context-breakdown-segment';
+                segment.style.width = `${share}%`;
+                segment.style.backgroundColor = segmentColor;
+                segment.title = `${entry.label}: ${entry.tokens.toLocaleString('zh-CN')}`;
+                track.appendChild(segment);
+
+                const row = document.createElement('div');
+                row.className = 'context-breakdown-row';
+                const swatch = document.createElement('span');
+                swatch.className = 'context-breakdown-swatch';
+                swatch.style.backgroundColor = segmentColor;
+                const name = document.createElement('span');
+                name.className = 'context-breakdown-name';
+                name.textContent = entry.label;
+                const count = document.createElement('span');
+                count.className = 'context-breakdown-count';
+                count.textContent = formatTokenCount(entry.tokens);
+                const percent = document.createElement('span');
+                percent.className = 'context-breakdown-percent';
+                percent.textContent = formatContextPercent(entry.tokens, windowSize);
+                row.append(swatch, name, count, percent);
+                rows.appendChild(row);
+            }
+            const isFallback = breakdown.tokenizerLabel.includes('参考估算') || breakdown.tokenizerLabel.includes('字符估算');
+            const isClaudeLegacy = /^claude-/i.test(String(breakdown.model || ''));
+            const tokenizerDescription = isFallback
+                ? '其它厂商模型使用通用参考分词。'
+                : isClaudeLegacy
+                    ? 'Claude 使用旧词表参考估算，较新 Claude 模型可能偏差较大。'
+                    : '文本按本地词表计数。';
+            const opaqueReasoningDescription = breakdown.hasOpaqueReasoningItems
+                ? `另有 ${breakdown.opaqueReasoningItems} 个不透明 reasoning 状态项；加密内容无法本地读取，未按密文长度计数。`
+                : '';
+            note.textContent = `${breakdown.tokenizerLabel} · ${tokenizerDescription} 图片与消息封装为估算值；独立思考文本不计入，显式 reasoning 项除外。${opaqueReasoningDescription}`;
+            positionContextBreakdown();
+        }
+
+        function updateContextMeter(breakdown) {
             const meter = document.getElementById('context-meter');
             const fill = document.getElementById('context-meter-fill');
             const label = document.getElementById('context-meter-label');
             if (!meter || !fill || !label) return;
             const chat = activeChatId ? chats.find(item => item.id === activeChatId) : null;
-            if (!chat || !chat.agentEnabled || !(tokenCount > 0)) {
+            if (!chat?.agentEnabled || !breakdown || !(breakdown.usedTokens > 0)) {
                 meter.classList.remove('visible', 'level-warn', 'level-critical');
                 return;
             }
-            const windowSize = getContextWindowForModel(chat.agentModel || getSelectedModelName());
-            const ratio = windowSize > 0 ? Math.min(1, tokenCount / windowSize) : 0;
+            const windowSize = breakdown.contextWindow;
+            const ratio = windowSize > 0 ? breakdown.usedTokens / windowSize : 0;
             const percent = Math.round(ratio * 100);
-            fill.style.width = `${Math.max(ratio > 0 ? 2 : 0, percent)}%`;
-            label.textContent = `${percent}% · ${formatTokenCount(tokenCount)}/${formatTokenCount(windowSize)}`;
+            fill.style.width = `${Math.max(ratio > 0 ? 2 : 0, Math.min(100, percent))}%`;
+            label.textContent = `${percent}% · ${formatTokenCount(breakdown.usedTokens)}/${formatTokenCount(windowSize)}`;
             meter.classList.add('visible');
-            meter.classList.toggle('level-warn', ratio >= AGENT_COMPACTION_THRESHOLD * 0.75 && ratio < AGENT_COMPACTION_THRESHOLD);
-            meter.classList.toggle('level-critical', ratio >= AGENT_COMPACTION_THRESHOLD);
+            const warnAt = chat?.agentEnabled ? AGENT_COMPACTION_THRESHOLD * 0.75 : 0.85;
+            const criticalAt = chat?.agentEnabled ? AGENT_COMPACTION_THRESHOLD : 0.95;
+            meter.classList.toggle('level-warn', ratio >= warnAt && ratio < criticalAt);
+            meter.classList.toggle('level-critical', ratio >= criticalAt);
             meter.setAttribute('aria-valuenow', String(percent));
-            meter.setAttribute('aria-label', `上下文窗口已使用 ${percent}%（${formatTokenCount(tokenCount)}/${formatTokenCount(windowSize)}）`);
+            meter.setAttribute('aria-label', `上下文窗口已使用 ${percent}%（${formatTokenCount(breakdown.usedTokens)}/${formatTokenCount(windowSize)}）`);
             const track = meter.querySelector('.context-meter-track');
             if (track) {
-                track.title = [
-                    `上下文窗口：${formatTokenCount(tokenCount)} / ${formatTokenCount(windowSize)}（${percent}%）`,
-                    `模型：${chat.agentModel || getSelectedModelName() || '未知'}`,
-                    ratio >= AGENT_COMPACTION_THRESHOLD
-                        ? `已达 ${Math.round(AGENT_COMPACTION_THRESHOLD * 100)}% 压缩阈值，下一轮将自动压缩`
-                        : `达到 ${Math.round(AGENT_COMPACTION_THRESHOLD * 100)}% 时自动压缩上下文`
-                ].join('\n');
+                track.title = `上下文：${formatTokenCount(breakdown.usedTokens)} / ${formatTokenCount(windowSize)}（${percent}%）`;
             }
         }
 
@@ -7391,7 +7758,7 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V8.0.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V8.2.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[1, 2, 3, 4, 5, 6].map(x => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"><span class="block text-[11px] text-gray-400 mt-1">背景 ${x}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
@@ -7940,9 +8307,10 @@
         }
         function renderQueuedAgentMessages() {
             const el = document.getElementById('queued-agent-messages'); if (!el) return;
-            const queuedHtml = queuedAgentMessages.map(text => `<div>↳ ${sanitizeHtml(text)}（将在下次插入时插入）</div>`).join('');
+            const visibleQueue = queuedAgentMessages.filter(entry => !entry || typeof entry !== 'object' || String(entry.gatewayChatId) === String(activeChatId));
+            const queuedHtml = visibleQueue.map(entry => `<div>↳ ${sanitizeHtml(escapeHtml(String(entry && typeof entry === 'object' ? entry.content || '' : entry || '')))}（将在下次插入时插入）</div>`).join('');
             const reconnectHtml = window.agentReconnectNotice ? `<div class="agent-reconnect-status">${sanitizeHtml(window.agentReconnectNotice)}</div>` : '';
-            el.classList.toggle('hidden', queuedAgentMessages.length === 0 && !window.agentReconnectNotice);
+            el.classList.toggle('hidden', visibleQueue.length === 0 && !window.agentReconnectNotice);
             el.innerHTML = queuedHtml + reconnectHtml;
         }
         window.renderQueuedAgentMessages = renderQueuedAgentMessages;
@@ -9002,6 +9370,8 @@
             let rawFullContent = "",
                 thinkingContent = "";
             let receivedAny = false;
+            let responseEndpoint = '';
+            const responsePayloads = [];
             processedReplaceCount = 0;
             sessionReplaceBlocks = [];
             streamBytesReceived = 0;
@@ -9045,6 +9415,7 @@
                 const basePayload = {
                     model,
                     temperature: currentTemp,
+                    __aiuiStructuredResponsesInput: true,
                     messages: [{
                         role: 'system',
                         content: systemWithMem
@@ -9063,6 +9434,7 @@
                 const requestResult = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal);
                 const { response, endpoint: resolvedEndpoint, requestBody } = requestResult;
                 endpoint = resolvedEndpoint;
+                responseEndpoint = endpoint;
                 lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
                 appendLog('trace', `请求体: ${JSON.stringify(requestBody)}`);
                 if (!response.ok) {
@@ -9078,7 +9450,13 @@
                     throw new Error(`API error: ${response.status}${detailMessage ? ` - ${detailMessage}` : ''}`);
                 }
                 appendLog('trace', `AI 接口响应状态: ${response.status} ${response.statusText || ''}`);
-                const reader = response.body.getReader();
+                const nonStreamingPayload = !response.body || typeof response.body.getReader !== 'function' ? await response.json() : null;
+                let nonStreamingConsumed = false;
+                const reader = nonStreamingPayload ? { read: async () => {
+                    if (nonStreamingConsumed) return { done: true };
+                    nonStreamingConsumed = true;
+                    return { done: false, value: new TextEncoder().encode(JSON.stringify(nonStreamingPayload)) };
+                } } : response.body.getReader();
                 const decoder = new TextDecoder();
                 const debugStream = developerModeEnabled && (logLevel === 'debug' || logLevel === 'trace');
                 const traceStream = developerModeEnabled && logLevel === 'trace';
@@ -9099,11 +9477,11 @@
                     const streamError = getStreamingErrorMessage(normalizedPayload);
                     if (streamError) throw new Error(streamError);
                     const sequence = normalizedPayload.sequence_number;
-                    const eventKey = eventId || (sequence !== undefined && sequence !== null
-                        ? `${normalizedPayload.type || endpoint}:${sequence}`
-                        : '');
+                    const eventKey = Number.isSafeInteger(sequence) && sequence >= 0
+                        ? `${normalizedPayload.type || endpoint}:${sequence}:${JSON.stringify(normalizedPayload)}` : '';
                     if (eventKey && seenStreamEvents.has(eventKey)) return false;
                     if (eventKey) seenStreamEvents.add(eventKey);
+                    responsePayloads.push(normalizedPayload);
 
                     const update = extractStreamingUpdate(normalizedPayload, endpoint);
                     const nextThinking = mergeStreamingText(
@@ -9245,7 +9623,8 @@
                     role: 'assistant',
                     content: rawFullContent,
                     model,
-                    reasoning: thinkingContent
+                    reasoning: thinkingContent,
+                    responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint: responseEndpoint, model, baseURL: getBaseURL() })
                 });
                 chat.updatedAt = Date.now();
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
@@ -9270,7 +9649,8 @@
                         role: 'assistant',
                         content: rawFullContent,
                         model,
-                        reasoning: thinkingContent
+                        reasoning: thinkingContent,
+                        responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint: responseEndpoint, model, baseURL: getBaseURL() })
                     });
                     chat.updatedAt = Date.now();
                     localStorage.setItem('ai_chats', JSON.stringify(chats));
@@ -9288,7 +9668,9 @@
             }
         }
     </script>
+    <script src="context-estimator.js"></script>
     <script src="agent-ui.js"></script>
+    <script src="gateway-renderer.js"></script>
 </body>
 
 </html>

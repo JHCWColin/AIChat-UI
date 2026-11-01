@@ -2,6 +2,7 @@ const fs = require("fs/promises");
 const path = require("path");
 const os = require("os");
 const { spawn } = require("child_process");
+const { StringDecoder } = require("string_decoder");
 
 const DEFAULT_SHELL_TIMEOUT_MS = 120000;
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
@@ -330,7 +331,9 @@ async function editFile(workspacePath, args = {}) {
                 hint: `old_text matches ${occurrences} locations. Include more surrounding context so it matches exactly once, or use multi_edit_file to replace several occurrences deliberately.`
             };
         }
-        const nextContent = content.replace(args.old_text, args.new_text);
+        // A callback inserts model-supplied text literally; String.replace's
+        // string form expands $&, $$, $` and $' and can corrupt source code.
+        const nextContent = content.replace(args.old_text, () => args.new_text);
         await fs.writeFile(targetPath, nextContent, "utf8");
         return {
             success: true,
@@ -395,7 +398,7 @@ async function multiEditFile(workspacePath, args = {}) {
             }
             content = edit.replaceAll
                 ? content.split(edit.oldText).join(edit.newText)
-                : content.replace(edit.oldText, edit.newText);
+                : content.replace(edit.oldText, () => edit.newText);
             applied.push({ index, occurrences });
             if (content === original) {
                 return {
@@ -606,17 +609,20 @@ async function copyPath(workspacePath, args = {}) {
             if (isPathInside(source.targetPath, destination.targetPath)) {
                 return { success: false, error: "cannot copy a directory into itself" };
             }
-            await fs.mkdir(destination.targetPath, { recursive: true });
+            // fs.cp creates the target itself. Pre-creating it makes a new
+            // directory copy fail with EEXIST when overwrite is false.
+            await fs.mkdir(path.dirname(destination.targetPath), { recursive: true });
             await fs.cp(source.targetPath, destination.targetPath, {
                 recursive: true,
                 force: args.overwrite === true,
                 errorOnExist: args.overwrite !== true,
-                filter: candidate => {
+                filter: async candidate => {
                     // Keep the copy inside the workspace and skip links and build output.
                     const candidateReal = path.resolve(candidate);
                     if (!isPathInside(workspaceReal, candidateReal)) return false;
                     // The root itself is always copied; only descendants are filtered.
                     if (candidateReal === path.resolve(source.targetPath)) return true;
+                    if ((await fs.lstat(candidate)).isSymbolicLink()) return false;
                     return !WORKSPACE_SCAN_EXCLUDED_DIRECTORIES.has(path.basename(candidate).toLowerCase());
                 }
             });
@@ -737,7 +743,7 @@ class AgentShellRunner {
         const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : DEFAULT_SHELL_TIMEOUT_MS;
         const maxOutputBytes = Number(options.maxOutputBytes) > 0 ? Number(options.maxOutputBytes) : DEFAULT_MAX_OUTPUT_BYTES;
         const shellCommand = process.platform === "win32" ? "powershell.exe" : (process.env.SHELL || "/bin/sh");
-        const windowsCommand = `$agentUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $agentUtf8; [Console]::OutputEncoding = $agentUtf8; $OutputEncoding = $agentUtf8; ${command}`;
+        const windowsCommand = `$agentUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $agentUtf8; [Console]::OutputEncoding = $agentUtf8; $OutputEncoding = $agentUtf8; ${command}\nif (-not $?) { if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1 }`;
         const shellArgs = process.platform === "win32"
             ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", windowsCommand]
             : ["-lc", command];
@@ -789,8 +795,8 @@ class AgentShellRunner {
                 clearTimeout(timer);
                 this.running.delete(executionId);
                 resolve({
-                    stdout: Buffer.concat(stdout).toString("utf8"),
-                    stderr: Buffer.concat(stderr).toString("utf8"),
+                    stdout: new StringDecoder("utf8").write(Buffer.concat(stdout)),
+                    stderr: new StringDecoder("utf8").write(Buffer.concat(stderr)),
                     exitCode: Number.isInteger(code) ? code : (state.cancelled || state.timedOut ? 1 : -1),
                     stdoutBytes,
                     stderrBytes,
@@ -823,7 +829,7 @@ class AgentBackgroundShellManager {
                 executable: "powershell.exe",
                 args: [
                     "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
-                    `$agentUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $agentUtf8; [Console]::OutputEncoding = $agentUtf8; $OutputEncoding = $agentUtf8; ${command}`
+                    `$agentUtf8 = New-Object System.Text.UTF8Encoding $false; [Console]::InputEncoding = $agentUtf8; [Console]::OutputEncoding = $agentUtf8; $OutputEncoding = $agentUtf8; ${command}\nif (-not $?) { if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1 }`
                 ]
             };
         }
@@ -909,8 +915,13 @@ class AgentBackgroundShellManager {
         if (!state) return { success: false, error: `unknown process id: ${processId}` };
         const tailBytes = Number(options.tail_bytes) > 0 ? Math.min(Number(options.tail_bytes), BACKGROUND_SHELL_BUFFER_BYTES) : 0;
         const collect = chunks => {
-            const text = Buffer.concat(chunks).toString("utf8");
-            return tailBytes > 0 && text.length > tailBytes ? text.slice(-tailBytes) : text;
+            let buffer = Buffer.concat(chunks);
+            if (tailBytes > 0 && buffer.length > tailBytes) buffer = buffer.subarray(-tailBytes);
+            // Tail limits are bytes. Drop a partial leading UTF-8 character so
+            // polling a Chinese/emoji log never injects replacement glyphs.
+            let start = 0;
+            while (start < buffer.length && (buffer[start] & 0xC0) === 0x80) start++;
+            return new StringDecoder("utf8").write(buffer.subarray(start));
         };
         return {
             success: true,
@@ -1104,19 +1115,27 @@ async function applyPatch(workspacePath, args = {}) {
     if (parsed.error) return { success: false, error: parsed.error };
     const results = [];
     const diffs = [];
+    const staged = new Map();
+    let appliedCount = 0;
     try {
         const workspaceReal = await fs.realpath(workspacePath);
         for (const operation of parsed.operations) {
             if (operation.error) return { success: false, error: operation.error, appliedCount: 0 };
-            const target = await resolveWorkspacePath(workspacePath, operation.path, { allowMissing: operation.type === "add" });
+            const target = await resolveWorkspacePath(workspacePath, operation.path, { allowMissing: true });
             const relativePath = path.relative(workspaceReal, target.targetPath).split(path.sep).join("/");
             let existing = "";
             let existed = false;
-            try {
-                existing = await fs.readFile(target.targetPath, "utf8");
-                existed = true;
-            } catch (error) {
-                if (error?.code !== "ENOENT") throw error;
+            if (staged.has(target.targetPath)) {
+                const pending = staged.get(target.targetPath);
+                existed = pending.content !== null;
+                existing = pending.content || "";
+            } else {
+                try {
+                    existing = await fs.readFile(target.targetPath, "utf8");
+                    existed = true;
+                } catch (error) {
+                    if (error?.code !== "ENOENT") throw error;
+                }
             }
             if (operation.type === "add") {
                 if (existed) return { success: false, error: `Add File target already exists: ${relativePath}`, appliedCount: 0 };
@@ -1125,15 +1144,14 @@ async function applyPatch(workspacePath, args = {}) {
                     .map(raw => (raw.startsWith("+") ? raw.slice(1) : raw));
                 while (addedLines.length && !addedLines[addedLines.length - 1].trim()) addedLines.pop();
                 const created = addedLines.join("\n") + (addedLines.length ? "\n" : "");
-                await fs.mkdir(path.dirname(target.targetPath), { recursive: true });
-                await fs.writeFile(target.targetPath, created, "utf8");
+                staged.set(target.targetPath, { content: created });
                 diffs.push(buildLineDiff("", created));
                 results.push({ type: "add", path: relativePath, addedLines: addedLines.length });
                 continue;
             }
             if (!existed) return { success: false, error: `file not found for ${operation.type}: ${relativePath}`, appliedCount: 0 };
             if (operation.type === "delete") {
-                await fs.rm(target.targetPath, { force: false });
+                staged.set(target.targetPath, { content: null });
                 diffs.push(buildLineDiff(existing, ""));
                 results.push({ type: "delete", path: relativePath, removedLines: splitTextLines(existing).length });
                 continue;
@@ -1148,9 +1166,19 @@ async function applyPatch(workspacePath, args = {}) {
                 results.push({ type: "update", path: relativePath, hunks: operation.hunks.length, changed: false });
                 continue;
             }
-            await fs.writeFile(target.targetPath, content, "utf8");
+            staged.set(target.targetPath, { content });
             diffs.push(buildLineDiff(existing, content));
             results.push({ type: "update", path: relativePath, hunks: operation.hunks.length, changed: true });
+        }
+        // Validate every section before changing any file. Invalid later context
+        // must not leave an earlier Add/Update applied while reporting zero edits.
+        for (const [targetPath, pending] of staged) {
+            if (pending.content === null) await fs.rm(targetPath, { force: true });
+            else {
+                await fs.mkdir(path.dirname(targetPath), { recursive: true });
+                await fs.writeFile(targetPath, pending.content, "utf8");
+            }
+            appliedCount++;
         }
         // Combine per-file diffs so the UI can render one ordinary diff block.
         const combined = {
@@ -1165,7 +1193,7 @@ async function applyPatch(workspacePath, args = {}) {
             displayDiff: combined
         };
     } catch (error) {
-        return { success: false, error: error.message, appliedCount: 0 };
+        return { success: false, error: error.message, appliedCount };
     }
 }
 

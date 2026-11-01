@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>AIUI · Agent 网关</title>
+    <link rel="stylesheet" href="gateway-console.css">
+    <script src="gateway-console.js" defer></script>
+</head>
+<body>
+    <main class="console-shell">
+        <header class="page-heading">
+            <div class="brand-mark" aria-hidden="true">A<span>↗</span></div>
+            <div class="heading-copy"><p class="eyebrow">AIUI / AGENT GATEWAY</p><h1>Agent 网关</h1><p>让局域网设备，接入电脑上的当前任务。</p></div>
+            <span id="gateway-badge" class="status-badge"><i></i>已关闭</span>
+        </header>
+        <div id="notice" role="status" aria-live="polite" hidden></div>
+        <section class="gateway-hero card">
+            <div><div class="section-kicker">服务状态</div><h2 id="service-title">随时准备连接</h2><p id="service-detail">启动网关后，在同一局域网的浏览器输入下方地址。</p></div>
+            <button id="toggle-gateway" class="button primary" disabled>启动网关 <span aria-hidden="true">↗</span></button>
+            <div id="gateway-urls" class="gateway-urls"></div>
+            <p class="small hero-note">关闭此控制台后网关继续运行。退出 AIUI 会关闭网关并断开全部设备。</p>
+        </section>
+        <div class="settings-grid">
+            <section class="card settings-card">
+                <div class="section-heading"><div><div class="section-kicker">01 / 网络</div><h2>监听地址</h2></div><span class="mini-tag">HTTP · 局域网</span></div>
+                <form id="network-form">
+                    <label for="host">网络接口</label><select id="host" required></select>
+                    <p class="field-note">优先显示真实网卡。VPN、虚拟网卡位于后方；仅共享所选接口。</p>
+                    <label for="port">端口号</label><input id="port" type="number" min="1" max="65535" required inputmode="numeric">
+                    <div class="form-footer"><span id="network-lock" class="field-note">修改地址和端口前需关闭网关。</span><button class="button secondary" id="save-network" type="submit">保存网络设置</button></div>
+                </form>
+            </section>
+            <section class="card settings-card">
+                <div class="section-heading"><div><div class="section-kicker">02 / 安全</div><h2>访问与权限</h2></div><span class="mini-tag">必须验证</span></div>
+                <div class="code-field"><label for="read-code">只读访问码 <span>监看任务与简略活动</span></label><div class="input-action"><input id="read-code" type="password" readonly autocomplete="off"><button type="button" class="icon-button reveal-code" data-target="read-code" aria-label="显示只读访问码">显示</button><button type="button" class="icon-button copy-code" data-target="read-code">复制</button></div></div>
+                <div class="code-field"><label for="write-code">可写访问码 <span>追加消息与继续任务</span></label><div class="input-action"><input id="write-code" type="password" readonly autocomplete="off"><button type="button" class="icon-button reveal-code" data-target="write-code" aria-label="显示可写访问码">显示</button><button type="button" class="icon-button copy-code" data-target="write-code">复制</button></div></div>
+                <label class="toggle-row"><div>允许远程追加消息<small>关闭后，所有设备仅能监看。</small></div><input type="checkbox" id="allow-write" role="switch"></label>
+                <div class="security-note">访问码仅授予当前会话权限。HTTP 不加密，请在可信局域网使用；命令授权仍须在电脑端完成。</div>
+                <div class="form-footer"><span class="field-note">重新生成会断开已认证设备。</span><button id="rotate-codes" class="button secondary" type="button">重新生成访问码</button></div>
+            </section>
+        </div>
+        <section class="card devices-card">
+            <div class="section-heading"><div><div class="section-kicker">03 / 连接管理</div><h2>接入设备 <span id="device-count">0</span></h2></div><button id="refresh-status" class="button quiet" type="button">刷新状态 ↻</button></div>
+            <div id="device-list" class="device-list"><p class="empty-state">暂时没有设备接入。启动网关后，分享地址和对应权限的访问码。</p></div>
+            <p class="field-note">强制下线会撤销该设备会话并阻止其重新登录，直至在此解除。浏览器清除站点数据后将被识别为新设备。</p>
+        </section>
+        <section class="card advanced-card">
+            <details><summary><div><div class="section-kicker">04 / 高级</div><h2>连接参数</h2></div><span class="summary-arrow" aria-hidden="true">⌄</span></summary>
+                <form id="advanced-form"><div class="advanced-fields">
+                    <div><label for="poll-interval">轮询间隔 <span>毫秒</span></label><input id="poll-interval" type="number" min="500" max="2000" step="100" required><p class="field-note">500–2000 ms，默认 1000 ms。</p></div>
+                    <div><label for="session-ttl">登录有效期 <span>分钟</span></label><input id="session-ttl" type="number" min="5" max="10080" required><p class="field-note">到期后需重新验证访问码。</p></div>
+                    <div><label for="max-devices">最多接入设备</label><input id="max-devices" type="number" min="1" max="64" required><p class="field-note">限制同时认证的设备数量。</p></div>
+                </div><div class="form-footer"><p class="field-note">使用普通 HTTP 轮询，兼容手机、平板和桌面浏览器。</p><button class="button secondary" type="submit">保存连接参数</button></div></form>
+            </details>
+        </section>
+        <footer class="page-footer"><span>AIUI <strong>V8.1.0</strong></span><span id="current-session">仅共享桌面端当前活动的 Agent 会话</span></footer>
+    </main>
+</body>
+</html>

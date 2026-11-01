@@ -23,10 +23,13 @@ jobs:
         with:
           node-version: 20
 
-      - name: Sync version with tag (remove 'V' prefix)
+      - name: Sync package version with release tag
         shell: bash
         run: |
-          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
+          TAG_VERSION="${GITHUB_REF_NAME#V}"
+          if [[ "$TAG_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
+            TAG_VERSION="${BASH_REMATCH[1]}"
+          fi
           CURRENT_VERSION=$(node -p "require('./package.json').version")
 
           echo "Current version: $CURRENT_VERSION"
@@ -39,7 +42,10 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Build model tokenizers
+        run: npm run build:tokenizer
 
       - name: Build Electron app (skip MSI on Windows to avoid WiX error)
         shell: bash
@@ -90,7 +96,10 @@ jobs:
       - name: Set version from tag
         shell: bash
         run: |
-          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
+          TAG_VERSION="${GITHUB_REF_NAME#V}"
+          if [[ "$TAG_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
+            TAG_VERSION="${BASH_REMATCH[1]}"
+          fi
           echo "APP_VERSION=$TAG_VERSION" >> $GITHUB_ENV
           echo "Version set to $TAG_VERSION"
 
@@ -107,6 +116,12 @@ jobs:
             --exclude='ios' \
             --exclude='node_modules' \
             --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='test' \
+            --exclude='dist' \
+            --exclude='build-tokenizer.cjs' \
+            --exclude='tokenizer-entry.js' \
             --exclude='release' \
             ./ www/
 
@@ -169,22 +184,27 @@ jobs:
       - name: Locate keystore file
         id: keystore
         run: |
-          KEYSTORE=$(find . -maxdepth 1 -type f -name '1*' | head -n 1)
-          if [ -z "$KEYSTORE" ]; then
-            echo "Error: keystore file not found"
-            exit 1
+          KEYSTORE=./1.keystore
+          if [ ! -f "$KEYSTORE" ]; then
+            echo "::warning::Android signing keystore is not configured; skipping signed APK publication."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           echo "keystore-file=$KEYSTORE" >> $GITHUB_OUTPUT
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Extract key alias
         id: alias
+        if: steps.keystore.outputs.available == 'true'
+        env:
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           ALIAS=$(keytool -list -keystore ./1.keystore \
-                  -storepass 20090807 2>/dev/null | \
+                  -storepass "$STORE_PASS" 2>/dev/null | \
                   grep -E 'PrivateKeyEntry|keyEntry' | head -n 1 | awk -F, '{print $1}')
           if [ -z "$ALIAS" ]; then
             ALIAS=$(keytool -list -v -keystore ./1.keystore \
-                    -storepass 20090807 2>/dev/null | \
+                    -storepass "$STORE_PASS" 2>/dev/null | \
                     grep "Alias name:" | head -n 1 | sed 's/Alias name: //')
           fi
           if [ -z "$ALIAS" ]; then
@@ -194,13 +214,15 @@ jobs:
           echo "alias=$ALIAS" >> $GITHUB_OUTPUT
 
       - name: Copy keystore
+        if: steps.keystore.outputs.available == 'true'
         run: cp ./1.keystore android/app/1.keystore
 
       - name: Build Release APK (signed)
+        if: steps.keystore.outputs.available == 'true'
         env:
-          STORE_PASS: 20090807
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ steps.alias.outputs.alias }}
-          KEY_PASS: 20090807
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEYSTORE_FILE: ${{ github.workspace }}/android/app/1.keystore
         run: |
           cd android
@@ -211,6 +233,7 @@ jobs:
             -Pandroid.injected.signing.key.password="$KEY_PASS"
 
       - name: Rename APK
+        if: steps.keystore.outputs.available == 'true'
         run: |
           cd android/app/build/outputs/apk/release
           APK_FILE=$(ls *.apk | head -n1)
@@ -219,6 +242,7 @@ jobs:
 
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
+        if: steps.keystore.outputs.available == 'true'
         with:
           files: android/app/build/outputs/apk/release/AIChatUI-*.apk
         env:
@@ -239,7 +263,10 @@ jobs:
       - name: Set version from tag
         shell: bash
         run: |
-          TAG_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^V//')
+          TAG_VERSION="${GITHUB_REF_NAME#V}"
+          if [[ "$TAG_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
+            TAG_VERSION="${BASH_REMATCH[1]}"
+          fi
           echo "APP_VERSION=$TAG_VERSION" >> $GITHUB_ENV
           echo "Version set to $TAG_VERSION"
 
@@ -256,6 +283,12 @@ jobs:
             --exclude='ios' \
             --exclude='node_modules' \
             --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='test' \
+            --exclude='dist' \
+            --exclude='build-tokenizer.cjs' \
+            --exclude='tokenizer-entry.js' \
             --exclude='release' \
             ./ www/
 

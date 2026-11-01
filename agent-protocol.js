@@ -148,7 +148,8 @@ Output exactly one finish_task JSON object as the final tool call.
                 else if (char === '"') inString = false;
                 continue;
             }
-            if (char === '"' || char === '＂' || char === '“' || char === '”') {
+            // Prose quotes before a tool call must not poison JSON scanning.
+            if ((depth > 0 || arrayDepth > 0) && (char === '"' || char === '＂' || char === '“' || char === '”')) {
                 inString = true;
                 continue;
             }
@@ -176,15 +177,51 @@ Output exactly one finish_task JSON object as the final tool call.
         return objects;
     }
 
+    function canonicalizeDsmlMarkers(value) {
+        return String(value || "").replace(/(?:<|&lt;)\s*(\/?)\s*[|｜]+\s*DSML\s*[|｜]+\s*([\w.-]*)([\s\S]*?)(?:>|&gt;|$)/gi,
+            (_, close, name, attrs) => `<${close}dsml${name ? `_${name.toLowerCase()}` : ""}${attrs}>`);
+    }
+
+    function stripDsmlProtocol(value, preserveOffsets = false) {
+        const source = canonicalizeDsmlMarkers(value);
+        const ranges = [];
+        const stack = [];
+        const tags = /<(\/?)dsml(?:_([\w.-]+))?\b[^>]*>/gi;
+        let match;
+        while ((match = tags.exec(source))) {
+            if (!match[2] || /\/\s*>$/.test(match[0])) {
+                if (!stack.length) ranges.push({ start: match.index, end: tags.lastIndex });
+                continue;
+            }
+            const name = match[2].toLowerCase();
+            if (!match[1]) stack.push({ name, start: match.index });
+            else {
+                const index = stack.map(item => item.name).lastIndexOf(name);
+                if (index >= 0) {
+                    const root = stack[0];
+                    stack.length = index;
+                    if (!stack.length) ranges.push({ start: root.start, end: tags.lastIndex });
+                } else if (!stack.length) ranges.push({ start: match.index, end: tags.lastIndex });
+            }
+        }
+        if (stack.length) ranges.push({ start: stack[0].start, end: source.length });
+        let cursor = 0;
+        let text = "";
+        for (const range of ranges) {
+            text += source.slice(cursor, range.start);
+            if (preserveOffsets) text += source.slice(range.start, range.end).replace(/[^\r\n]/g, " ");
+            cursor = range.end;
+        }
+        return text + source.slice(cursor);
+    }
+
     function cleanRemainingText(value) {
-        let text = String(value || "")
+        let text = stripDsmlProtocol(value)
             .replace(/<\/?json\b[^>]*>/gi, "")
             .replace(/&lt;\/?json\b[^&]*&gt;/gi, "")
             .replace(/<\/?[|｜]{2}\s*DSML\s*[|｜]{2}>/gi, "")
             .replace(/&lt;\/?[|｜]{2}\s*DSML\s*[|｜]{2}&gt;/gi, "")
-            .replace(/```(?:json)?\s*```/gi, "")
-            .replace(/^\s*```(?:json)?\s*/i, "")
-            .replace(/\s*```(?:json)?\s*$/i, "");
+            .replace(/```(?:json)?\s*```/gi, "");
         const echoedToolResult = text.match(/(?:^|\n)[ \t]*(?:user\s*:[ \t]*(?:\n[ \t]*)*)?(?:\[[ \t]*Tool[ \t]+Result[ \t]*:|ToolResult[ \t]*:)/i);
         if (echoedToolResult) text = text.slice(0, echoedToolResult.index);
         return text
@@ -204,6 +241,51 @@ Output exactly one finish_task JSON object as the final tool call.
         return source;
     }
 
+    // Responses reasoning items are protocol state. Readable thinking text remains
+    // UI-only, but completed opaque items must accompany the next Responses turn.
+    function collectResponsesReasoningItems(payloads) {
+        const items = [];
+        const positions = new Map();
+        for (const payload of Array.isArray(payloads) ? payloads : [payloads]) {
+            if (!payload || typeof payload !== "object") continue;
+            const response = payload.response && typeof payload.response === "object" ? payload.response : payload;
+            const candidates = Array.isArray(response.output) ? response.output
+                : payload.type === "response.output_item.done" && payload.item ? [payload.item] : [];
+            for (const item of candidates) {
+                if (item?.type !== "reasoning") continue;
+                const copy = JSON.parse(JSON.stringify(item));
+                const key = typeof item.id === "string" && item.id ? item.id : JSON.stringify(copy);
+                if (positions.has(key)) items[positions.get(key)] = copy;
+                else { positions.set(key, items.length); items.push(copy); }
+            }
+        }
+        return items;
+    }
+
+    function createResponsesReasoningState(payloads, options = {}) {
+        if (options.endpoint !== "/responses") return null;
+        const items = collectResponsesReasoningItems(payloads);
+        if (!items.length) return null;
+        return { model: String(options.model || ""), endpoint: "/responses",
+            baseURL: String(options.baseURL || "").replace(/\/+$/, ""), items };
+    }
+
+    function getResponsesReasoningItems(message, options = {}) {
+        const state = message?.__aiuiResponsesReasoning || message?.responsesReasoning;
+        if (!state || state.endpoint !== "/responses" || options.endpoint !== "/responses"
+            || state.model !== String(options.model || "")
+            || String(state.baseURL || "").replace(/\/+$/, "") !== String(options.baseURL || "").replace(/\/+$/, "")) return [];
+        return collectResponsesReasoningItems({ output: state.items });
+    }
+
+    function stripAssistantReasoningContent(content) {
+        if (typeof content === "string") return stripReasoningSections(content);
+        if (!Array.isArray(content)) return content;
+        return content.filter(part => !["thinking", "reasoning", "redacted_thinking"].includes(part?.type))
+            .map(part => part && typeof part === "object" && typeof part.text === "string"
+                ? { ...part, text: stripReasoningSections(part.text) } : part);
+    }
+
     function normalizeToolCall(parsed) {
         const toolCall = parsed && parsed.tool_call;
         if (toolCall && typeof toolCall === "object" && typeof toolCall.name === "string") {
@@ -215,8 +297,33 @@ Output exactly one finish_task JSON object as the final tool call.
         return null;
     }
 
+    function maskToolCallFences(source, calls) {
+        const ranges = [];
+        const fences = /```(?:json)?[ \t]*(?:\r?\n)?([\s\S]*?)```/gi;
+        let match;
+        while ((match = fences.exec(source))) {
+            const bodyStart = match.index + match[0].length - match[1].length - 3;
+            const bodyEnd = fences.lastIndex - 3;
+            const enclosed = calls.filter(call => call.start >= bodyStart && call.end <= bodyEnd);
+            let cursor = bodyStart;
+            let remainder = "";
+            for (const call of enclosed) { remainder += source.slice(cursor, call.start); cursor = call.end; }
+            remainder += source.slice(cursor, bodyEnd);
+            if (!enclosed.length || remainder.trim()) continue;
+            ranges.push({ start: match.index, end: bodyStart }, { start: bodyEnd, end: fences.lastIndex });
+        }
+        let cursor = 0;
+        let result = "";
+        for (const range of ranges) {
+            result += source.slice(cursor, range.start) + source.slice(range.start, range.end).replace(/[^\r\n]/g, " ");
+            cursor = range.end;
+        }
+        return result + source.slice(cursor);
+    }
+
     function parseSequentialToolCalls(text) {
-        const source = String(stripReasoningSections(text) || "").replace(/^\uFEFF/, "");
+        const original = canonicalizeDsmlMarkers(String(stripReasoningSections(text) || "").replace(/^\uFEFF/, ""));
+        const source = stripDsmlProtocol(original, true);
         const parsedObjects = [];
         for (const candidate of scanJsonObjects(source)) {
             let parsed;
@@ -240,15 +347,16 @@ Output exactly one finish_task JSON object as the final tool call.
             parsedObjects.push({ ...candidate, call });
         }
 
+        const displaySource = maskToolCallFences(source, parsedObjects);
         let cursor = 0;
         const segments = [];
         for (const candidate of parsedObjects) {
-            const textSegment = cleanRemainingText(source.slice(cursor, candidate.start));
+            const textSegment = cleanRemainingText(displaySource.slice(cursor, candidate.start));
             if (textSegment) segments.push({ type: "text", text: textSegment });
             segments.push({ type: "tool_call", call: candidate.call });
             cursor = candidate.end;
         }
-        const tail = cleanRemainingText(source.slice(cursor));
+        const tail = cleanRemainingText(displaySource.slice(cursor));
         if (tail) segments.push({ type: "text", text: tail });
         const calls = parsedObjects.map(candidate => candidate.call);
 
@@ -256,7 +364,7 @@ Output exactly one finish_task JSON object as the final tool call.
             calls,
             segments,
             text: segments.filter(segment => segment.type === "text").map(segment => segment.text).join("\n\n"),
-            hasMalformedToolCall: calls.length === 0 && /"tool_call"\s*:/.test(source)
+            hasMalformedToolCall: calls.length === 0 && /(?:"tool_call"\s*:|<\/?dsml_[\w.-]+\b)/i.test(original)
         };
     }
 
@@ -282,6 +390,13 @@ Output exactly one finish_task JSON object as the final tool call.
         CORE_AGENT_RULES,
         buildFixedAgentPrompt,
         parseSequentialToolCalls,
+        canonicalizeDsmlMarkers,
+        stripDsmlProtocol,
+        stripReasoningSections,
+        stripAssistantReasoningContent,
+        collectResponsesReasoningItems,
+        createResponsesReasoningState,
+        getResponsesReasoningItems,
         stripToolCallsForDisplay: text => parseSequentialToolCalls(text).text,
         formatCurrentTime
     };
