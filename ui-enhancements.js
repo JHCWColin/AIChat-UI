@@ -91,6 +91,7 @@
         node.style.top = `${Math.max(12, rect.top >= height + 12 ? rect.top-height-7 : Math.min(innerHeight-height-12,rect.bottom+7))}px`;
     }
     function openChoice(node, trigger, keepModel = false) {
+        $('attach-menu')?.classList.remove('visible');
         const open = node.classList.contains('open');
         if (!keepModel) closeChoices();
         if (open) { node.classList.remove('open'); node.inert = true; trigger.setAttribute('aria-expanded','false');
@@ -405,6 +406,7 @@
         new MutationObserver(appearance).observe(document.body,{ attributes:true,attributeFilter:['class','data-accent-color'] }); appearance();
     }
     window.AIUIEnhancements = {
+        closeChoices,
         reasoningFor:model => { const cap = capabilities.get(model); return model === $('model-select').value ? reasoningValue : savedReasoning()[model] || cap.default; },
         modelRequest:() => { const chat = currentChat(); if (!chat) return; chat.modelRequestSteps = (chat.modelRequestSteps || 0)+1; chat.lastRequestFailed = false; renderMetrics(); },
         beginRequestTask:() => { freezeRuntimeAPI(); syncAppStateToMain(); },

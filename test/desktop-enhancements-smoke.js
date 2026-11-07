@@ -41,6 +41,16 @@ app.whenReady().then(async () => {
         assert.equal(await evaluate(main,"localStorage.getItem('auto_summary_interval')"),'0');
         await sleep(250);
         assert.deepEqual(await evaluate(main,"(() => { const c=getComputedStyle(document.getElementById('model-selector-trigger')); return [c.borderTopLeftRadius,c.borderTopRightRadius,c.borderBottomLeftRadius,c.borderBottomRightRadius]; })()"),['12px','12px','0px','0px']);
+        // Real click dispatch must leave exactly one of the overlapping menus open.
+        await evaluate(main, "document.getElementById('model-selector-trigger').click(); document.querySelector('.reasoning-footer').click(); document.getElementById('attach-plus-btn').click();");
+        assert.deepEqual(await evaluate(main, "[document.querySelectorAll('.choice-popover.open').length,document.getElementById('model-selector-trigger').getAttribute('aria-expanded'),document.getElementById('attach-menu').classList.contains('visible') ]"),[0,'false',true]);
+        for (const theme of ['theme-dark','theme-light']) {
+            assert.equal(await evaluate(main, `(() => { document.body.classList.remove('theme-dark','theme-light'); document.body.classList.add('${theme}'); const a=getComputedStyle(document.getElementById('attach-menu')),c=getComputedStyle(document.getElementById('context-breakdown')); return a.backgroundColor===c.backgroundColor && a.backdropFilter===c.backdropFilter && document.getElementById('attach-menu').parentElement===document.body; })()`),true);
+        }
+        await evaluate(main, "document.body.classList.remove('theme-light'); document.body.classList.add('theme-dark'); document.getElementById('model-selector-trigger').click();");
+        assert.deepEqual(await evaluate(main, "[document.getElementById('attach-menu').classList.contains('visible'),document.querySelector('.model-choice-popover').classList.contains('open')]"),[false,true]);
+        await evaluate(main, "document.getElementById('attach-plus-btn').click(); document.getElementById('attach-plus-btn').click();");
+        assert.equal(await evaluate(main, "document.getElementById('attach-menu').classList.contains('visible')"),false);
         const token = await evaluate(main,"window.electronAPI.countContextBatch(['你好，世界！'],'deepseek-flash')");
         assert.equal(token.generic,false); assert.equal(token.counts[0],4);
         assert.equal((await evaluate(main,"window.electronAPI.countContextBatch(['hello'],'gemini-4-argon')")).generic,true);
