@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "9.3.0",
+  "version": "9.4.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
@@ -10,6 +10,7 @@
     "build": "electron-builder --win portable nsis",
     "build:tokenizer": "node build-tokenizer.cjs",
     "test": "node --test test/*.test.js",
+    "test:api-profiles": "electron test/api-profiles-smoke.js",
     "test:gateway-ui": "electron test/gateway-electron-smoke.js",
     "test:agent-live": "electron test/agent-live-smoke.js"
   },

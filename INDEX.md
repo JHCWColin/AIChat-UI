@@ -256,7 +256,7 @@
 |---|---|
 | AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`（约 4882–5300） |
 | Claude `/v1/messages` 协议转换 | `index.html` `buildMessagesPayloadFromBase` / `extractMessagesStreamUpdate`；语音窗口对应 `voicechat-api.js` 的 `buildMessagesPayload` / `extractUpdate` |
-| API 配置档案（多组 Key 切换） | `index.html` `readApiProfiles` / `switchApiProfile` / `saveApiProfile`（约 7073 起）+ HTML `#api-profile-select` |
+| API 配置档案（多组 Key 切换） | `index.html` `readApiProfiles` / `switchApiProfile` / `createApiProfile` / `saveApiProfileEdits` / `cancelApiProfileEdits`（约 7433 起）+ HTML `#api-profile-select`；`npm run test:api-profiles` 验证独立偏好窗口中的配置切换与保存 |
 | 上下文 token 统计与悬停分解 | `context-estimator.js` / `tokenizer-entry.js` / `build-tokenizer.cjs`；`index.html` `updateContextMeter` / `getContextWindowForModel` + `#context-meter` |
 | Agent 阈值压缩触发 | `agent-ui.js` `compactAgentContextIfNeeded`（在 Agent Loop 每轮开头调用） |
 | AI 回复如何渲染 / Markdown / 防 XSS | `renderAssistantMarkdown` + `sanitizeHtml`（约 4610–4642） |

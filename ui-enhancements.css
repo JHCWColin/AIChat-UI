@@ -117,8 +117,8 @@ body main>header { height:48px!important; min-height:48px!important; max-height:
 .agent-question .agent-question-option[aria-pressed=true] { border-color:var(--accent-strong); background:rgba(var(--accent-rgb),.12); }
 .agent-question input[hidden] { display:none!important; }
 body.preferences-window>aside,body.preferences-window>main,body.preferences-window>#sidebar-overlay { display:none!important; }
-body.preferences-window #settings-modal { display:flex!important; position:fixed; inset:0; padding:0; opacity:1!important; visibility:visible!important; }
-body.preferences-window #settings-modal>div { max-width:none; width:100%; height:100dvh; max-height:none; border-radius:0; }
+body.preferences-window #settings-modal { display:flex!important; position:fixed; inset:0; padding:0; opacity:1!important; visibility:visible!important; pointer-events:auto; transition:none; animation:none; }
+body.preferences-window #settings-modal>div { max-width:none; width:100%; height:100dvh; max-height:none; border-radius:0; opacity:1; transform:none; transition:none; animation:none; }
 body.preferences-window #settings-modal .settings-body-inner { min-width:0; }
 /* The detached page has its own opaque canvas; modal glass must not blend
    with the hidden chat or depend on native form-control theme defaults. */

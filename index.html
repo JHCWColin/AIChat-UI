@@ -3466,25 +3466,25 @@
                     <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
                         <i data-lucide="key" class="w-4 h-4"></i>API 配置
                     </h3>
-                    <p class="text-xs text-gray-400 mb-3">填入你的 Key 即可生效，在此处修改并保存，会持久存储。</p>
+                    <p class="text-xs text-gray-400 mb-3">选择配置后会立即载入并生效；修改下方内容后，点击「保存修改」。</p>
                     <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex items-center justify-between gap-3 mb-3">
-                            <label class="block text-sm font-medium text-gray-200">配置档案</label>
-                            <button type="button" onclick="saveApiProfile()"
-                                class="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">保存当前为新档案</button>
+                            <label for="api-profile-select" class="block text-sm font-medium text-gray-200">配置档案</label>
+                            <button type="button" onclick="createApiProfile()"
+                                class="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">新建配置</button>
                         </div>
                         <select id="api-profile-select" onchange="switchApiProfile(this.value)"
                             class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             <option value="">（默认配置）</option>
                         </select>
-                        <p class="text-[11px] text-gray-500 mt-2">每个档案独立保存 API Key、Base URL、请求端点与最大 Token，切换后立即生效并记住选择。</p>
-                        <div class="flex gap-2 mt-3">
-                            <input id="api-profile-name" type="text" placeholder="新档案名称，例如 Claude 官方"
-                                class="flex-1 bg-[#171717] border border-gray-700 rounded-lg p-2 text-xs outline-none focus:border-emerald-500 transition-colors">
-                            <button type="button" onclick="renameApiProfile()"
-                                class="px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">重命名</button>
-                            <button type="button" onclick="deleteApiProfile()"
-                                class="px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-red-500 hover:text-red-400 transition-colors">删除</button>
+                        <p id="api-profile-status" role="status" class="text-[11px] text-gray-500 mt-2"></p>
+                        <p class="text-[11px] text-gray-500 mt-2">每个配置独立保存 API Key、Base URL、请求端点、模型列表与最大 Token 限制。</p>
+                        <div class="flex items-center gap-2 mt-3">
+                            <label for="api-profile-name" class="text-xs text-gray-300 shrink-0">配置名称</label>
+                            <input id="api-profile-name" type="text" placeholder="例如 Claude 官方"
+                                class="flex-1 min-w-0 bg-[#171717] border border-gray-700 rounded-lg p-2 text-xs outline-none focus:border-emerald-500 transition-colors">
+                            <button id="api-profile-delete" type="button" onclick="deleteApiProfile()"
+                                class="px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-red-500 hover:text-red-400 transition-colors">删除配置</button>
                         </div>
                     </div>
                     <div class="space-y-3">
@@ -3579,11 +3579,11 @@
                         </div>
                     </div>
                     <div id="api-settings-actions" class="flex justify-end gap-3 pt-4 border-t border-gray-700 mt-5">
-                        <button onclick="toggleSettings()"
-                            class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
+                        <button onclick="cancelApiProfileEdits()"
+                            class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">放弃修改</button>
                         <span id="api-unsaved-hint" class="hidden self-center text-xs text-red-400">点击保存后才会生效</span>
-                        <button onclick="saveSettings()"
-                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存设置</button>
+                        <button id="api-profile-save" onclick="if (saveSettings(true)) showVoiceNotification('API 配置已保存', false, 2500)"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存修改</button>
                     </div>
                 </div>
                 <div id="section-voice-chat" class="settings-content-section space-y-4">
@@ -4004,7 +4004,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V9.3.0 Release</span>
+                            <span id="app-version">V9.4.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -5846,6 +5846,7 @@
         function resetModelListEditor() {
             const input = document.getElementById('model-list-input');
             if (input) input.value = DEFAULT_MODEL_LIST.join('\n');
+            markApiSettingsDirty();
         }
 
         function onModelSelectionChange() {
@@ -7096,7 +7097,7 @@
                 updateSettingsLocks();
             } else {
                 if (apiSettingsDirty && !confirm('API 配置已修改但尚未保存，是否保存更改？')) { return; }
-                if (apiSettingsDirty) saveSettings(true);
+                if (apiSettingsDirty && !saveSettings(true)) return;
                 closeAnimatedModal(modal, 'flex', () => {
                     modal.classList.remove('portrait-layout');
                 });
@@ -7233,7 +7234,7 @@
         function switchSettingsSection(sectionId, btn) {
             if (apiSettingsDirty && sectionId !== 'api' && document.getElementById('section-api')?.classList.contains('active-section')) {
                 if (!confirm('API 配置已修改但尚未保存，是否保存更改？')) return;
-                saveSettings(true);
+                if (!saveSettings(true)) return;
             }
             document.querySelectorAll('.settings-content-section').forEach(s => s.classList.remove('active-section'));
             document.querySelectorAll('.settings-sidebar button').forEach(b => b.classList.remove('active-nav'));
@@ -7244,9 +7245,7 @@
                 populateAutoSummarySettings();
             }
             if (sectionId === 'api') {
-                populateModelListEditor();
-                populateRequestEndpointSettings();
-                renderApiProfileOptions();
+                if (!apiSettingsDirty) { populateApiSettingsEditor(); renderApiProfileOptions(); }
             }
             if (sectionId === 'voice') {
             }
@@ -7436,19 +7435,22 @@
         const API_PROFILE_FIELDS = ['api_key', 'base_url', 'request_endpoint', 'max_tokens_limit', 'model_list', 'selected_model'];
         const API_PROFILES_KEY = 'api_profiles';
         const ACTIVE_PROFILE_KEY = 'active_api_profile';
+        const DEFAULT_API_PROFILE_KEY = 'default_api_profile';
+        let creatingApiProfile = false;
 
         function readApiProfiles() {
             try {
                 const parsed = JSON.parse(localStorage.getItem(API_PROFILES_KEY) || '{}');
                 if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-                const profiles = {};
+                const profiles = Object.create(null);
                 for (const [name, value] of Object.entries(parsed)) {
                     if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
                     const settings = {};
                     // Only known fields are restored, so a corrupted entry can never
                     // overwrite unrelated localStorage keys.
+                    const source = value.settings && typeof value.settings === 'object' ? value.settings : value;
                     for (const field of API_PROFILE_FIELDS) {
-                        if (typeof value[field] === 'string') settings[field] = value[field];
+                        if (typeof source[field] === 'string') settings[field] = source[field];
                     }
                     profiles[String(name)] = { settings, updatedAt: Number(value.updatedAt) || 0 };
                 }
@@ -7479,22 +7481,27 @@
             return settings;
         }
 
+        function populateApiSettingsEditor() {
+            document.getElementById('api-key-input').value = getAPIKey();
+            document.getElementById('base-url-input').value = localStorage.getItem('base_url') ?? getBaseURL();
+            document.getElementById('max-tokens-input').value = localStorage.getItem('max_tokens_limit') || '0';
+            populateRequestEndpointSettings();
+            populateModelListEditor();
+        }
+
         function applyApiSettings(settings) {
             for (const field of API_PROFILE_FIELDS) {
                 if (typeof settings?.[field] === 'string') localStorage.setItem(field, settings[field]);
                 else localStorage.removeItem(field);
             }
-            // Push the restored values back into any visible controls.
-            const apiKeyInput = document.getElementById('api-key-input');
-            const baseUrlInput = document.getElementById('base-url-input');
-            const maxTokensInput = document.getElementById('max-tokens-input');
-            if (apiKeyInput) apiKeyInput.value = getAPIKey();
-            if (baseUrlInput) baseUrlInput.value = getBaseURL();
             maxTokensLimit = parseInt(localStorage.getItem('max_tokens_limit') || '0') || 0;
-            if (maxTokensInput) maxTokensInput.value = String(maxTokensLimit);
-            populateRequestEndpointSettings();
-            loadModelList();
+            applyTextModelList(loadModelList(), localStorage.getItem(SELECTED_MODEL_STORAGE_KEY));
+            populateApiSettingsEditor();
+            apiSettingsDirty = false;
+            document.getElementById('api-unsaved-hint')?.classList.add('hidden');
             updateTokenEstimate();
+            window.AIUIEnhancements?.changed();
+            window.electronAPI?.preferencesChanged();
         }
 
         function renderApiProfileOptions() {
@@ -7515,83 +7522,127 @@
                 select.appendChild(option);
             }
             select.value = names.includes(active) ? active : '';
+            if (creatingApiProfile) {
+                const draft = document.createElement('option');
+                draft.textContent = '（正在新建配置）';
+                draft.disabled = true;
+                select.appendChild(draft);
+                select.selectedIndex = select.options.length - 1;
+            }
             const nameInput = document.getElementById('api-profile-name');
-            if (nameInput) nameInput.value = names.includes(active) ? active : '';
+            if (nameInput) {
+                nameInput.value = creatingApiProfile ? '' : active;
+                nameInput.readOnly = !creatingApiProfile && !active;
+                nameInput.placeholder = nameInput.readOnly ? '默认配置' : '例如 Claude 官方';
+            }
+            document.getElementById('api-profile-delete').hidden = creatingApiProfile || !active;
+            document.getElementById('api-profile-save').textContent = creatingApiProfile ? '创建配置' : '保存修改';
+            document.getElementById('api-profile-status').textContent = creatingApiProfile
+                ? '正在新建：填写名称和下方配置后点击「创建配置」，保存后立即启用。'
+                : active ? `正在修改：${active}。名称与下方内容统一通过「保存修改」保存。`
+                : '正在修改：默认配置。修改下方内容后点击「保存修改」，或点击「新建配置」添加独立配置。';
+        }
+
+        function confirmApiProfileDiscard() {
+            return !apiSettingsDirty || window.confirm('API 配置尚未保存，继续将放弃本次修改。是否继续？');
+        }
+
+        function readDefaultApiSettings() {
+            try { return JSON.parse(localStorage.getItem(DEFAULT_API_PROFILE_KEY) || '{}'); }
+            catch (_) { return {}; }
         }
 
         function switchApiProfile(name) {
             const target = String(name || '');
             const profiles = readApiProfiles();
-            if (target && !profiles[target]) {
+            if (target && !Object.hasOwn(profiles, target)) {
                 showVoiceNotification(`配置档案不存在：${target}`, true, 3000);
                 renderApiProfileOptions();
                 return;
             }
-            // Leaving a profile persists the edits made before switching, so switching
-            // tabs never silently discards the key that was just typed in.
-            const active = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
-            if (active && profiles[active]) {
-                profiles[active] = { settings: captureCurrentApiSettings(), updatedAt: Date.now() };
+            if (!confirmApiProfileDiscard()) {
+                const select = document.getElementById('api-profile-select');
+                if (creatingApiProfile) select.selectedIndex = select.options.length - 1;
+                else select.value = localStorage.getItem(ACTIVE_PROFILE_KEY) || '';
+                return;
             }
+            // Preserve the default configuration before the first switch away.
+            if (!localStorage.getItem(ACTIVE_PROFILE_KEY)) {
+                localStorage.setItem(DEFAULT_API_PROFILE_KEY, JSON.stringify(captureCurrentApiSettings()));
+            }
+            creatingApiProfile = false;
             if (target) {
                 localStorage.setItem(ACTIVE_PROFILE_KEY, target);
                 applyApiSettings(profiles[target].settings);
             } else {
                 localStorage.removeItem(ACTIVE_PROFILE_KEY);
+                applyApiSettings(readDefaultApiSettings());
             }
-            writeApiProfiles(profiles);
             renderApiProfileOptions();
             showVoiceNotification(target ? `已切换到配置档案：${target}` : '已切换回默认配置', false, 2500);
         }
 
-        function saveApiProfile() {
-            const select = document.getElementById('api-profile-select');
-            const nameInput = document.getElementById('api-profile-name');
-            const suggested = String(nameInput?.value || select?.value || '').trim();
-            if (!suggested) {
-                showVoiceNotification('请先在下方输入档案名称', true, 3000);
-                nameInput?.focus();
-                return;
-            }
-            const profiles = readApiProfiles();
-            const settings = captureCurrentApiSettings();
-            if (!settings.api_key && !settings.base_url) {
-                showVoiceNotification('当前没有可保存的 API 配置', true, 3000);
-                return;
-            }
-            const isOverwrite = Boolean(profiles[suggested]);
-            profiles[suggested] = { settings, updatedAt: Date.now() };
-            localStorage.setItem(ACTIVE_PROFILE_KEY, suggested);
-            if (!writeApiProfiles(profiles)) return;
+        function createApiProfile() {
+            if (!confirmApiProfileDiscard()) return;
+            creatingApiProfile = true;
             renderApiProfileOptions();
-            showVoiceNotification(isOverwrite ? `已更新配置档案：${suggested}` : `已保存配置档案：${suggested}`, false, 2500);
+            document.getElementById('api-key-input').value = '';
+            document.getElementById('base-url-input').value = '';
+            document.getElementById('max-tokens-input').value = '0';
+            document.getElementById('model-list-input').value = '';
+            document.querySelectorAll('input[name="request-endpoint"]').forEach(radio => { radio.checked = radio.value === '/responses'; });
+            markApiSettingsDirty();
+            document.getElementById('api-profile-name').focus();
         }
 
-        function renameApiProfile() {
+        function cancelApiProfileEdits() {
+            if (!confirmApiProfileDiscard()) return;
+            creatingApiProfile = false;
+            populateApiSettingsEditor();
+            renderApiProfileOptions();
+            apiSettingsDirty = false;
+            document.getElementById('api-unsaved-hint')?.classList.add('hidden');
+        }
+
+        function saveApiProfileEdits() {
             const active = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
             const nameInput = document.getElementById('api-profile-name');
-            const next = String(nameInput?.value || '').trim();
-            if (!active) {
-                showVoiceNotification('请先在下拉框选择一个档案', true, 3000);
-                return;
-            }
-            if (!next) {
-                showVoiceNotification('请输入新的档案名称', true, 3000);
-                return;
-            }
-            if (next === active) return;
+            const named = creatingApiProfile || Boolean(active);
+            const next = named ? String(nameInput?.value || '').trim() : '';
             const profiles = readApiProfiles();
-            profiles[active] = { settings: captureCurrentApiSettings(), updatedAt: Date.now() };
-            if (profiles[next]) {
-                showVoiceNotification(`名称已存在：${next}`, true, 3000);
-                return;
+            if (named && !next) {
+                showVoiceNotification('请输入配置名称', true, 3000);
+                nameInput?.focus();
+                return false;
             }
-            profiles[next] = profiles[active];
-            delete profiles[active];
-            localStorage.setItem(ACTIVE_PROFILE_KEY, next);
-            if (!writeApiProfiles(profiles)) return;
+            if (named && (creatingApiProfile || next !== active) && Object.hasOwn(profiles, next)) {
+                showVoiceNotification(`名称已存在：${next}`, true, 3000);
+                return false;
+            }
+            const models = normalizeModelList(document.getElementById('model-list-input').value);
+            const savedModels = models.length ? models : DEFAULT_MODEL_LIST.slice();
+            const currentModel = localStorage.getItem(SELECTED_MODEL_STORAGE_KEY);
+            const settings = {
+                api_key: document.getElementById('api-key-input').value.trim(),
+                base_url: document.getElementById('base-url-input').value.trim(),
+                request_endpoint: document.querySelector('input[name="request-endpoint"]:checked')?.value || '/responses',
+                max_tokens_limit: String(Math.max(0, parseInt(document.getElementById('max-tokens-input').value) || 0)),
+                model_list: JSON.stringify(savedModels),
+                selected_model: savedModels.includes(currentModel) ? currentModel : savedModels[0]
+            };
+            if (named) {
+                profiles[next] = { settings, updatedAt: Date.now() };
+                if (!creatingApiProfile && next !== active) delete profiles[active];
+                if (!writeApiProfiles(profiles)) return false;
+                if (!active) localStorage.setItem(DEFAULT_API_PROFILE_KEY, JSON.stringify(captureCurrentApiSettings()));
+                localStorage.setItem(ACTIVE_PROFILE_KEY, next);
+            } else {
+                localStorage.setItem(DEFAULT_API_PROFILE_KEY, JSON.stringify(settings));
+            }
+            creatingApiProfile = false;
+            applyApiSettings(settings);
             renderApiProfileOptions();
-            showVoiceNotification(`已重命名为：${next}`, false, 2500);
+            return true;
         }
 
         async function deleteApiProfile() {
@@ -7603,13 +7654,16 @@
             if (!window.confirm(`确定要删除配置档案「${active}」吗？此操作不可撤销。`)) return;
             const profiles = readApiProfiles();
             delete profiles[active];
-            localStorage.removeItem(ACTIVE_PROFILE_KEY);
             if (!writeApiProfiles(profiles)) return;
+            localStorage.removeItem(ACTIVE_PROFILE_KEY);
+            creatingApiProfile = false;
+            applyApiSettings(readDefaultApiSettings());
             renderApiProfileOptions();
             showVoiceNotification(`已删除配置档案：${active}`, false, 2500);
         }
 
         function saveSettings(skipClose = false) {
+            if (!saveApiProfileEdits()) return false;
             if (isGenerating || (typeof isAgentTaskRunning === 'function' && isAgentTaskRunning())) {
                 showVoiceNotification('设置会在本轮流传输结束后应用', false, 3000, false, 'warning');
             }
@@ -7621,24 +7675,8 @@
             localStorage.setItem('bg_image', selectedBackgroundImage);
             localStorage.setItem('canvas_font_size', currentCanvasFontSize);
             localStorage.setItem('layout_mode', currentLayoutMode);
-            const apiKeyInput = document.getElementById('api-key-input').value.trim();
-            if (apiKeyInput) localStorage.setItem('api_key', apiKeyInput);
-            else localStorage.removeItem('api_key');
-            const baseUrlInput = document.getElementById('base-url-input').value.trim();
-            if (baseUrlInput) localStorage.setItem('base_url', baseUrlInput);
-            else localStorage.removeItem('base_url');
-            const maxTokensVal = parseInt(document.getElementById('max-tokens-input').value) || 0;
-            localStorage.setItem('max_tokens_limit', maxTokensVal);
-            maxTokensLimit = maxTokensVal;
-            const modelListInput = document.getElementById('model-list-input');
-            const editedModelList = normalizeModelList(modelListInput?.value || '');
-            const savedModelList = editedModelList.length ? editedModelList : DEFAULT_MODEL_LIST.slice();
-            const currentTextModel = isImageMode
-                ? localStorage.getItem(SELECTED_MODEL_STORAGE_KEY)
-                : document.getElementById('model-select')?.value;
+            const savedModelList = loadModelList();
             const selectedContextModel = document.getElementById('context-compaction-model-select')?.value || '';
-            localStorage.setItem(MODEL_LIST_STORAGE_KEY, JSON.stringify(savedModelList));
-            applyTextModelList(savedModelList, currentTextModel || DEFAULT_CHAT_MODEL);
             const selectedSummaryRadio = document.querySelector('input[name="auto-summary-interval"]:checked');
             autoSummaryInterval = selectedSummaryRadio ? parseInt(selectedSummaryRadio.value, 10) : 0;
             if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 0;
@@ -7649,19 +7687,6 @@
                 : (savedModelList.includes(DEFAULT_CONTEXT_COMPACTION_MODEL) ? DEFAULT_CONTEXT_COMPACTION_MODEL : savedModelList[0]);
             if (contextModelSelect && savedContextModel) contextModelSelect.value = savedContextModel;
             if (savedContextModel) localStorage.setItem('context_compaction_model', savedContextModel);
-            const selectedEndpoint = document.querySelector('input[name="request-endpoint"]:checked')?.value || '/responses';
-            localStorage.setItem('request_endpoint', selectedEndpoint);
-            // Keep the active profile in step with edits made through the normal save
-            // flow, so switching away never restores stale credentials.
-            const activeProfileName = String(localStorage.getItem(ACTIVE_PROFILE_KEY) || '');
-            if (activeProfileName) {
-                const profiles = readApiProfiles();
-                if (profiles[activeProfileName]) {
-                    profiles[activeProfileName] = { settings: captureCurrentApiSettings(), updatedAt: Date.now() };
-                    writeApiProfiles(profiles);
-                }
-            }
-            renderApiProfileOptions();
             const voiceChatFields = {
                 voice_chat_model: 'voice-chat-model-input',
                 voice_fish_base: 'voice-fish-base-input',
@@ -7715,6 +7740,7 @@
             if (!skipClose) toggleSettings();
             updateTokenEstimate();
             syncAppStateToMain();
+            return true;
         }
 
         async function checkForUpdatesManually() {
@@ -7748,7 +7774,7 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.3.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.4.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[[7, 'Duo Light'], [8, 'Duo Dark'], [9, 'Golden Gate'], [1, '花谱1'], [2, '花谱2'], [3, '洛天依1'], [4, '洛天依2'], [5, '初音未来1'], [6, '初音未来2']].map(([x, name]) => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${name}"><span class="block text-[11px] text-gray-400 mt-1">${name}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
@@ -8917,7 +8943,7 @@
             document.getElementById('sys-prompt').value = systemPrompt;
             document.getElementById('api-key-input').value = getAPIKey();
             document.getElementById('base-url-input').value = getBaseURL();
-            ['api-key-input', 'base-url-input', 'max-tokens-input', 'model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
+            ['api-profile-name', 'api-key-input', 'base-url-input', 'max-tokens-input', 'model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
             document.querySelectorAll('input[name="request-endpoint"]').forEach(el => el.addEventListener('change', markApiSettingsDirty));
             document.getElementById('max-tokens-input').value = maxTokensLimit;
             const savedDetail = localStorage.getItem('image_detail_level') || 'medium';

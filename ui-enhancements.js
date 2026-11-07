@@ -384,7 +384,7 @@
         };
         if (preferences) {
             const close = async () => {
-                if (apiSettingsDirty) { if (!confirm('API 配置已修改但尚未保存，是否保存更改？')) return; saveSettings(true); }
+                if (apiSettingsDirty) { if (!confirm('API 配置已修改但尚未保存，是否保存更改？')) return; if (!saveSettings(true)) return; }
                 await window.electronAPI?.closePreferences();
             };
             window.toggleSettings = close;
@@ -463,7 +463,7 @@
         await originalOnload?.(event);
         initializeSelectors(); initializeSidebar(); initializeSettings();
         if (preferences) {
-            const modal = $('settings-modal'); openAnimatedModal(modal,'flex');
+            const modal = $('settings-modal'); modal.classList.add('flex','modal-active');
             populateAutoSummarySettings(); populateModelListEditor(); populateVoiceChatSettings(); populateDesktopWorkSettings(); populateOtherSettings(); populateAdvancedSettings(); populateAgentSettings(); updateSettingsPortraitMode();
             const state = await window.electronAPI?.getPreferencesState();
             if (state) { isGenerating = state.generating; contextCompactionRunning = state.compaction; window._audioChatRunning = state.audio; window._desktopWorkRunning = state.desktop; window.isAgentTaskRunning = () => state.agentRunning; updateSettingsLocks(); }
