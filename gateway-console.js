@@ -1,6 +1,19 @@
 (() => {
     'use strict';
     const api = window.gatewayConsoleAPI;
+    function applyAppearance(value) {
+        const light = value?.theme !== 'dark';
+        document.documentElement.dataset.theme = light ? 'light' : 'dark';
+        const style = document.documentElement.style;
+        const colors = light ? { '--bg':'#f6f6f6','--card':'#ffffff','--line':'#dedede','--text':'#252525','--muted':'#737373' }
+            : { '--bg':'#212121','--card':'#292929','--line':'#404040','--text':'#ededed','--muted':'#a3a3a3' };
+        for (const [key,color] of Object.entries(colors)) style.setProperty(key,color);
+        style.setProperty('--accent',value?.accent || '#10b981');
+        style.setProperty('--accent-dark',`color-mix(in srgb, ${value?.accent || '#10b981'} 15%, var(--card))`);
+        style.colorScheme = light ? 'light':'dark';
+    }
+    api?.getAppearance?.().then(applyAppearance);
+    api?.onAppearance?.(applyAppearance);
     const $ = id => document.getElementById(id);
     let status = null;
     let busy = false;

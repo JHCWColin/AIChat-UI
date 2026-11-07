@@ -869,10 +869,6 @@
             white-space: nowrap;
         }
 
-        #settings-modal.portrait-layout .settings-sidebar .settings-back-btn {
-            display: inline-flex;
-        }
-
         #settings-modal.portrait-layout .settings-sidebar nav {
             display: flex !important;
             flex-direction: row !important;
@@ -943,10 +939,6 @@
             #settings-modal .settings-sidebar button {
                 flex: 0 0 auto;
                 white-space: nowrap;
-            }
-
-            #settings-modal .settings-sidebar .settings-back-btn {
-                display: inline-flex;
             }
 
             #settings-modal .settings-sidebar nav {
@@ -2350,16 +2342,6 @@
             background: #dc2626;
         }
 
-        #voice-btn.recording {
-            background: rgba(220, 38, 38, 0.7);
-            border-color: rgba(220, 38, 38, 0.9);
-            color: white;
-        }
-
-        body.theme-light #voice-btn.recording {
-            background: rgba(220, 38, 38, 0.8);
-        }
-
         #active-chat-heading {
             min-width: 0;
             display: flex;
@@ -2998,6 +2980,9 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="ui-enhancements.css">
+    <script src="model-capabilities.js"></script>
+    <script src="request-metrics.js"></script>
 </head>
 
 <body class="h-screen flex overflow-hidden theme-light font-size-medium" onclick="closeRetryMenu(event)">
@@ -3058,6 +3043,11 @@
                         <div class="input-selector-row">
                             <div class="model-selector-container flex items-center gap-2">
                                 <select id="model-select" onchange="onModelSelectionChange()">
+                                    <option value="gpt-6.1-sol">gpt-6.1-sol</option>
+                                    <option value="gpt-6.1-terra">gpt-6.1-terra</option>
+                                    <option value="gpt-6-luna">gpt-6-luna</option>
+                                    <option value="gemini-4-argon">gemini-4-argon</option>
+                                    <option value="deepseek-flash">deepseek-flash</option>
                                     <option value="gpt-6-astra">gpt-6-astra</option>
                                     <option value="gpt-5.6-sol">gpt-5.6-sol</option>
                                     <option value="gpt-5.6-terra" selected>gpt-5.6-terra（默认）</option>
@@ -3081,7 +3071,6 @@
 
                                     <option value="gemini-3.8-flash">gemini-3.8-flash</option>
                                     <option value="gemini-3.8-flash-search">gemini-3.8-flash-search</option>
-                                    <option value="gemini-3.7-flash">gemini-3.7-flash</option>
                                     <option value="gemini-3.7-flash-search">gemini-3.7-flash-search</option>
                                     <option value="gemini-3.6-flash">gemini-3.6-flash</option>
 
@@ -3179,10 +3168,6 @@
                             <input type="file" id="hidden-file-input"
                                 accept="image/*,.txt,.md,.json,.csv,.py,.js,.html,.css,.xml,.yaml,.yml,.log,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
                                 multiple hidden onchange="handleFileSelect(event)">
-                            <button id="voice-btn" onclick="toggleVoiceRecording()" title="语音输入"
-                                class="p-2 rounded-xl transition-colors flex-shrink-0">
-                                <i data-lucide="mic" class="w-5 h-5"></i>
-                            </button>
                             <button id="send-btn" onclick="sendMessage()"
                                 class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 flex-shrink-0">
                                 <i data-lucide="arrow-up" class="w-5 h-5"></i>
@@ -3259,27 +3244,22 @@
         <div class="bg-[#2f2f2f] w-full max-w-4xl rounded-xl shadow-2xl overflow-hidden text-white flex">
             <aside class="settings-sidebar p-3 flex flex-col">
                 <div class="settings-sidebar-header flex items-center justify-between gap-3 mb-3 px-2">
-                    <button id="settings-back-btn"
-                        class="settings-back-btn hidden items-center gap-2 px-3 py-2 rounded-xl border border-gray-700 text-sm text-gray-200"
-                        onclick="toggleSettings()">
-                        <i data-lucide="arrow-left" class="w-4 h-4"></i> 返回
-                    </button>
                     <h2 class="text-lg font-semibold text-gray-200">偏好设置</h2>
                 </div>
                 <nav class="flex flex-col gap-0.5 flex-grow">
                     <button class="active-nav" data-section="ai-chat"
-                        onclick="switchSettingsSection('ai-chat', this)">对话设置</button>
-                    <button data-section="appearance" onclick="switchSettingsSection('appearance', this)">外观设置</button>
-                    <button data-section="coding" onclick="switchSettingsSection('coding', this)">编码模式</button>
-                    <button data-section="api" onclick="switchSettingsSection('api', this)">API配置</button>
+                        onclick="switchSettingsSection('ai-chat', this)"><i data-lucide="messages-square" aria-hidden="true"></i><span>对话设置</span></button>
+                    <button data-section="appearance" onclick="switchSettingsSection('appearance', this)"><i data-lucide="palette" aria-hidden="true"></i><span>外观设置</span></button>
+                    <button data-section="coding" onclick="switchSettingsSection('coding', this)"><i data-lucide="code-2" aria-hidden="true"></i><span>编码模式</span></button>
+                    <button data-section="api" onclick="switchSettingsSection('api', this)"><i data-lucide="key-round" aria-hidden="true"></i><span>API配置</span></button>
                     <button data-section="desktop-work"
-                        onclick="switchSettingsSection('desktop-work', this)">桌面协作</button>
-                    <button data-section="other" onclick="switchSettingsSection('other', this)">其他</button>
-                    <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)">语音聊天</button>
-                    <button data-section="agent" onclick="switchSettingsSection('agent', this)">Agent</button>
-                    <button data-section="advanced" onclick="switchSettingsSection('advanced', this)">开发调试</button>
-                    <button data-section="guide" onclick="switchSettingsSection('guide', this)">使用指导</button>
-                    <button data-section="about" onclick="switchSettingsSection('about', this)">关于</button>
+                        onclick="switchSettingsSection('desktop-work', this)"><i data-lucide="monitor-up" aria-hidden="true"></i><span>桌面协作</span></button>
+                    <button data-section="other" onclick="switchSettingsSection('other', this)"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span>其他</span></button>
+                    <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)"><i data-lucide="audio-lines" aria-hidden="true"></i><span>语音聊天</span></button>
+                    <button data-section="agent" onclick="switchSettingsSection('agent', this)"><i data-lucide="bot" aria-hidden="true"></i><span>Agent</span></button>
+                    <button data-section="advanced" onclick="switchSettingsSection('advanced', this)"><i data-lucide="bug" aria-hidden="true"></i><span>开发调试</span></button>
+                    <button data-section="guide" onclick="switchSettingsSection('guide', this)"><i data-lucide="book-open" aria-hidden="true"></i><span>使用指导</span></button>
+                    <button data-section="about" onclick="switchSettingsSection('about', this)"><i data-lucide="info" aria-hidden="true"></i><span>关于</span></button>
                 </nav>
             </aside>
             <div class="flex-grow p-5 settings-body-inner">
@@ -3300,46 +3280,48 @@
                                 onclick="setTemp(1.2, this)">创意性</button>
                         </div>
                     </div>
-                    <div class="pt-2">
-                        <label class="block text-sm font-medium mb-3 text-gray-300">自动摘要</label>
-                        <div class="space-y-2">
-                            <label
-                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="0"
-                                    class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">不进行自动压缩</strong><small
-                                        class="block mt-1 text-xs text-gray-500">不压缩上下文，消耗更多
-                                        Token；上下文更完整、回复通常更精确，但处理时间可能更长。</small></span>
-                            </label>
-                            <label
-                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="10"
-                                    class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">默认：每 10 轮对话自动压缩</strong><small
-                                        class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次生成一份摘要。</small></span>
-                            </label>
-                            <label
-                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="15"
-                                    class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small
-                                        class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份摘要。</small></span>
-                            </label>
-                            <label
-                                class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
-                                <input type="radio" name="auto-summary-interval" value="20"
-                                    class="mt-1 accent-emerald-500">
-                                <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small
-                                        class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份摘要。</small></span>
-                            </label>
+                    <div id="context-compaction-card" class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div>
+                            <label class="block text-sm font-medium mb-3 text-gray-300">自动摘要</label>
+                            <div class="space-y-2">
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="auto-summary-interval" value="0"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">不进行自动摘要（默认）</strong><small
+                                            class="block mt-1 text-xs text-gray-500">不压缩上下文，消耗更多
+                                            Token；上下文更完整、回复通常更精确，但处理时间可能更长。</small></span>
+                                </label>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="auto-summary-interval" value="10"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">每 10 轮对话自动压缩</strong><small
+                                            class="block mt-1 text-xs text-gray-500">每累计 10 个完整轮次生成一份摘要。</small></span>
+                                </label>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="auto-summary-interval" value="15"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">每 15 轮对话自动压缩</strong><small
+                                            class="block mt-1 text-xs text-gray-500">每累计 15 个完整轮次生成一份摘要。</small></span>
+                                </label>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="auto-summary-interval" value="20"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">每 20 轮对话自动压缩</strong><small
+                                            class="block mt-1 text-xs text-gray-500">每累计 20 个完整轮次生成一份摘要。</small></span>
+                                </label>
+                            </div>
+                            <p class="text-[11px] text-gray-500 mt-2">摘要不会替换界面的原本聊天记录，也不会展示。</p>
                         </div>
-                        <p class="text-[11px] text-gray-500 mt-2">摘要不会替换界面的原本聊天记录，也不会展示。</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2 text-gray-300">上下文压缩模型</label>
-                        <select id="context-compaction-model-select" onchange="onContextSettingChange()"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"></select>
-                        <p class="text-[11px] text-gray-500 mt-2">建议选择价格较低、响应较快的模型；摘要助手越便宜，整体使用体验通常越好，成本也越低。</p>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">上下文压缩模型</label>
+                            <select id="context-compaction-model-select" onchange="onContextSettingChange()"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"></select>
+                            <p class="text-[11px] text-gray-500 mt-2">建议选择价格较低、响应较快的模型；摘要助手越便宜，整体使用体验通常越好，成本也越低。</p>
+                        </div>
                     </div>
                 </div>
                 <div id="section-appearance" class="settings-content-section space-y-5">
@@ -3396,6 +3378,24 @@
                     <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">背景图片</label>
                         <div class="grid grid-cols-3 gap-3">
+                            <div class="flex flex-col items-center gap-2">
+                                <img id="bg-thumb-7" src="7.JPG" alt="Duo Light"
+                                    class="w-20 h-20 object-cover object-center rounded-xl cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors"
+                                    onclick="setBackgroundImage(7, this)">
+                                <span class="text-xs text-gray-400 text-center">Duo Light</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2">
+                                <img id="bg-thumb-8" src="8.JPG" alt="Duo Dark"
+                                    class="w-20 h-20 object-cover object-center rounded-xl cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors"
+                                    onclick="setBackgroundImage(8, this)">
+                                <span class="text-xs text-gray-400 text-center">Duo Dark</span>
+                            </div>
+                            <div class="flex flex-col items-center gap-2">
+                                <img id="bg-thumb-9" src="9.JPG" alt="Golden Gate"
+                                    class="w-20 h-20 object-cover object-center rounded-xl cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors"
+                                    onclick="setBackgroundImage(9, this)">
+                                <span class="text-xs text-gray-400 text-center">Golden Gate</span>
+                            </div>
                             <div class="flex flex-col items-center gap-2">
                                 <img id="bg-thumb-1" src="1.JPG" alt="1"
                                     class="w-20 h-20 object-cover object-center rounded-xl cursor-pointer border-2 border-gray-600 hover:border-emerald-500 transition-colors"
@@ -3488,52 +3488,54 @@
                         </div>
                     </div>
                     <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
-                            <input type="password" id="api-key-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="sk-...">
-                            <!-- div class="mt-2 space-y-2">
-                                <button type="button" onclick="applyPresetApiKey('sk-*****')"
-                                    class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
-                                    <span class="block text-sm font-medium text-gray-200">替换为 default-only</span>
-                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">虽然价格贵，但 gpt
-                                        系列模型支持流式输出。</span>
-                                    <span
-                                        class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
-                                </button>
-                                <button type="button" onclick="applyPresetApiKey('sk-*****')"
-                                    class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
-                                    <span class="block text-sm font-medium text-gray-200">替换为 codex-only</span>
-                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">仅支持 gpt
-                                        系列的最近模型且不支持流式，但价格五折。</span>
-                                    <span
-                                        class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
-                                </button>
-                                <button type="button" onclick="applyPresetApiKey('sk-*****')"
-                                    class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
-                                    <span class="block text-sm font-medium text-gray-200">替换为 codex-default</span>
-                                    <span class="mt-1 block text-[11px] leading-4 text-gray-500">成本优先，非 gpt 系列支持流式，gpt
-                                        最新系列仍享受五折但不支持流式。</span>
-                                    <span
-                                        class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
-                                </button>
-                            </div -->
+                        <div id="api-connection-card" class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                            <div>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
+                                <input type="password" id="api-key-input"
+                                    class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
+                                    placeholder="sk-...">
+                                <!-- div class="mt-2 space-y-2">
+                                    <button type="button" onclick="applyPresetApiKey('sk-*****')"
+                                        class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
+                                        <span class="block text-sm font-medium text-gray-200">替换为 default-only</span>
+                                        <span class="mt-1 block text-[11px] leading-4 text-gray-500">虽然价格贵，但 gpt
+                                            系列模型支持流式输出。</span>
+                                        <span
+                                            class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
+                                    </button>
+                                    <button type="button" onclick="applyPresetApiKey('sk-*****')"
+                                        class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
+                                        <span class="block text-sm font-medium text-gray-200">替换为 codex-only</span>
+                                        <span class="mt-1 block text-[11px] leading-4 text-gray-500">仅支持 gpt
+                                            系列的最近模型且不支持流式，但价格五折。</span>
+                                        <span
+                                            class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
+                                    </button>
+                                    <button type="button" onclick="applyPresetApiKey('sk-*****')"
+                                        class="w-full rounded-xl border border-gray-700 bg-[#1a1a1a] px-3 py-2 text-left transition-colors hover:border-emerald-500 hover:text-emerald-400">
+                                        <span class="block text-sm font-medium text-gray-200">替换为 codex-default</span>
+                                        <span class="mt-1 block text-[11px] leading-4 text-gray-500">成本优先，非 gpt 系列支持流式，gpt
+                                            最新系列仍享受五折但不支持流式。</span>
+                                        <span
+                                            class="mt-1 block break-all text-[10px] font-mono text-gray-500">sk-*****</span>
+                                    </button>
+                                </div -->
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">Base URL</label>
+                                <input type="text" id="base-url-input"
+                                    class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
+                                    placeholder="https://api.vveai.com/v1">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2 text-gray-300">最大 Token 限制 <span
+                                        class="text-gray-500">(0=不限制)</span></label>
+                                <input type="number" id="max-tokens-input" min="0" step="1000" value="0"
+                                    class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
+                                    placeholder="0">
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">Base URL</label>
-                            <input type="text" id="base-url-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="https://api.vveai.com/v1">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">最大 Token 限制 <span
-                                    class="text-gray-500">(0=不限制)</span></label>
-                            <input type="number" id="max-tokens-input" min="0" step="1000" value="0"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="0">
-                        </div>
-                        <div>
+                        <div id="api-endpoint-card" class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                             <label class="block text-sm font-medium mb-3 text-gray-300">请求端点</label>
                             <div class="space-y-2">
                                 <label
@@ -3575,6 +3577,13 @@
                             <p class="text-[11px] text-gray-500 mt-2">每行一个模型；可直接增加、删除或调整顺序。保存后会同步更新主模型选择器和重试模型选择器，并存储在本机
                                 LocalStorage 中。</p>
                         </div>
+                    </div>
+                    <div id="api-settings-actions" class="flex justify-end gap-3 pt-4 border-t border-gray-700 mt-5">
+                        <button onclick="toggleSettings()"
+                            class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
+                        <span id="api-unsaved-hint" class="hidden self-center text-xs text-red-400">点击保存后才会生效</span>
+                        <button onclick="saveSettings()"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存设置</button>
                     </div>
                 </div>
                 <div id="section-voice-chat" class="settings-content-section space-y-4">
@@ -3712,18 +3721,6 @@
                 </div>
                 <div id="section-other" class="settings-content-section space-y-5">
                     <h3 class="text-base font-semibold text-gray-200 mb-3">其他</h3>
-                    <div class="space-y-4">
-                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                            <label class="block text-sm font-medium mb-2 text-gray-300">语音转文字模型</label>
-                            <select id="voice-model-select"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors text-white">
-                                <option value="whisper-1" selected>whisper-1 (默认)</option>
-                                <option value="whisper-base">whisper-base</option>
-                                <option value="whisper-large">whisper-large</option>
-                            </select>
-                            <p class="text-[11px] text-gray-500 mt-2">录音后自动使用此模型进行语音识别。</p>
-                        </div>
-                    </div>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex flex-col">
                             <span class="text-sm font-medium text-gray-200">LATEX 渲染</span>
@@ -3827,14 +3824,12 @@
                         <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 当前版本已移除云端同步与云端记忆入口，所有聊天与记忆仅保存在本地。
                         </p>
                         <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
-                            在设置的其他位置选择你喜欢的背景图片、亮暗模式以及文字大小。以及默认使用的语音输入模型。（<strong>前提是你提供的AI后端要支持语音转文字模型</strong>）。</p>
+                            在设置的其他位置选择你喜欢的背景图片、亮暗模式以及文字大小。</p>
 
                         <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">文字对话</p>
                         <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在模型列表里选择模型（前提是AI后端要支持）进行文字对话。</p>
                         <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
                             对于AI发出的所有消息，可以使用“复制”功能。对于AI发出的<strong>最后一条</strong>消息，可以使用“重试”功能。</p>
-                        <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">•
-                            使用“语音转文字”模型进行语音输入，识别到的内容将会在鼠标光标（若存在）处插入，或者在末尾插入，不会影响对话框中已有内容。</p>
 
                         <p style="font-size:1.4em; font-weight:bold; margin:1.2em 0 0.3em;">上下文压缩</p>
                         <p style="margin:0.3em 0 0.2em 1.5em; text-indent:-1.5em;">• 在“设置 - 对话设置”中可关闭自动摘要，或选择每 10、15、20
@@ -4007,7 +4002,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V8.2.0 Release</span>
+                            <span id="app-version">V9.0.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -4024,13 +4019,6 @@
                                     class="text-emerald-400 hover:text-emerald-300">LICENSE</a> 文件。</p>
                         </div>
                     </div>
-                </div>
-                <div class="flex justify-end gap-3 pt-4 border-t border-gray-700 mt-5">
-                    <button onclick="toggleSettings()"
-                        class="px-4 py-2 hover:bg-gray-800 rounded-xl text-sm">取消</button>
-                    <span id="api-unsaved-hint" class="hidden self-center text-xs text-red-400">点击保存后才会生效</span>
-                    <button onclick="saveSettings()"
-                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors text-sm font-medium">保存设置</button>
                 </div>
             </div>
         </div>
@@ -4065,7 +4053,7 @@
             <p class="mt-3 text-sm leading-relaxed">继续即表示你信任此工作区。Agent 可能将其中的 Markdown 和纯文本内容作为指令发送给
                 API，并执行有风险的操作；来源不明请取消。</p>
             <p id="agent-workspace-trust-path" title=""></p>
-            <ul id="agent-workspace-trust-files" aria-label="工作区文本文件"></ul>
+            <ul id="agent-workspace-trust-files" aria-label="工作区文档提醒"></ul>
             <div class="flex justify-end gap-2 mt-5">
                 <button type="button" class="px-4 py-2 rounded-md border border-gray-600 text-sm"
                     onclick="resolveAgentWorkspaceTrust(false)">取消</button>
@@ -5096,7 +5084,8 @@
                 content: msg.role === 'assistant' && typeof AgentProtocol !== 'undefined'
                     ? AgentProtocol.stripAssistantReasoningContent(msg.content || '') : (msg.content || ''),
                 ...(msg.role === 'assistant' && msg.responsesReasoning
-                    ? { __aiuiResponsesReasoning: msg.responsesReasoning } : {})
+                    ? { __aiuiResponsesReasoning: msg.responsesReasoning } : {}),
+                ...(msg.role === 'assistant' && msg.reasoning ? { reasoning_content:msg.reasoning } : {})
             };
         }
 
@@ -5392,6 +5381,7 @@
             const sourceMessages = Array.isArray(publicBasePayload.messages) ? publicBasePayload.messages : [];
             const cleanMessages = sourceMessages.map(message => {
                 const { __aiuiResponsesReasoning, responsesReasoning, reasoning, reasoning_content, ...clean } = message || {};
+                if (/deepseek/i.test(publicBasePayload.model || '') && message.role === 'assistant' && (reasoning_content || reasoning)) clean.reasoning_content = reasoning_content || reasoning;
                 if (clean.role === 'assistant' && typeof AgentProtocol !== 'undefined') {
                     clean.content = AgentProtocol.stripAssistantReasoningContent(clean.content);
                 }
@@ -5561,7 +5551,10 @@
 
         async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, options = {}) {
             const send = async endpoint => {
-                const requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
+                let requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
+                if (window.AIUIModelCapabilities) requestBody = window.AIUIModelCapabilities.map(requestBody, basePayload.model, endpoint, window.AIUIEnhancements?.reasoningFor(basePayload.model));
+                if (endpoint === '/chat/completions' && requestBody.stream) requestBody.stream_options = { ...requestBody.stream_options,include_usage:true };
+                window.AIUIEnhancements?.modelRequest();
                 const headers = {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${getAPIKey()}`
@@ -5570,6 +5563,8 @@
                 // header; sending it elsewhere is harmless.
                 if (endpoint === '/v1/messages' || endpoint === '/messages') {
                     headers['anthropic-version'] = ANTHROPIC_API_VERSION;
+                    headers['x-api-key'] = getAPIKey();
+                    if (!requestBody.max_tokens) requestBody.max_tokens = 8192;
                 }
                 const response = await fetch(`${getBaseURL()}${endpoint}`, {
                     method: 'POST',
@@ -5732,10 +5727,10 @@
         let filteredChats = [];
         let currentAttachments = [];
         let maxTokensLimit = parseInt(localStorage.getItem('max_tokens_limit') || '0') || 0;
-        let autoSummaryInterval = parseInt(localStorage.getItem('auto_summary_interval') || '10', 10);
+        let autoSummaryInterval = parseInt(localStorage.getItem('auto_summary_interval') || '0', 10);
         let lastPromptCacheDebug = null;
-        if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 10;
-        if (localStorage.getItem('auto_summary_interval') === null) localStorage.setItem('auto_summary_interval', '10');
+        if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 0;
+        if (localStorage.getItem('auto_summary_interval') === null) localStorage.setItem('auto_summary_interval', '0');
         if (localStorage.getItem('context_compaction_model') === null) localStorage.setItem('context_compaction_model', DEFAULT_CONTEXT_COMPACTION_MODEL);
         let compactionConfirmResolver = null;
         let agentAutoCompactionResolver = null;
@@ -5743,7 +5738,6 @@
         let processedReplaceCount = 0;
         let sessionReplaceBlocks = [];
         let cmEditor = null;
-        let voiceModel = localStorage.getItem('voice_model') || 'whisper-1';
         let mathRenderingEnabled = localStorage.getItem('math_rendering_enabled') !== 'false';
         let developerModeEnabled = localStorage.getItem('developer_mode') === 'true';
         let autoUpdateEnabled = localStorage.getItem('auto_update_enabled') !== 'false';
@@ -5771,12 +5765,6 @@
             const levelPriority = LOG_LEVEL_PRIORITIES[level] ?? LOG_LEVEL_PRIORITIES.info;
             return levelPriority >= currentPriority;
         }
-
-        let audioContext = null;
-        let mediaStream = null;
-        let scriptProcessor = null;
-        let audioChunks = [];
-        let isRecording = false;
 
         // 图像模式相关
         let isImageMode = false;
@@ -6162,7 +6150,7 @@
                 }))
             } : { messages: [], agentEnabled: false };
             const input = document.getElementById('user-input')?.value || '';
-            const model = String(chat.agentEnabled ? chat.agentModel || getSelectedModelName() : getSelectedModelName());
+            const model = String(chat.agentEnabled && window.isAgentTaskRunning?.(chat.id) ? chat.agentModel || getSelectedModelName() : getSelectedModelName());
             const normalize = messages => {
                 const payload = buildRequestPayloadForEndpoint({ model, messages, __aiuiStructuredResponsesInput: true }, getRequestEndpoint());
                 return Array.isArray(payload.input)
@@ -6208,21 +6196,16 @@
             tokenEstimateTimer = setTimeout(async () => {
                 try {
                     const chat = activeChatId ? chats.find(item => item.id === activeChatId) : null;
-                    const model = String(chat?.agentEnabled ? chat.agentModel || getSelectedModelName() : getSelectedModelName());
+                    const model = String(chat?.agentEnabled && window.isAgentTaskRunning?.(chat.id) ? chat.agentModel || getSelectedModelName() : getSelectedModelName());
                     const messages = await buildContextMessagesForEstimate();
-                    const tokenizer = window.electronAPI?.countContextTokens ? {
-                        count: (text, selectedModel) => window.electronAPI.countContextTokens(text, selectedModel),
-                        describe: selectedModel => window.electronAPI.describeContextTokenizer?.(selectedModel) || '本地 tokenizer'
-                    } : null;
-                    const breakdown = await window.AIUIContextEstimator.estimate(messages, {
+                    const breakdown = await window.estimateContextAccurately(messages, {
                         model,
-                        tokenizer,
                         contextWindow: getContextWindowForModel(model),
                         agent: chat?.agentEnabled === true
                     });
                     if (runId !== tokenEstimateRunId) return;
                     if (breakdown.usedTokens > 0) {
-                        span.textContent = `预估 tokens: ${breakdown.usedTokens.toLocaleString('zh-CN')}`;
+                        span.textContent = `Toks: ${breakdown.usedTokens.toLocaleString('zh-CN')}`;
                         span.style.color = breakdown.overWindow ? '#ef4444' : '';
                         span.style.display = 'inline';
                     } else {
@@ -6231,6 +6214,7 @@
                     }
                     renderContextBreakdown(breakdown);
                     updateContextMeter(breakdown);
+                    window.AIUIEnhancements?.context(breakdown);
                 } catch (error) {
                     if (runId !== tokenEstimateRunId) return;
                     span.textContent = 'Token 估算暂不可用';
@@ -6291,10 +6275,14 @@
         }
 
         function positionContextBreakdown() {
-            const trigger = document.getElementById('token-estimate');
             const popover = document.getElementById('context-breakdown');
-            if (!trigger || !popover) return;
-            const triggerRect = trigger.getBoundingClientRect();
+            if (!popover) return false;
+            // An empty/new chat can hide the token label until counting finishes.
+            // Keep its detail popup anchored to the visible usage row in that state.
+            const triggerRect = ['token-estimate','context-meter','context-estimate-shell']
+                .map(id => document.getElementById(id)?.getBoundingClientRect())
+                .find(rect => rect && rect.width > 0 && rect.top > 0);
+            if (!triggerRect) { hideContextBreakdown(); return false; }
             const width = Math.min(360, Math.max(0, window.innerWidth - 24));
             const left = Math.max(12, Math.min(triggerRect.left, window.innerWidth - width - 12));
             popover.style.width = `${width}px`;
@@ -6303,6 +6291,7 @@
             let top = triggerRect.top - height - 10;
             if (top < 12) top = Math.min(window.innerHeight - height - 12, triggerRect.bottom + 10);
             popover.style.top = `${Math.max(12, top)}px`;
+            return true;
         }
 
         const contextEstimateShell = document.getElementById('context-estimate-shell');
@@ -6312,7 +6301,7 @@
         let contextBreakdownCloseTimer = null;
         function showContextBreakdown() {
             clearTimeout(contextBreakdownCloseTimer);
-            positionContextBreakdown();
+            if (!positionContextBreakdown()) return;
             contextBreakdownPopover?.classList.add('is-open');
             document.getElementById('token-estimate')?.setAttribute('aria-expanded', 'true');
         }
@@ -6394,17 +6383,16 @@
                 row.append(swatch, name, count, percent);
                 rows.appendChild(row);
             }
-            const isFallback = breakdown.tokenizerLabel.includes('参考估算') || breakdown.tokenizerLabel.includes('字符估算');
-            const isClaudeLegacy = /^claude-/i.test(String(breakdown.model || ''));
-            const tokenizerDescription = isFallback
-                ? '其它厂商模型使用通用参考分词。'
-                : isClaudeLegacy
-                    ? 'Claude 使用旧词表参考估算，较新 Claude 模型可能偏差较大。'
-                    : '文本按本地词表计数。';
-            const opaqueReasoningDescription = breakdown.hasOpaqueReasoningItems
-                ? `另有 ${breakdown.opaqueReasoningItems} 个不透明 reasoning 状态项；加密内容无法本地读取，未按密文长度计数。`
-                : '';
-            note.textContent = `${breakdown.tokenizerLabel} · ${tokenizerDescription} 图片与消息封装为估算值；独立思考文本不计入，显式 reasoning 项除外。${opaqueReasoningDescription}`;
+            const countingMethod = breakdown.generic ? 'o200k_base'
+                : /DeepSeek.*V4\.1/.test(breakdown.tokenizerLabel) ? 'DeepSeek V4.1'
+                : /DeepSeek.*V4/.test(breakdown.tokenizerLabel) ? 'DeepSeek V4'
+                : breakdown.tokenizerLabel;
+            note.textContent = `计算方式：${countingMethod}`;
+            let warning = document.getElementById('context-generic-warning');
+            if (!warning) { warning = document.createElement('span'); warning.id = 'context-generic-warning'; warning.className = 'generic-estimate-warning'; }
+            note.append(warning);
+            warning.textContent = breakdown.generic ? '通用预估' : '';
+            warning.hidden = !breakdown.generic;
             positionContextBreakdown();
         }
 
@@ -6839,6 +6827,8 @@
                 const isLast = idx === messages.length - 1;
                 const renderedRow = appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
                     .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
+                    completedAt: msg.completedAt,
+                    failed: msg.failed === true,
                     agentFinal: msg.agentFinal === true,
                     agentSegment: msg.agentSegment === true,
                     agentMessage: renderingAgentChat && msg.role === 'assistant'
@@ -7019,6 +7009,12 @@
                 }
                 footer.appendChild(modelSpan);
                 footer.appendChild(btnGroup);
+                const time = document.createElement('time'); time.className = 'message-time';
+                if (messageOptions.completedAt && !messageOptions.failed) {
+                    const date = new Date(messageOptions.completedAt);
+                    if (Number.isFinite(date.getTime())) { time.dateTime = date.toISOString(); time.textContent = date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false }); }
+                }
+                footer.appendChild(time);
                 contentCol.appendChild(footer);
             }
             row.appendChild(contentCol);
@@ -7077,6 +7073,11 @@
         }
 
         function toggleSettings() {
+            if (!new URLSearchParams(location.search).has('preferences') && window.electronAPI?.openPreferences) {
+                syncAppStateToMain();
+                window.electronAPI.openPreferences();
+                return;
+            }
             const modal = document.getElementById('settings-modal');
             const shouldOpen = !modal.classList.contains('flex');
             if (shouldOpen) {
@@ -7084,7 +7085,6 @@
                 switchSettingsSection('ai-chat', document.querySelector('.settings-sidebar button[data-section="ai-chat"]'));
                 populateAutoSummarySettings();
                 populateModelListEditor();
-                populateVoiceModel();
                 populateVoiceChatSettings();
                 populateDesktopWorkSettings();
                 populateOtherSettings();
@@ -7103,13 +7103,14 @@
         }
 
         function updateSettingsLocks() {
+            if (!new URLSearchParams(location.search).has('preferences')) syncAppStateToMain();
             const agentRunning = typeof isAgentTaskRunning === 'function' && isAgentTaskRunning();
             const compaction = contextCompactionRunning;
             const audio = Boolean(window._audioChatRunning);
             const desktop = Boolean(window._desktopWorkRunning);
             const lock = (section, disabled, text) => {
                 const el = document.getElementById(`section-${section}`); if (!el) return;
-                el.querySelectorAll('input,select,textarea,button').forEach(node => { if (node.id !== 'settings-back-btn') node.disabled = disabled; });
+                el.querySelectorAll('input,select,textarea,button').forEach(node => { node.disabled = disabled; });
                 let note = document.getElementById(`settings-lock-${section}`);
                 if (!note) { note = document.createElement('p'); note.id = `settings-lock-${section}`; note.className = 'text-sm text-red-400'; el.querySelector('h3')?.after(note); }
                 note.textContent = text; note.classList.toggle('hidden', !disabled);
@@ -7124,7 +7125,7 @@
         function onContextSettingChange() {
             if (contextCompactionRunning) return;
             const radio = document.querySelector('input[name="auto-summary-interval"]:checked');
-            autoSummaryInterval = Number(radio?.value || 10);
+            autoSummaryInterval = Number(radio?.value || 0);
             localStorage.setItem('auto_summary_interval', String(autoSummaryInterval));
             const model = document.getElementById('context-compaction-model-select')?.value;
             if (model) localStorage.setItem('context_compaction_model', model);
@@ -7135,8 +7136,6 @@
             if (!modal) return;
             const isPortrait = window.matchMedia('(max-aspect-ratio: 1/1), (orientation: portrait)').matches;
             modal.classList.toggle('portrait-layout', isPortrait);
-            const backBtn = document.getElementById('settings-back-btn');
-            if (backBtn) backBtn.style.display = isPortrait ? 'inline-flex' : 'none';
         }
 
         window.addEventListener('resize', () => {
@@ -7147,11 +7146,6 @@
             const guide = document.getElementById('setup-guide-modal');
             if (guide && guide.classList.contains('flex')) guide.classList.toggle('portrait-layout', window.matchMedia('(max-aspect-ratio: 1/1), (orientation: portrait)').matches);
         });
-
-        function populateVoiceModel() {
-            const select = document.getElementById('voice-model-select');
-            if (select) select.value = voiceModel;
-        }
 
         function populateAutoSummarySettings() {
             const radio = document.querySelector(`input[name="auto-summary-interval"][value="${autoSummaryInterval}"]`);
@@ -7253,7 +7247,6 @@
                 renderApiProfileOptions();
             }
             if (sectionId === 'voice') {
-                populateVoiceModel();
             }
             if (sectionId === 'voice-chat') {
                 populateVoiceChatSettings();
@@ -7645,8 +7638,8 @@
             localStorage.setItem(MODEL_LIST_STORAGE_KEY, JSON.stringify(savedModelList));
             applyTextModelList(savedModelList, currentTextModel || DEFAULT_CHAT_MODEL);
             const selectedSummaryRadio = document.querySelector('input[name="auto-summary-interval"]:checked');
-            autoSummaryInterval = selectedSummaryRadio ? parseInt(selectedSummaryRadio.value, 10) : 10;
-            if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 10;
+            autoSummaryInterval = selectedSummaryRadio ? parseInt(selectedSummaryRadio.value, 10) : 0;
+            if (![0, 10, 15, 20].includes(autoSummaryInterval)) autoSummaryInterval = 0;
             localStorage.setItem('auto_summary_interval', String(autoSummaryInterval));
             const contextModelSelect = document.getElementById('context-compaction-model-select');
             const savedContextModel = savedModelList.includes(selectedContextModel)
@@ -7667,11 +7660,6 @@
                 }
             }
             renderApiProfileOptions();
-            const voiceSelect = document.getElementById('voice-model-select');
-            if (voiceSelect) {
-                voiceModel = voiceSelect.value;
-                localStorage.setItem('voice_model', voiceModel);
-            }
             const voiceChatFields = {
                 voice_chat_model: 'voice-chat-model-input',
                 voice_fish_base: 'voice-fish-base-input',
@@ -7749,7 +7737,7 @@
             ['语音聊天', '语音聊天会使用这里指定的对话模型生成回复，语音识别和语音合成仍按语音聊天页面中的凭据工作。建议选择响应速度快、支持流式输出的模型。', 'guide/6.gif'],
             ['桌面协作', '桌面协作可以在语音输入后附带当前显示器截图。你可以设置全局传图快捷键、截图清晰度，并决定是否在没有手动截图时自动传图。', 'guide/7.gif'],
             ['Agent', 'Agent 设置控制工具调用信息的展示、Shell 超时、图片查看细节以及自动滚动行为。命令前缀仍需在偏好设置 Agent 页面单独维护。', 'guide/8.gif'],
-            ['其他设置', '其他设置集中管理语音转文字默认模型、LaTeX 数学公式渲染和启动时的自动更新检查。每项旁边的说明会帮助你了解关闭后的影响。', 'guide/9.gif']
+            ['其他设置', '其他设置集中管理 LaTeX 数学公式渲染和启动时的自动更新检查。每项旁边的说明会帮助你了解关闭后的影响。', 'guide/9.gif']
         ];
         function guideToggle(id, checked, label, hint = '') {
             return `<div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700"><div class="flex flex-col pr-3"><span class="text-sm font-medium text-gray-200">${label}</span>${hint ? `<span class="text-[11px] text-gray-500 mt-0.5">${hint}</span>` : ''}</div><label class="cloud-toggle shrink-0"><input id="${id}" type="checkbox" ${checked ? 'checked' : ''}><span class="slider"></span></label></div>`;
@@ -7758,15 +7746,15 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V8.2.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.0.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
-                setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[1, 2, 3, 4, 5, 6].map(x => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${x}"><span class="block text-[11px] text-gray-400 mt-1">背景 ${x}</span></button>`).join('')}</div>` : '',
+                setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[[7, 'Duo Light'], [8, 'Duo Dark'], [9, 'Golden Gate'], [1, '花谱1'], [2, '花谱2'], [3, '洛天依1'], [4, '洛天依2'], [5, '初音未来1'], [6, '初音未来2']].map(([x, name]) => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${name}"><span class="block text-[11px] text-gray-400 mt-1">${name}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
                 setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode === 'classic' ? 'active' : ''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode === 'split' ? 'active' : ''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'small' ? 'active' : ''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'medium' ? 'active' : ''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'large' ? 'active' : ''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
                 setupGuidePage === 5 ? `<label class="block text-sm text-gray-300">语音对话模型<input id="guide-voice-model" value="${escapeHtml(localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL)}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label>` : '',
                 setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
                 setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label><label class="block text-sm text-gray-300">联网搜索默认引擎<select id="guide-agent-search-engine" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="bing">Bing</option><option value="duckduckgo">DuckDuckGo</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
-                setupGuidePage === 8 ? `<label class="block text-sm text-gray-300">语音转文字模型<select id="guide-voice-transcribe" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="whisper-1">whisper-1</option><option value="whisper-base">whisper-base</option><option value="whisper-large">whisper-large</option></select><span class="block text-[11px] text-gray-500 mt-2">录音结束后使用此模型把语音识别为文字，模型越大通常越准确但速度更慢。</span></label>${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染', '开启后将数学公式、化学方程式渲染为排版结果；关闭后按原始文本显示。')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新', '仅 Setup 安装版会在启动时检查 GitHub Release；Portable 版本不会主动检查。')}` : '',
+                setupGuidePage === 8 ? `${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染', '开启后将数学公式、化学方程式渲染为排版结果；关闭后按原始文本显示。')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新', '仅 Setup 安装版会在启动时检查 GitHub Release；Portable 版本不会主动检查。')}` : '',
                 `</div>`
             ].join('');
             c.innerHTML = `<div class="setup-guide-page"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3><img src="${page[2]}" class="setup-guide-gif mb-3" alt="" onerror="this.remove()"><p class="setup-guide-description">${page[1]}</p>${blocks}</div>`;
@@ -7774,7 +7762,6 @@
             if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model'); if (v) v.value = localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL; }
             if (setupGuidePage === 6) { const q = document.getElementById('guide-desktop-quality'); if (q) q.value = localStorage.getItem('desktop_image_quality') || 'balanced'; }
             if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = localStorage.getItem('agent_detail_default_behavior') || 'expanded'; const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const se = document.getElementById('guide-agent-search-engine'); if (se) se.value = localStorage.getItem('agent_search_engine') === 'duckduckgo' ? 'duckduckgo' : 'bing'; const sc = document.getElementById('guide-agent-scroll'); if (sc) sc.checked = localStorage.getItem('agent_auto_scroll') !== 'false'; }
-            if (setupGuidePage === 8) { const v = document.getElementById('guide-voice-transcribe'); if (v) v.value = localStorage.getItem('voice_model') || 'whisper-1'; }
             document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
             document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
         }
@@ -7789,7 +7776,7 @@
             if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model')?.value.trim(); if (v) { localStorage.setItem('voice_chat_model', v); const input = document.getElementById('voice-chat-model-input'); if (input) input.value = v; } }
             if (setupGuidePage === 6) { const s = document.getElementById('guide-desktop-shortcut')?.value.trim(); const q = document.getElementById('guide-desktop-quality')?.value; if (s) { localStorage.setItem('desktop_shortcut', s); const input = document.getElementById('desktop-shortcut-input'); if (input) input.value = s; } if (q) { localStorage.setItem('desktop_image_quality', q); const select = document.getElementById('desktop-image-quality-input'); if (select) select.value = q; } const auto = document.getElementById('guide-desktop-auto')?.checked ? 'true' : 'false'; localStorage.setItem('desktop_auto_screenshot', auto); const toggle = document.getElementById('desktop-auto-screenshot-input'); if (toggle) toggle.checked = auto === 'true'; }
             if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const guideEngine = document.getElementById('guide-agent-search-engine')?.value; if (guideEngine) localStorage.setItem('agent_search_engine', guideEngine === 'duckduckgo' ? 'duckduckgo' : 'bing'); const autoScroll = document.getElementById('guide-agent-scroll')?.checked ? 'true' : 'false'; localStorage.setItem('agent_auto_scroll', autoScroll); const autoScrollInput = document.getElementById('agent-auto-scroll'); if (autoScrollInput) autoScrollInput.checked = autoScroll === 'true'; }
-            if (setupGuidePage === 8) { localStorage.setItem('voice_model', document.getElementById('guide-voice-transcribe')?.value || 'whisper-1'); mathRenderingEnabled = Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled = Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false'); localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false'); }
+            if (setupGuidePage === 8) { mathRenderingEnabled = Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled = Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false'); localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false'); }
         }
         function setupGuideBack() { if (setupGuidePage === 0) closeSetupGuide(); else setupGuidePrev(); }
         function openSetupGuide() {
@@ -7834,12 +7821,14 @@
 
         function autoResize(t) {
             t.style.height = 'auto';
-            t.style.height = t.scrollHeight + 'px';
-            const footer = document.getElementById('input-footer');
-            if (footer) {
-                if (t.scrollHeight > INPUT_EXPAND_THRESHOLD) footer.classList.add('input-expanded');
-                else footer.classList.remove('input-expanded');
-            }
+            const style = getComputedStyle(t);
+            const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+            const maxLines = Math.max(1, Math.min(30, Number(localStorage.getItem('input_max_lines')) || 6));
+            const maximum = lineHeight * maxLines + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+            t.style.height = Math.min(t.scrollHeight, maximum) + 'px';
+            t.style.maxHeight = maximum + 'px';
+            t.style.overflowY = t.scrollHeight > maximum + 1 ? 'auto' : 'hidden';
+            document.getElementById('input-footer')?.classList.remove('input-expanded');
             updateTokenEstimate();
         }
 
@@ -8462,6 +8451,7 @@
                 const nextTurn = {
                     role: turn.role,
                     content: String(turn.content || ''),
+                    ...(turn.role === 'assistant' ? { completedAt:Number(turn.completedAt) || Date.now() } : {}),
                     ...(turn.role === 'assistant' ? {
                         model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
                         voiceRecordId: String(turn.voiceRecordId || '').trim()
@@ -8844,6 +8834,7 @@
                 const aiMsg = {
                     role: 'assistant',
                     content: '生成完成',
+                    completedAt: Date.now(),
                     generatedImages: [`img:${refId}`],
                     model
                 };
@@ -8899,156 +8890,9 @@
             });
         }
 
-        function setVoiceStatus(text, isError = false) {
-            showVoiceNotification(text, isError);
-        }
-
-        async function toggleVoiceRecording() {
-            const voiceBtn = document.getElementById('voice-btn');
-            if (isRecording) {
-                if (scriptProcessor) {
-                    scriptProcessor.disconnect();
-                    scriptProcessor = null;
-                }
-                if (mediaStream) {
-                    mediaStream.getTracks().forEach(track => track.stop());
-                    mediaStream = null;
-                }
-                if (audioContext) {
-                    await audioContext.close();
-                    audioContext = null;
-                }
-                isRecording = false;
-                voiceBtn.classList.remove('recording');
-                showVoiceNotification('正在处理语音...');
-                const wavBlob = encodeWAV(audioChunks, 44100);
-                audioChunks = [];
-                await transcribeAudio(wavBlob);
-                return;
-            }
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                showVoiceNotification('错误: 浏览器不支持录音', true);
-                return;
-            }
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    audio: true
-                });
-                mediaStream = stream;
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                    sampleRate: 44100
-                });
-                const source = audioContext.createMediaStreamSource(stream);
-                scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-                audioChunks = [];
-                scriptProcessor.onaudioprocess = (event) => {
-                    if (!isRecording) return;
-                    const inputData = event.inputBuffer.getChannelData(0);
-                    audioChunks.push(new Float32Array(inputData));
-                };
-                source.connect(scriptProcessor);
-                scriptProcessor.connect(audioContext.destination);
-                isRecording = true;
-                voiceBtn.classList.add('recording');
-                showVoiceNotification('正在聆听...');
-            } catch (err) {
-                showVoiceNotification('错误: 无法访问麦克风', true);
-            }
-        }
-
-        function encodeWAV(samples, sampleRate) {
-            const buffer = mergeBuffers(samples);
-            const dataLength = buffer.length * 2;
-            const bufferLength = 44 + dataLength;
-            const arrayBuffer = new ArrayBuffer(bufferLength);
-            const view = new DataView(arrayBuffer);
-            writeString(view, 0, 'RIFF');
-            view.setUint32(4, bufferLength - 8, true);
-            writeString(view, 8, 'WAVE');
-            writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true);
-            view.setUint16(22, 1, true);
-            view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true);
-            view.setUint16(32, 2, true);
-            view.setUint16(34, 16, true);
-            writeString(view, 36, 'data');
-            view.setUint32(40, dataLength, true);
-            const volume = 0.9;
-            let offset = 44;
-            for (let i = 0; i < buffer.length; i++) {
-                const sample = Math.max(-1, Math.min(1, buffer[i]));
-                const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-                view.setInt16(offset, intSample * volume, true);
-                offset += 2;
-            }
-            return new Blob([view], {
-                type: 'audio/wav'
-            });
-        }
-
-        function mergeBuffers(chunks) {
-            let length = 0;
-            chunks.forEach(chunk => length += chunk.length);
-            const result = new Float32Array(length);
-            let offset = 0;
-            chunks.forEach(chunk => {
-                result.set(chunk, offset);
-                offset += chunk.length;
-            });
-            return result;
-        }
-
-        function writeString(view, offset, string) {
-            for (let i = 0; i < string.length; i++) {
-                view.setUint8(offset + i, string.charCodeAt(i));
-            }
-        }
-        async function transcribeAudio(audioBlob) {
-            const formData = new FormData();
-            formData.append('file', audioBlob, 'recording.wav');
-            formData.append('model', voiceModel);
-            try {
-                const res = await fetch(`${getBaseURL()}/audio/transcriptions`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${getAPIKey()}`
-                    },
-                    body: formData
-                });
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.error?.message || `转录失败: ${res.status}`);
-                }
-                const data = await res.json();
-                const text = data.text || '';
-                insertTextAtCursor(text);
-                showVoiceNotification('识别成功', false);
-            } catch (err) {
-                showVoiceNotification(`错误: ${err.message}`, true);
-            }
-        }
-
-        function insertTextAtCursor(text) {
-            const input = document.getElementById('user-input');
-            if (!input) return;
-            const start = input.selectionStart;
-            const end = input.selectionEnd;
-            const current = input.value;
-            if (start || start === 0) {
-                input.value = current.substring(0, start) + text + current.substring(end);
-                input.selectionStart = input.selectionEnd = start + text.length;
-            } else {
-                input.value += text;
-            }
-            input.focus();
-            autoResize(input);
-            updateTokenEstimate();
-        }
-
         window.onload = async () => {
-            await migrateOldChats();
+            const preferencesPage = new URLSearchParams(location.search).has('preferences');
+            if (!preferencesPage) await migrateOldChats();
             const savedTheme = localStorage.getItem('theme') || 'light';
             const savedAccentColor = localStorage.getItem('accent_color') || 'green';
             setAccentColor(savedAccentColor, false);
@@ -9061,11 +8905,6 @@
             document.getElementById('base-url-input').value = getBaseURL();
             ['api-key-input', 'base-url-input', 'max-tokens-input', 'model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
             document.querySelectorAll('input[name="request-endpoint"]').forEach(el => el.addEventListener('change', markApiSettingsDirty));
-            const immediateSettings = {
-                'sys-prompt': 'sys_prompt', 'voice-chat-model-input': 'voice_chat_model', 'voice-fish-base-input': 'voice_fish_base', 'voice-fish-key-input': 'voice_fish_key', 'voice-fish-name-input': 'voice_fish_name', 'voice-fish-id-input': 'voice_fish_id', 'voice-xf-appid-input': 'voice_xf_appid', 'voice-xf-key-input': 'voice_xf_key', 'voice-xf-secret-input': 'voice_xf_secret', 'voice-preset-probability': 'voice_preset_probability', 'desktop-shortcut-input': 'desktop_shortcut', 'desktop-image-quality-input': 'desktop_image_quality'
-            };
-            Object.entries(immediateSettings).forEach(([id, key]) => document.getElementById(id)?.addEventListener('input', e => { if (!isGenerating) localStorage.setItem(key, e.target.value); }));
-            ['desktop-skip-b-preset-input', 'desktop-auto-screenshot-input', 'math-render-toggle', 'auto-update-toggle', 'developer-mode-toggle', 'record-logs-toggle'].forEach(id => document.getElementById(id)?.addEventListener('change', e => { if (!isGenerating) localStorage.setItem(id.replace(/-input|-/g, '_').replace(/^_/, '').replace(/_toggle$/, ''), e.target.checked ? 'true' : 'false'); }));
             document.getElementById('max-tokens-input').value = maxTokensLimit;
             const savedDetail = localStorage.getItem('image_detail_level') || 'medium';
             const detailSelect = document.getElementById('image-detail-select');
@@ -9077,8 +8916,10 @@
             renderChatHistory();
             chats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             const latestChat = chats.length ? chats[0] : null;
-            if (!latestChat || (latestChat.messages && latestChat.messages.length > 0)) createNewChat();
-            else switchChat(latestChat.id);
+            if (!preferencesPage) {
+                if (!latestChat || (latestChat.messages && latestChat.messages.length > 0)) createNewChat();
+                else switchChat(latestChat.id);
+            }
             const input = document.getElementById('user-input');
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -9131,7 +8972,6 @@
             if (currentChat && currentChat.canvasEnabled) canvasPanelVisible = true;
             else canvasPanelVisible = false;
             updateCanvasPanelForChat(currentChat);
-            populateVoiceModel();
             updateAttachMenuButtons();
             if (window.electronAPI?.onUpdateAvailable) {
                 window.electronAPI.onUpdateAvailable(showAvailableUpdateVersion);
@@ -9142,7 +8982,7 @@
             syncAppStateToMain();
             if (window.electronAPI?.signalRendererReady) window.electronAPI.signalRendererReady();
             loadUpdateLog();
-            openFirstSetupGuide();
+            if (!preferencesPage) openFirstSetupGuide();
         };
 
         function updateTempUI() {
@@ -9270,6 +9110,9 @@
         function syncAppStateToMain() {
             if (!window.electronAPI?.updateAppState) return;
             window.electronAPI.updateAppState({
+                agentRunning: typeof isAgentTaskRunning === 'function' && isAgentTaskRunning(),
+                generating: isGenerating,
+                compaction: contextCompactionRunning,
                 developerMode: developerModeEnabled,
                 autoUpdateEnabled
             });
@@ -9359,8 +9202,11 @@
         }
 
         async function requestAI(userText, model, chat, sendAttachments = []) {
+            const requestMetrics = window.AIUIRequestMetrics?.create();
+            chat.lastRequestFailed = false;
             abortController = new AbortController();
             isGenerating = true;
+            window.AIUIEnhancements?.beginRequestTask();
             document.getElementById('send-btn').classList.add('hidden');
             document.getElementById('stop-btn').classList.remove('hidden');
             setCanvasEditable(false);
@@ -9484,6 +9330,10 @@
                     responsePayloads.push(normalizedPayload);
 
                     const update = extractStreamingUpdate(normalizedPayload, endpoint);
+                    if (requestMetrics) {
+                        window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
+                        window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
+                    }
                     const nextThinking = mergeStreamingText(
                         thinkingContent,
                         update.reasoningDelta,
@@ -9622,6 +9472,7 @@
                 chat.messages.push({
                     role: 'assistant',
                     content: rawFullContent,
+                    completedAt: Date.now(),
                     model,
                     reasoning: thinkingContent,
                     responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint: responseEndpoint, model, baseURL: getBaseURL() })
@@ -9629,8 +9480,16 @@
                 chat.updatedAt = Date.now();
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
                 renderChatHistory();
+                if (requestMetrics) {
+                    let output = 0;
+                    if ((!requestMetrics.hasOutputUsage || (requestMetrics.reasoningText && !requestMetrics.hasReasoningUsage)) && rawFullContent) try { output = await window.electronAPI?.countContextTokens(rawFullContent, model) || 0; } catch (_) {}
+                    window.AIUIEnhancements?.requestMetrics(chat, requestMetrics, true, output);
+                }
+                const stamp = aiRow.querySelector('.message-time');
+                if (stamp) { const date = new Date(); stamp.dateTime = date.toISOString(); stamp.textContent = date.toLocaleTimeString([], { hour:'2-digit',minute:'2-digit',hour12:false }); }
             } catch (err) {
                 if (err.name !== 'AbortError') {
+                    window.AIUIEnhancements?.failed(chat);
                     appendLog('debug', `AI 请求出错: ${err.message}`);
                     setThinkingStatus(thinkingDiv, false);
                     contentArea.innerHTML = `<span class="text-red-500">Error: ${sanitizeHtml(err.message)}</span>`;
@@ -9648,6 +9507,7 @@
                     chat.messages.push({
                         role: 'assistant',
                         content: rawFullContent,
+                        completedAt: Date.now(),
                         model,
                         reasoning: thinkingContent,
                         responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint: responseEndpoint, model, baseURL: getBaseURL() })
@@ -9659,9 +9519,12 @@
             } finally {
                 abortController = null;
                 isGenerating = false;
+                window.AIUIEnhancements?.endRequestTask();
                 document.getElementById('send-btn').classList.remove('hidden');
                 document.getElementById('stop-btn').classList.add('hidden');
                 setCanvasEditable(true);
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+                if (typeof updateTokenEstimate === 'function') updateTokenEstimate();
                 lucide.createIcons();
                 document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper')
                     .scrollHeight;
@@ -9671,6 +9534,10 @@
     <script src="context-estimator.js"></script>
     <script src="agent-ui.js"></script>
     <script src="gateway-renderer.js"></script>
+    <script src="context-token-service.js"></script>
+    <script src="jszip.min.js"></script>
+    <script src="chat-archive.js"></script>
+    <script src="ui-enhancements.js"></script>
 </body>
 
 </html>

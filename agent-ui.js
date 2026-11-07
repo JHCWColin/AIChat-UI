@@ -5,6 +5,7 @@
     const DEFAULT_AGENT_DIFF_MAX_LINES = 10;
     const DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS = 120;
     const TOOL_ICONS = {
+        ask_user_question: 'message-circle-question',
         read_file_range: "file-search",
         write_file: "file-plus-2",
         edit_file: "file-pen-line",
@@ -31,6 +32,7 @@
         browse_web: "globe"
     };
     const TOOL_LABELS = {
+        ask_user_question: '询问用户',
         read_file_range: "读取",
         write_file: "写入",
         edit_file: "编辑",
@@ -74,6 +76,7 @@
     let agentThinkingSequence = 0;
     let agentStopRequested = false;
     let agentApprovalResolver = null;
+    let agentQuestionResolver = null;
     let agentApprovalRow = null;
     let agentApprovalPrefix = "";
     let agentWorkspaceTrustResolver = null;
@@ -215,7 +218,11 @@
         const input = document.getElementById("user-input");
         if (input) input.placeholder = chat?.agentEnabled ? "向 Agent 描述任务..." : "给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文";
         updateAttachMenuButtons();
-        if (chat?.agentEnabled) refreshAgentWorkspace(chat).catch(() => {});
+        if (typeof updateTokenEstimate === 'function') updateTokenEstimate();
+        if (chat?.agentEnabled) refreshAgentWorkspace(chat).then(() => {
+            if (currentAgentChat() === chat && typeof updateTokenEstimate === 'function') updateTokenEstimate();
+        }).catch(() => {});
+        window.AIUIEnhancements?.changed();
     }
 
     async function enterAgentMode() {
@@ -327,25 +334,9 @@
         const fileList = document.getElementById("agent-workspace-trust-files");
         if (fileList) {
             fileList.replaceChildren();
-            const preview = Array.isArray(selection?.textFilePreview) ? selection.textFilePreview.slice(0, 5) : [];
-            const totalCount = Math.max(Number(selection?.textFileCount) || 0, preview.length);
-            if (preview.length === 0) {
-                const item = document.createElement("li");
-                item.textContent = "未检测到 .txt 或 .md 文件";
-                fileList.appendChild(item);
-            } else {
-                for (const filePath of preview) {
-                    const item = document.createElement("li");
-                    item.textContent = String(filePath);
-                    fileList.appendChild(item);
-                }
-                const remaining = totalCount - preview.length;
-                if (remaining > 0) {
-                    const item = document.createElement("li");
-                    item.textContent = `剩余${remaining}个……`;
-                    fileList.appendChild(item);
-                }
-            }
+            const item = document.createElement("li");
+            item.textContent = "工作区中的文档可能包含影响 Agent 行为的指令，请仅信任你了解的目录。";
+            fileList.appendChild(item);
         }
 
         openAnimatedModal(modal, "visible");
@@ -399,6 +390,7 @@
     }
 
     function requestAgentCommandApproval(command, suggestedPrefix) {
+        window.AIUIEnhancements?.notifyQuestion('Agent 请求运行非白名单命令');
         const wrapper = document.getElementById("messages-wrapper");
         if (!wrapper) return Promise.resolve("reject");
         const row = document.createElement("div");
@@ -941,6 +933,7 @@
             ? "agent-tool-row-wrapper agent-tool-inline"
             : "chat-row agent-tool-row-wrapper";
         row.dataset.agentToolId = message.toolId || "";
+        if (["start_process", "read_process_output", "stop_process", "list_processes"].includes(message.toolName)) row.classList.add('agent-background-compact');
         const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
         const running = message.status === "running";
         row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-detail"></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
@@ -1009,6 +1002,9 @@
             chat.agentFixedPrompt = `${chat.agentFixedPrompt}\n\n${requiredToolInstruction}`;
             if (options.estimateOnly !== true) persistAgentChats();
         }
+        if (!chat.agentFixedPrompt.includes('ask_user_question')) {
+            chat.agentFixedPrompt += '\n\nask_user_question\nArguments: {"questions":[{"id":"string","question":"string","options":[{"label":"string","description":"string"}],"allow_custom":true}]}\nPauses execution until the user answers. Use it when user input is required.\n';
+        }
         const result = [{
             role: "system",
             content: chat.agentFixedPrompt
@@ -1040,6 +1036,7 @@
                 const built = await buildSingleApiMessage(message, chat, message === latestUser);
                 if (message.role === "assistant") {
                     built.content = AgentProtocol.stripAssistantReasoningContent(built.content);
+                    if (/deepseek/i.test(chat.agentModel || '') && message.reasoning) built.reasoning_content = message.reasoning;
                     if (message.responsesReasoning) built.__aiuiResponsesReasoning = message.responsesReasoning;
                 }
                 result.push(built);
@@ -1053,6 +1050,7 @@
     }
 
     async function requestAgentModel(chat, model, options = {}) {
+        const requestMetrics = window.AIUIRequestMetrics?.create();
         if (Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
             const queued = window.queuedAgentMessages.splice(0);
             let consumedUserMessages = 0;
@@ -1109,6 +1107,13 @@
         if (!response.body || typeof response.body.getReader !== "function") {
             const payload = await response.json();
             const update = extractStreamingUpdate(payload, endpoint);
+            if (requestMetrics) {
+                window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
+                let count = 0;
+                if ((!requestMetrics.hasOutputUsage || (requestMetrics.reasoningText && !requestMetrics.hasReasoningUsage)) && requestMetrics.text) try { count = await window.electronAPI.countContextTokens(requestMetrics.text, model); } catch (_) {}
+                window.AIUIEnhancements?.requestMetrics(chat, requestMetrics, true, count);
+            }
+            window.AIUIEnhancements?.requestContextRefresh();
             const reasoning = String(update.reasoningSnapshot || update.reasoningDelta || "");
             if (reasoning && typeof options.onReasoning === "function") options.onReasoning(reasoning);
             return {
@@ -1151,6 +1156,10 @@
             const streamError = getStreamingErrorMessage(normalizedPayload);
             if (streamError) throw new Error(streamError);
             const update = extractStreamingUpdate(normalizedPayload, endpoint);
+            if (requestMetrics) {
+                window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
+                window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
+            }
             fullText = mergeStreamingText(fullText, update.contentDelta, update.contentSnapshot);
             const nextReasoning = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
             if (nextReasoning !== reasoningText) {
@@ -1192,6 +1201,7 @@
                 completion = collectAgentCompletionInfo(payload, completion);
                 fullText = mergeStreamingText(fullText, "", extractNonStreamingResponseText(payload, endpoint));
                 const update = extractStreamingUpdate(payload, endpoint);
+                if (requestMetrics) window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
                 reasoningText = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
                 if (reasoningText && typeof options.onReasoning === "function") options.onReasoning(reasoningText);
             }
@@ -1201,6 +1211,12 @@
             hideVoiceNotification();
             showVoiceNotification(`Agent 流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
         }
+        if (requestMetrics) {
+            let count = 0;
+            if ((!requestMetrics.hasOutputUsage || (requestMetrics.reasoningText && !requestMetrics.hasReasoningUsage)) && fullText) try { count = await window.electronAPI.countContextTokens(fullText, model); } catch (_) {}
+            window.AIUIEnhancements?.requestMetrics(chat, requestMetrics, true, count);
+        }
+        if (typeof updateTokenEstimate === 'function') updateTokenEstimate();
         return {
             text: fullText,
             reasoning: reasoningText,
@@ -1270,6 +1286,7 @@
         const message = {
             role: "assistant",
             content,
+            completedAt: Date.now(),
             model,
             reasoning: ToolCallNormalizer.stripReasoningSections(String(reasoning || "")),
             agentDisplayOnly: true,
@@ -1278,6 +1295,7 @@
         };
         chat.messages.push(message);
         appendMessageToUI("assistant", content, model, final, message.reasoning, [], [], "", {
+            completedAt: message.completedAt,
             agentFinal: final,
             agentSegment: !final,
             agentMessage: true
@@ -1327,10 +1345,14 @@
     }
 
     async function resolveAgentToolResult(chat, call, message) {
+        if (call.name === 'ask_user_question') {
+            const result = await requestAgentUserQuestion(call.arguments || {}, message);
+            return agentStopRequested ? STOP_SENTINEL : result;
+        }
         if (call.name === "update_plan") {
             return handleUpdatePlan(chat, call.arguments || {});
         }
-        if (call.name === "run_shell") {
+        if (call.name === "run_shell" || call.name === 'start_process') {
             const command = String(call.arguments?.command || "");
             if (!command.trim()) return { success: false, error: "command is required" };
             if (agentCommandMode !== "yolo") {
@@ -1347,6 +1369,7 @@
                     }
                 }
             }
+            if (call.name === 'start_process') return window.electronAPI.executeAgentTool({ chatId:chat.id,name:call.name,arguments:call.arguments || {} });
             agentCurrentExecutionId = message.executionId;
             const startedAt = Date.now();
             const progressTimer = setInterval(() => {
@@ -1391,6 +1414,57 @@
             chatId: chat.id,
             name: call.name,
             arguments: toolArguments
+        });
+    }
+
+    function requestAgentUserQuestion(args, message) {
+        const raw = Array.isArray(args.questions) ? args.questions : [{ question:args.question || args.prompt, options:args.options }];
+        const questions = raw.slice(0,6).filter(item => item && String(item.question || item.header || '').trim());
+        if (!questions.length) return Promise.resolve({ success:false,error:'questions must contain at least one question' });
+        const form = document.createElement('form'); form.className = 'agent-question';
+        const controls = [];
+        for (const [index,question] of questions.entries()) {
+            const field = document.createElement('fieldset'); const heading = document.createElement('h4'); heading.textContent = question.question || question.header; field.append(heading);
+            for (const item of (Array.isArray(question.options) ? question.options:[]).slice(0,12)) {
+                const radio = document.createElement('input'); radio.type = 'radio'; radio.name = `question-${index}`; radio.value = typeof item === 'string' ? item:String(item.label || ''); radio.hidden = true;
+                const option = document.createElement('button'); option.type = 'button'; option.className = 'agent-question-option'; option.setAttribute('aria-pressed','false');
+                const text = document.createElement('span'); text.textContent = radio.value; option.append(text);
+                if (item.description) { const small = document.createElement('small'); small.textContent = item.description; option.append(small); }
+                option.onclick = () => { radio.checked = true; radio.dispatchEvent(new Event('change')); };
+                field.append(radio,option);
+            }
+            const customOption = document.createElement('button'); customOption.type = 'button'; customOption.className = 'agent-question-option'; customOption.textContent = '手动输入'; customOption.setAttribute('aria-pressed','false'); field.append(customOption);
+            const custom = document.createElement('input'); custom.type = 'text'; custom.placeholder = '输入你的回答…'; custom.hidden = true; custom.setAttribute('aria-label',question.question || '回答'); field.append(custom); form.append(field);
+            const selectOption = selected => field.querySelectorAll('.agent-question-option').forEach(button => button.setAttribute('aria-pressed',String(button === selected)));
+            customOption.onclick = () => { field.querySelectorAll('input[type=radio]').forEach(input => { input.checked = false; }); selectOption(customOption); custom.hidden = false; custom.focus(); };
+            custom.oninput = () => { if (custom.value) { field.querySelectorAll('input[type=radio]').forEach(input => { input.checked = false; }); selectOption(customOption); } };
+            field.querySelectorAll('input[type=radio]').forEach(input => input.onchange = () => { custom.value = ''; custom.hidden = true; selectOption(input.nextElementSibling); });
+            controls.push({ id:String(question.id || index),field,custom });
+        }
+        const error = document.createElement('p'); error.className = 'text-xs text-red-500';
+        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = '取消';
+        const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = '提交回答'; submit.style.color = 'var(--accent-strong)';
+        const actions = document.createElement('div'); actions.className = 'agent-question-actions'; actions.append(error,cancel,submit); form.append(actions);
+        const toolRow = document.querySelector(`[data-agent-tool-id="${CSS.escape(String(message.toolId))}"] .agent-tool-row`);
+        if (toolRow) { toolRow.querySelector('.agent-tool-preview')?.remove(); toolRow.querySelector('.agent-tool-detail')?.remove(); toolRow.append(form); }
+        else document.getElementById('messages-wrapper').append(form);
+        window.AIUIEnhancements?.notifyQuestion(questions[0].question);
+        form.querySelector('.agent-question-option')?.focus({ preventScroll:true });
+        requestAnimationFrame(() => form.scrollIntoView({ block:'end',behavior:'instant' }));
+        return new Promise(resolve => {
+            agentQuestionResolver = result => {
+                agentQuestionResolver = null; form.querySelectorAll('input,button').forEach(node => { node.disabled = true; }); resolve(result);
+            };
+            cancel.onclick = () => agentQuestionResolver?.({ success:true,cancelled:true,answers:{} });
+            form.onsubmit = event => {
+                event.preventDefault(); const answers = {};
+                for (const control of controls) {
+                    const value = control.custom.value.trim() || control.field.querySelector('input:checked')?.value;
+                    if (!value) { error.textContent = '请回答每个问题，或取消本次询问。'; return; }
+                    answers[control.id] = value;
+                }
+                agentQuestionResolver?.({ success:true,answers });
+            };
         });
     }
 
@@ -1609,6 +1683,8 @@
             return;
         }
         startAgentTaskTimer();
+        chat.agentModel = model;
+        window.AIUIEnhancements?.taskStart(chat);
         document.getElementById("send-btn")?.classList.add("hidden");
         document.getElementById("stop-btn")?.classList.remove("hidden");
         let thinkingRow = appendAgentThinkingRow();
@@ -1682,7 +1758,9 @@
                 completeAgentThinking(chat, model, thinkingRow, result);
                 thinkingRow = null;
                 if (agentStopRequested) break;
-                const rawParsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls);
+                const rawParsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls, {
+                    enhanced: localStorage.getItem('developer_mode') === 'true' && localStorage.getItem('enhanced_tool_parser') === 'true'
+                });
                 const parsed = {
                     ...rawParsed,
                     calls: ToolCallNormalizer.canonicalizeToolCalls(rawParsed.calls),
@@ -1875,6 +1953,7 @@
             }
         } catch (error) {
             if (error?.name !== "AbortError" && !agentStopRequested) {
+                window.AIUIEnhancements?.failed(chat);
                 appendLog("error", `Agent Loop 出错：${error.message}`);
                 chat.messages.push({ role: "assistant", content: `Agent 执行失败：${error.message}`, model, agentFinal: true, failed: true });
                 persistAgentChats();
@@ -1895,6 +1974,8 @@
             isGenerating = false;
             agentTaskChatId = null;
             agentTaskPreparing = false;
+            window.AIUIEnhancements?.taskEnd(chat);
+            persistAgentChats();
             if (typeof updateSettingsLocks === "function") updateSettingsLocks();
             document.getElementById("send-btn")?.classList.remove("hidden");
             document.getElementById("stop-btn")?.classList.add("hidden");
@@ -1967,6 +2048,7 @@
 
     function stopAgentTask() {
         agentStopRequested = true;
+        agentQuestionResolver?.({ success:true,cancelled:true,answers:{} });
         if (Array.isArray(window.queuedAgentMessages)) {
             let cancelled = 0;
             for (let index = window.queuedAgentMessages.length - 1; index >= 0; index -= 1) {
@@ -2065,7 +2147,7 @@
     const originalOnload = window.onload;
     window.onload = async function (event) {
         if (typeof originalOnload === "function") await originalOnload(event);
-        initializeAgentUI();
+        if (!new URLSearchParams(location.search).has('preferences')) initializeAgentUI();
     };
 
     window.isAgentTaskRunning = isAgentTaskRunning;
@@ -2084,6 +2166,7 @@
     window.requestAgentLoop = requestAgentLoop;
     window.buildAgentMessagesForContextEstimate = chat => buildAgentMessages(chat, { estimateOnly: true });
     window.submitGatewayAgentMessage = submitGatewayAgentMessage;
+    window.getAgentStoredResult = key => agentResultStore.get(key);
     // The gateway reads only the active reasoning text, never raw model payloads.
     window.getGatewayAgentThinkingState = () => agentLiveThinkingRow && agentTaskChatId ? {
         chatId: String(agentTaskChatId), id: agentLiveThinkingRow.gatewayThinkingId,

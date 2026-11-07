@@ -19,3 +19,6 @@ Thumbs.db
 
 # Local reference implementation; never ship or commit it.
 参考.html
+
+# Local task notes
+/任务.txt

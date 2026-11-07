@@ -2,6 +2,12 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("gatewayConsoleAPI", {
+    getAppearance: () => ipcRenderer.invoke('appearance:get'),
+    onAppearance: callback => {
+        const listener = (_event, value) => callback(value);
+        ipcRenderer.on('appearance:changed', listener);
+        return () => ipcRenderer.removeListener('appearance:changed', listener);
+    },
     getStatus: () => ipcRenderer.invoke("agent-gateway:get-status"),
     configure: patch => ipcRenderer.invoke("agent-gateway:configure", patch),
     start: () => ipcRenderer.invoke("agent-gateway:start"),

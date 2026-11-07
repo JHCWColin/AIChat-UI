@@ -9,7 +9,8 @@ const {
     globalShortcut,
     desktopCapturer,
     screen,
-    nativeImage
+    nativeImage,
+    Notification
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
@@ -37,8 +38,7 @@ const {
     saveUserAllowedCommands,
     findAllowedCommandPrefix,
     deriveAllowedCommandPrefix,
-    getEnvironmentDescription,
-    scanWorkspaceTextFiles
+    getEnvironmentDescription
 } = require("./agent-tools");
 const AgentSearch = require("./agent-search");
 const { registerAgentGateway } = require("./gateway-electron");
@@ -67,6 +67,11 @@ let agentWorkspaceStore = null;
 const pendingAgentWorkspaceSelections = new Map();
 const agentShellRunner = new AgentShellRunner();
 const agentBackgroundShells = new AgentBackgroundShellManager();
+let rendererRuntimeState = {};
+const desktopEnhancements = require('./desktop-enhancements').registerDesktopEnhancements({
+    app, BrowserWindow, ipcMain, Notification, getMainWindow: () => mainWindow, isMainSender,
+    getRuntimeState: () => ({ ...rendererRuntimeState, audio: Boolean(audioSession), desktop: Boolean(audioSession?.mode === 'desktop') })
+});
 
 const FETCH_PUBLIC_TIMEOUT_MS = 30000;
 const FETCH_PUBLIC_MAX_BYTES = 2000000;
@@ -250,7 +255,7 @@ async function checkForAppUpdates() {
 }
 
 ipcMain.handle("app:check-for-updates", async (event) => {
-    if (!isMainSender(event)) throw new Error("非法的更新检查请求");
+    if (!isMainSender(event) && !desktopEnhancements.isPreferences(event)) throw new Error("非法的更新检查请求");
     try {
         await autoUpdater.checkForUpdates();
         return { success: true };
@@ -344,7 +349,7 @@ function createWindow(htmlFile = "index.html", options = {}) {
         }
     });
 
-    win.loadFile(htmlFile);
+    win.loadFile(path.resolve(__dirname, htmlFile));
     win.webContents.setWindowOpenHandler(() => ({ action: "allow" }));
     return win;
 }
@@ -372,6 +377,7 @@ function sanitizeTurns(turns) {
                 role: item.role,
                 content: String(item.content || "").slice(0, 200000)
             };
+            if (Number.isFinite(Number(item.completedAt)) && Number(item.completedAt) > 0) clean.completedAt = Number(item.completedAt);
             if (item.role === "assistant" && typeof item.voiceRecordId === "string" && item.voiceRecordId.trim()) {
                 clean.voiceRecordId = item.voiceRecordId.trim();
             }
@@ -929,7 +935,7 @@ ipcMain.handle("desktop-work:capture-screenshot", async (event) => {
 });
 
 ipcMain.handle("app:get-update-log", async (event) => {
-    if (!isMainSender(event)) throw new Error("非法的更新日志请求");
+    if (!isMainSender(event) && !desktopEnhancements.isPreferences(event)) throw new Error("非法的更新日志请求");
     return fs.readFile(path.join(__dirname, "UPDATE.md"), "utf8");
 });
 
@@ -952,7 +958,6 @@ ipcMain.handle("agent:select-workspace", async (event, chatId) => {
     const workspacePath = await fs.realpath(result.filePaths[0]);
     const stats = await fs.stat(workspacePath);
     if (!stats.isDirectory()) throw new Error("工作区必须是目录");
-    const scan = await scanWorkspaceTextFiles(workspacePath);
     const selectionId = crypto.randomUUID();
     for (const [pendingId, pending] of pendingAgentWorkspaceSelections) {
         if (pending.chatId !== String(chatId || "")) continue;
@@ -975,9 +980,7 @@ ipcMain.handle("agent:select-workspace", async (event, chatId) => {
         selectionId,
         canceled: false,
         requiresConfirmation: true,
-        environment: getEnvironmentDescription(workspacePath),
-        textFileCount: scan.totalCount,
-        textFilePreview: scan.preview
+        environment: getEnvironmentDescription(workspacePath)
     };
 });
 
@@ -1012,13 +1015,13 @@ ipcMain.handle("agent:remove-workspace", async (event, chatId) => {
 });
 
 ipcMain.handle("agent:get-command-settings", async (event) => {
-    if (!isMainSender(event)) throw new Error("非法的 Agent 命令设置请求");
+    if (!isMainSender(event) && !desktopEnhancements.isPreferences(event)) throw new Error("非法的 Agent 命令设置请求");
     const paths = getAgentCommandPaths();
     return loadAllowedCommands(paths.defaultFile, paths.userFile);
 });
 
 ipcMain.handle("agent:save-command-additions", async (event, commands) => {
-    if (!isMainSender(event)) throw new Error("非法的 Agent 命令设置请求");
+    if (!isMainSender(event) && !desktopEnhancements.isPreferences(event)) throw new Error("非法的 Agent 命令设置请求");
     const paths = getAgentCommandPaths();
     const additions = await saveUserAllowedCommands(paths.userFile, commands);
     return { success: true, additions };
@@ -1185,7 +1188,7 @@ ipcMain.handle("desktop-work:complete", async (event, turns) => {
 });
 
 ipcMain.handle("audio-chat:generate-preset", async (event, config) => {
-    if (!isMainSender(event)) throw new Error("非法的预制语音请求");
+    if (!isMainSender(event) && !desktopEnhancements.isPreferences(event)) throw new Error("非法的预制语音请求");
     return generateVoicePreset(config || {});
 });
 
@@ -1267,6 +1270,7 @@ ipcMain.on("renderer:ready", (event) => {
 
 ipcMain.on("app-state:update", (event, state) => {
     if (!isMainSender(event)) return;
+    rendererRuntimeState = { agentRunning: state?.agentRunning === true, generating: state?.generating === true, compaction: state?.compaction === true };
     if (state && Object.prototype.hasOwnProperty.call(state, "developerMode")) {
         developerModeEnabled = Boolean(state.developerMode);
     }

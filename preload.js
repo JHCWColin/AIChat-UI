@@ -2,8 +2,22 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
     isElectron: true,
-    countContextTokens: (text, model) => require("./tokenizer-runtime.cjs").count(text, model),
-    describeContextTokenizer: model => require("./tokenizer-runtime.cjs").describe(model),
+    countContextTokens: (text, model) => ipcRenderer.invoke('context:count', [text], model).then(result => result.counts[0]),
+    countContextBatch: (texts, model) => ipcRenderer.invoke('context:count', texts, model),
+    openPreferences: () => ipcRenderer.invoke('preferences:open'),
+    closePreferences: () => ipcRenderer.invoke('preferences:close'),
+    getPreferencesState: () => ipcRenderer.invoke('preferences:state'),
+    preferencesChanged: () => ipcRenderer.send('preferences:changed'),
+    updateAppearance: value => ipcRenderer.send('appearance:update', value),
+    notifyAgent: value => ipcRenderer.invoke('agent:notify', value),
+    onPreferencesChanged: callback => {
+        const listener = () => callback(); ipcRenderer.on('preferences:changed', listener);
+        return () => ipcRenderer.removeListener('preferences:changed', listener);
+    },
+    onPreferencesClose: callback => {
+        const listener = () => callback(); ipcRenderer.on('preferences:request-close', listener);
+        return () => ipcRenderer.removeListener('preferences:request-close', listener);
+    },
     openAgentGateway: () => ipcRenderer.invoke("agent-gateway:open"),
     publishGatewaySnapshot: snapshot => ipcRenderer.send("agent-gateway:snapshot", snapshot),
     completeGatewayMessage: (requestId, result) => ipcRenderer.send("agent-gateway:message-result", requestId, result),

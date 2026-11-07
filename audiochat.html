@@ -1758,6 +1758,7 @@
                     this.turns.push({
                         role: 'assistant',
                         content: text,
+                        completedAt: Date.now(),
                         ...(voiceRecordId ? { voiceRecordId } : {})
                     });
                     await this.checkpoint();

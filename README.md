@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V8.2.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V9.0.0_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -39,13 +39,13 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ## 最近更新
 
-### V8.2.0 Release 精确上下文统计
+### V9.0.0 Release
 
-- 按模型选择 OpenAI 本地词表、DeepSeek 官方离线词表或参考 tokenizer，替换单一字符数估算，并明确标注统计方式。
-- 将鼠标悬停在预估 token 或上下文进度条上，查看彩色占用条、各部分 token 数与百分比。
-- 普通思考文本仅用于显示，不再回灌上下文；保留 Responses API 要求连续传递的原生 reasoning item。
-
-OpenAI 模型按系列使用 `cl100k_base` 或 `o200k_base`；DeepSeek V4 与 V4.1 使用对应官方离线词表。Claude 使用 Anthropic 旧词表参考估算；`deepseek-chat`、`deepseek-reasoner` 等未指明版本的别名，以及没有专用词表的厂商模型，使用通用参考估算。图片、消息封装和不可读取的 reasoning 数据仍为估算值，实际用量以服务端返回的 usage 为准。
+- 全新模型与推理深度菜单、异步 Token 计数、Agent 用量与性能统计。
+- Agent 信息侧栏、询问用户工具、增强工具解析及桌面系统通知。
+- 独立偏好设置、可用模型发现、响应式输入框和统一主题布局。
+- ZIP 会话导入导出、消息结束时间及三款新背景。
+- 完整变更与计数限制请参阅 [更新日志](UPDATE.md)。
 
 ### V8.1.0 Release 局域网 Agent 网关
 
@@ -183,7 +183,7 @@ npm run build  //构建
 
 ## 版本信息
 
-- 当前版本：`V8.2.0 Release`
+- 当前版本：`V9.0.0 Release`
 - 当前构建标识：`build20261101`
 
 ---

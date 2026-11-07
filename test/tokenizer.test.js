@@ -47,7 +47,10 @@ test("known DeepSeek model families select matching labels and unknown aliases s
         assert.match(localTokenizer.describe(model), /版本未知.*参考估算/);
         assert.equal(localTokenizer.count("你好，世界！", model), localTokenizer.count("你好，世界！", "unknown-model"));
     }
-    assert.equal(localTokenizer.describe("claude-sonnet-5"), "Anthropic 旧词表参考估算");
+    for (const model of ['claude-sonnet-5','claude-sonnet-4-6','claude-3-7-sonnet-20250219','claude-opus-4-8','anthropic/claude-opus-5','claude-fable-5-1','claude_fable_5']) {
+        assert.match(localTokenizer.describe(model),/Claude (Sonnet|Opus|Fable).*参考估算/);
+        assert.equal(localTokenizer.count('你好，世界！',model),localTokenizer.count('你好，世界！','unknown-model'));
+    }
 });
 
 test("tokenizer runtime works outside the project cwd without network or installed model packages", () => {

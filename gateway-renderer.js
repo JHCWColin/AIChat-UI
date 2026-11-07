@@ -1,5 +1,6 @@
 (function () {
     "use strict";
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('preferences')) return;
 
     const api = window.electronAPI;
     if (!api?.isElectron || !api.publishGatewaySnapshot) return;

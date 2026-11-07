@@ -1,0 +1,307 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
+const http = require('node:http');
+const { app,BrowserWindow,dialog } = require('electron');
+const profile = path.join(os.tmpdir(),`aiui-enhancements-${process.pid}`);
+app.setPath('userData',profile);
+app.commandLine.appendSwitch('disable-gpu');
+require('../main');
+setTimeout(() => { console.error('smoke test watchdog timeout'); app.exit(1); },120000).unref();
+const sleep = ms => new Promise(resolve => setTimeout(resolve,ms));
+async function until(callback,label) {
+    const deadline = Date.now()+20000;
+    while (Date.now()<deadline) { const result = await callback(); if (result) return result; await sleep(100); }
+    throw new Error(`Timed out: ${label}`);
+}
+const evaluate = async (win,source) => {
+    let timer;
+    try { return await Promise.race([win.webContents.executeJavaScript(source,true),new Promise((_,reject) => { timer=setTimeout(() => reject(new Error(`Renderer evaluation timed out: ${source.slice(0,180)}`)),15000); })]); }
+    finally { clearTimeout(timer); }
+};
+async function closePreferences(win) {
+    // Closing the sender can discard executeJavaScript's reply before it arrives.
+    void win.webContents.executeJavaScript('void window.electronAPI.closePreferences(); true',true).catch(() => {});
+    await until(() => win.isDestroyed(),'preferences closed');
+}
+const errors = [];
+app.on('web-contents-created',(_event,contents) => {
+    contents.on('console-message',(_event,level,message) => { if (level>=3 && !/ERR_FILE_NOT_FOUND|ERR_NAME_NOT_RESOLVED/.test(message)) errors.push(message); });
+});
+app.whenReady().then(async () => {
+    const artifacts = path.join(profile,'screenshots'); await fs.mkdir(artifacts,{ recursive:true });
+    let server;
+    try {
+        const main = await until(() => BrowserWindow.getAllWindows().find(win => /index\.html$/.test(win.webContents.getURL())),'main window');
+        await until(() => evaluate(main,"Boolean(window.AIUIEnhancements && document.querySelectorAll('.custom-select-trigger').length === 3)"),'initialized custom selectors');
+        await sleep(450);
+        await evaluate(main,"closeSetupGuide(); localStorage.setItem('first_setup_guide_shown','1');");
+        assert.equal(await evaluate(main,"localStorage.getItem('auto_summary_interval')"),'0');
+        await sleep(250);
+        assert.deepEqual(await evaluate(main,"(() => { const c=getComputedStyle(document.getElementById('model-selector-trigger')); return [c.borderTopLeftRadius,c.borderTopRightRadius,c.borderBottomLeftRadius,c.borderBottomRightRadius]; })()"),['12px','12px','0px','0px']);
+        const token = await evaluate(main,"window.electronAPI.countContextBatch(['你好，世界！'],'deepseek-flash')");
+        assert.equal(token.generic,false); assert.equal(token.counts[0],4);
+        assert.equal((await evaluate(main,"window.electronAPI.countContextBatch(['hello'],'gemini-4-argon')")).generic,true);
+        dialog.showOpenDialog = async () => ({ canceled:false,filePaths:[artifacts] });
+        const initialChat = await evaluate(main,'activeChatId');
+        await evaluate(main,"createNewChat(); document.getElementById('model-select').value='deepseek-flash'; onModelSelectionChange(); document.getElementById('model-select').dispatchEvent(new Event('change'));");
+        await until(() => evaluate(main,"document.getElementById('context-breakdown-model').textContent==='deepseek-flash' && document.getElementById('token-estimate').style.display==='none'"),'empty ordinary chat estimate');
+        await evaluate(main,"showContextBreakdown(); window.testEnterAgent=enterAgentMode(); true;");
+        await until(() => evaluate(main,"document.getElementById('agent-workspace-trust-modal').classList.contains('visible')"),'new agent workspace trust');
+        await evaluate(main,"resolveAgentWorkspaceTrust(true); window.testEnterAgent");
+        await until(() => evaluate(main,"document.getElementById('token-estimate').textContent.startsWith('Toks:') && document.getElementById('context-breakdown-rows').textContent.includes('系统工具')"),'initial Agent tool and prompt tokens without switching chats');
+        const initialUsage = await evaluate(main,"(() => { const trigger=document.getElementById('token-estimate').getBoundingClientRect(); const popup=document.getElementById('context-breakdown').getBoundingClientRect(); return {text:document.getElementById('token-estimate').textContent,visible:trigger.width>0 && trigger.height>0,meter:document.getElementById('context-meter').classList.contains('visible'),left:popup.left,anchor:trigger.left,top:popup.top,bottom:popup.bottom,anchorTop:trigger.top}; })()");
+        assert.ok(initialUsage.visible && initialUsage.meter && Math.abs(initialUsage.left-initialUsage.anchor)<2 && initialUsage.top>12 && initialUsage.bottom<=initialUsage.anchorTop,JSON.stringify(initialUsage));
+        await evaluate(main,"document.getElementById('agent-info-toggle').click();"); await sleep(250);
+        assert.deepEqual(await evaluate(main,"(() => {const c=getComputedStyle(document.querySelector('#agent-sidebar-context .context-breakdown'));return [c.backgroundColor,c.backdropFilter];})()"),['rgba(0, 0, 0, 0)','none']);
+        await fs.writeFile(path.join(artifacts,'new-agent-context.png'),(await main.webContents.capturePage()).toPNG());
+        await evaluate(main,`hideContextBreakdown(); document.getElementById('agent-info-toggle').click(); switchChat(${JSON.stringify(initialChat)}); document.getElementById('model-select').value='gpt-5.6-terra'; onModelSelectionChange(); document.getElementById('model-select').dispatchEvent(new Event('change'));`);
+        assert.deepEqual(await evaluate(main,"(() => { const t=document.getElementById('user-input'); t.value=Array(14).fill('一行输入文本').join('\\n'); autoResize(t); const c=getComputedStyle(t); return { scroll:c.overflowY,lines:Math.round((t.clientHeight-parseFloat(c.paddingTop)-parseFloat(c.paddingBottom))/parseFloat(c.lineHeight)),transform:getComputedStyle(document.getElementById('input-footer')).transform }; })()"),{ scroll:'auto',lines:6,transform:'none' });
+        await evaluate(main,"document.querySelector('.model-selector-container .custom-select-trigger').click()");
+        await sleep(200);
+        const picker = await evaluate(main,"(() => { const p=document.querySelector('.choice-popover.open'); const r=p.getBoundingClientRect(); return { top:r.top,bottom:r.bottom,height:r.height,width:r.width,screen:innerHeight,reasoning:p.innerText.includes('Reasoning depth'),itemHeight:p.querySelector('.choice-option').getBoundingClientRect().height }; })()");
+        assert.ok(picker.top>=0 && picker.bottom<=picker.screen+1 && picker.height<=441 && picker.width<=341 && picker.itemHeight<30,JSON.stringify(picker)); assert.equal(picker.reasoning,true,JSON.stringify(picker));
+        assert.equal(await evaluate(main,"document.querySelector('.choice-search') === null"),true);
+        assert.equal(await evaluate(main,"(() => { const items=document.querySelectorAll('.choice-popover.open .choice-option');return items[1].getBoundingClientRect().top-items[0].getBoundingClientRect().bottom>=3;})()"),true);
+        await fs.writeFile(path.join(artifacts,'model-picker.png'),(await main.webContents.capturePage()).toPNG());
+        await evaluate(main,"document.querySelector('.reasoning-footer>span').click()"); await sleep(180);
+        assert.equal(await evaluate(main,"document.querySelectorAll('.choice-popover.open').length"),2);
+        assert.equal(await evaluate(main,"(() => { const parent=document.querySelector('.model-choice-popover').getBoundingClientRect(),child=document.querySelector('.reasoning-choice-popover').getBoundingClientRect(); return child.left>=parent.right+7 && child.right<=innerWidth-11 && child.top>=12 && child.bottom<=innerHeight-11; })()"),true);
+        await fs.writeFile(path.join(artifacts,'reasoning-menu.png'),(await main.webContents.capturePage()).toPNG());
+        const reasoningOptions = await evaluate(main,"[...document.querySelector('.choice-popover[aria-label=\"Reasoning depth\"]').querySelectorAll('.choice-option')].map(item=>item.textContent.replace('✓','').trim())");
+        assert.ok(reasoningOptions.includes('medium (default)'),JSON.stringify(reasoningOptions));
+        assert.ok(reasoningOptions.every(label=>label!=='Default' && label!=='Automatic' && !/[\u4e00-\u9fff]/.test(label)),JSON.stringify(reasoningOptions));
+        await evaluate(main,"document.querySelector('.choice-popover.open:last-of-type .choice-option')?.click(); document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})); document.getElementById('user-input').value=''; autoResize(document.getElementById('user-input')); const chat=chats.find(c=>c.id===activeChatId); chat.agentEnabled=true; chat.agentPlan={steps:[{step:'检查侧栏数据',status:'in_progress'}]}; updateAgentUIForChat(chat); window.AIUIEnhancements.changed(); document.getElementById('agent-info-toggle').click();");
+        await sleep(300);
+        assert.equal(await evaluate(main,"document.getElementById('agent-info-toggle').hidden"),false);
+        assert.equal(await evaluate(main,"document.getElementById('agent-sidebar-plan').textContent.includes('检查侧栏数据')"),true);
+        const sidebarAnimation = await evaluate(main,`(async () => {
+            const sidebar=document.getElementById('agent-info-sidebar');
+            const content=sidebar.querySelector('.agent-info-sidebar-content');
+            content.style.maxHeight='160px'; content.scrollTop=40;
+            const measure=() => { const card=content.querySelector('section').getBoundingClientRect(); return {top:card.top,width:card.width,height:card.height,scroll:content.scrollTop}; };
+            const before=measure(), frames=[];
+            document.getElementById('agent-info-toggle').click();
+            const start=performance.now();
+            do { await new Promise(requestAnimationFrame); frames.push(measure()); } while(performance.now()-start<240);
+            const closedWidth=sidebar.getBoundingClientRect().width;
+            document.getElementById('agent-info-toggle').click();
+            await new Promise(resolve=>setTimeout(resolve,240));
+            content.style.maxHeight=''; content.scrollTop=0;
+            return {before,frames,closedWidth};
+        })()`);
+        assert.ok(sidebarAnimation.before.scroll>0,JSON.stringify(sidebarAnimation));
+        assert.ok(sidebarAnimation.frames.every(frame=>Object.keys(sidebarAnimation.before).every(key=>Math.abs(frame[key]-sidebarAnimation.before[key])<1)),JSON.stringify(sidebarAnimation));
+        assert.equal(sidebarAnimation.closedWidth,0);
+        assert.equal(await evaluate(main,"Math.abs(document.getElementById('model-selector-trigger').getBoundingClientRect().bottom-document.querySelector('#input-footer .input-area').getBoundingClientRect().top)<2"),true);
+        assert.equal(await evaluate(main,"document.getElementById('agent-command-mode-bar').nextElementSibling.id"),'send-btn');
+        assert.deepEqual(await evaluate(main,"(()=>{const r=document.getElementById('command-mode-trigger').getBoundingClientRect();return [r.width,r.height]})()"),[36,36]);
+        assert.equal(await evaluate(main,"document.getElementById('voice-btn') === null && typeof toggleVoiceRecording === 'undefined' && typeof transcribeAudio === 'undefined'"),true);
+        assert.equal(await evaluate(main,"['export-chats-btn','import-chats-btn'].every(id=>{const b=document.getElementById(id);return b.className===document.getElementById('agent-gateway-btn').className && Boolean(b.querySelector('svg.lucide'));})"),true);
+        assert.equal(await evaluate(main,"document.getElementById('import-chats-btn').getBoundingClientRect().top>=document.getElementById('export-chats-btn').getBoundingClientRect().bottom"),true);
+        assert.equal(await evaluate(main,"getComputedStyle(document.querySelector('#input-footer .input-area')).borderTopRightRadius"),'12px');
+        await evaluate(main,"document.getElementById('command-mode-trigger').click()");
+        assert.equal(await evaluate(main,"(() => {const items=document.querySelectorAll('.choice-popover.open .choice-option');return items[1].getBoundingClientRect().top-items[0].getBoundingClientRect().bottom>=3;})()"),true);
+        await evaluate(main,"document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true})); document.getElementById('agent-command-mode-select').value='yolo'; AIUIEnhancements.changed()");
+        assert.deepEqual(await evaluate(main,"[document.getElementById('command-mode-trigger').dataset.icon,getComputedStyle(document.getElementById('command-mode-trigger')).color]"),['shield-alert','rgb(245, 158, 11)']);
+        await evaluate(main,"document.getElementById('agent-command-mode-select').value='safe'; AIUIEnhancements.changed()");
+        const headerHeight = await evaluate(main,"document.querySelector('main>header').getBoundingClientRect().height");
+        assert.equal(headerHeight,48);
+        await evaluate(main,"document.querySelector('.history-toolbar button:last-child').click()"); await sleep(250);
+        assert.equal(await evaluate(main,"document.querySelector('main>header').getBoundingClientRect().height"),headerHeight);
+        await evaluate(main,"document.getElementById('history-restore').click()"); await sleep(250);
+        assert.equal(await evaluate(main,"document.querySelector('main>header').getBoundingClientRect().height"),headerHeight);
+        await fs.writeFile(path.join(artifacts,'agent-sidebar.png'),(await main.webContents.capturePage()).toPNG());
+        const countBefore = await evaluate(main,'chats.length');
+        await evaluate(main,'toggleSettings()');
+        const prefs = await until(() => BrowserWindow.getAllWindows().find(win => /preferences=1/.test(win.webContents.getURL())),'modal preferences');
+        await until(() => evaluate(prefs,"Boolean(document.getElementById('input-max-lines'))"),'preference controls');
+        assert.equal(await evaluate(prefs,"[...document.querySelectorAll('.settings-sidebar nav button')].every(button=>Boolean(button.querySelector('svg.lucide')))"),true);
+        assert.equal(await evaluate(prefs,"document.getElementById('api-settings-actions').getClientRects().length"),0);
+        assert.equal(await evaluate(prefs,"document.querySelector('input[name=auto-summary-interval]:checked').value"),'0');
+        assert.equal(await evaluate(prefs,"document.getElementById('context-compaction-card').contains(document.getElementById('context-compaction-model-select')) && document.getElementById('context-compaction-card').contains(document.querySelector('input[name=auto-summary-interval]'))"),true);
+        await evaluate(prefs,"document.querySelector('input[name=auto-summary-interval][value=\"15\"]').click()");
+        assert.equal(await evaluate(prefs,"localStorage.getItem('auto_summary_interval')"),'15');
+        await evaluate(prefs,"document.querySelector('input[name=auto-summary-interval][value=\"0\"]').click()");
+        assert.equal(await evaluate(prefs,"document.getElementById('voice-model-select')===null && Boolean(document.getElementById('voice-chat-model-input')) && Boolean(document.getElementById('math-render-toggle'))"),true);
+        assert.equal(await evaluate(prefs,"document.getElementById('settings-back-btn')===null"),true);
+        assert.deepEqual(await evaluate(prefs,"(() => { const input=document.getElementById('input-max-lines'); const buttons=input.closest('.setting-stepper').querySelectorAll('button'); input.value='6'; buttons[1].click(); const plus=input.value; buttons[0].click(); const minus=input.value; input.value='30'; buttons[1].click(); const max=input.value; input.value='1'; buttons[0].click(); const min=input.value; input.value='6'; return [plus,minus,max,min]; })()"),['7','6','30','1']);
+        assert.deepEqual(await evaluate(prefs,"[...document.querySelectorAll('[id^=bg-thumb-]')].slice(0,3).map(img=>[img.id,img.alt])"),[['bg-thumb-7','Duo Light'],['bg-thumb-8','Duo Dark'],['bg-thumb-9','Golden Gate']]);
+        assert.equal(await evaluate(prefs,"Promise.all([7,8,9].map(number=>new Promise(resolve=>{const img=new Image();img.onload=()=>resolve(img.naturalWidth>0);img.onerror=()=>resolve(false);img.src=number+'.JPG';}))).then(loaded=>loaded.every(Boolean))"),true);
+        await evaluate(prefs,"document.getElementById('developer-mode-toggle').checked=true; onDeveloperModeToggleChange(); switchSettingsSection('advanced',document.querySelector('[data-section=advanced]'));");
+        assert.equal(await evaluate(prefs,"['enhanced-tool-parser','agent-native-notifications'].every(id=>{const input=document.getElementById(id); const toggle=input.closest('.cloud-toggle'); return toggle && input.nextElementSibling.classList.contains('slider') && getComputedStyle(input).opacity==='0' && getComputedStyle(toggle.querySelector('.slider')).borderRadius===getComputedStyle(document.querySelector('#record-logs-toggle+.slider')).borderRadius;})"),true);
+        await evaluate(prefs,"document.getElementById('enhanced-tool-parser').click();");
+        await sleep(250); await fs.writeFile(path.join(artifacts,'preferences-tool-parser.png'),(await prefs.webContents.capturePage()).toPNG());
+        assert.equal(await evaluate(prefs,"localStorage.getItem('enhanced_tool_parser')"),'true');
+        await evaluate(prefs,"document.getElementById('enhanced-tool-parser').click(); document.getElementById('developer-mode-toggle').click();");
+        assert.equal(prefs.getParentWindow(),main); assert.equal(prefs.isModal(),true); assert.equal(main.isEnabled(),false);
+        assert.equal(await evaluate(main,'chats.length'),countBefore);
+        assert.equal(await evaluate(prefs,'chats.length'),countBefore);
+        assert.equal(await evaluate(prefs,"(() => { const saved=localStorage.getItem('api_key'); const key=document.getElementById('api-key-input'); const value=key.value; key.value='unsaved-api-draft'; key.dispatchEvent(new Event('input',{bubbles:true})); const lines=document.getElementById('input-max-lines'); lines.value='4'; lines.dispatchEvent(new Event('change',{bubbles:true})); const unchanged=localStorage.getItem('api_key')===saved && apiSettingsDirty; key.value=value; apiSettingsDirty=false; document.getElementById('api-unsaved-hint').classList.add('hidden'); return unchanged; })()"),true);
+        await evaluate(prefs,"setTheme('dark'); setAccentColor('rose');");
+        await sleep(300);
+        assert.equal(await evaluate(main,"document.body.classList.contains('theme-dark')"),true);
+        assert.equal(await evaluate(main,"localStorage.getItem('input_max_lines')"),'4');
+        assert.deepEqual(await evaluate(prefs,"(() => { const c=getComputedStyle(document.getElementById('sys-prompt')); const h=document.querySelector('.settings-sidebar-header h2'); return {bg:c.backgroundColor,text:c.color,titleFits:h.scrollWidth<=h.clientWidth,sidebar:Math.round(document.querySelector('.settings-sidebar').getBoundingClientRect().width)}; })()"),{bg:'rgb(23, 23, 25)',text:'rgb(229, 231, 235)',titleFits:true,sidebar:164});
+        await fs.writeFile(path.join(artifacts,'preferences.png'),(await prefs.webContents.capturePage()).toPNG());
+        await evaluate(prefs,"setTheme('light'); switchSettingsSection('api',document.querySelector('[data-section=api]'));");
+        assert.ok(await evaluate(prefs,"document.getElementById('api-settings-actions').getClientRects().length>0"));
+        assert.equal(await evaluate(prefs,"[...document.querySelectorAll('#settings-modal button')].filter(button=>['取消','保存设置'].includes(button.textContent.trim())).every(button=>button.closest('.settings-content-section').id==='section-api')"),true);
+        assert.deepEqual(await evaluate(prefs,"(() => { const c=getComputedStyle(document.getElementById('base-url-input')); return [c.backgroundColor,c.color]; })()"),['rgb(240, 240, 245)','rgb(36, 36, 36)']);
+        await sleep(250); await fs.writeFile(path.join(artifacts,'preferences-light.png'),(await prefs.webContents.capturePage()).toPNG());
+        await evaluate(prefs,"setTheme('dark');");
+        await closePreferences(prefs);
+        assert.equal(main.isEnabled(),true);
+        await evaluate(main,'window.electronAPI.openAgentGateway()');
+        const gateway = await until(() => BrowserWindow.getAllWindows().find(win => /gateway-console\.html$/.test(win.webContents.getURL())),'gateway window');
+        await until(() => evaluate(gateway,"document.documentElement.dataset.theme === 'dark'"),'gateway appearance');
+        assert.equal(await evaluate(gateway,"getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()"),'#e11d48');
+        await fs.writeFile(path.join(artifacts,'gateway-themed.png'),(await gateway.webContents.capturePage()).toPNG());
+        let modelCalls = 0;
+        let modelListAvailable = true;
+        let countAvailable = false;
+        let textRequestFails = false;
+        const requests = [];
+        server = http.createServer(async (req,res) => {
+            res.setHeader('Access-Control-Allow-Origin','*'); res.setHeader('Access-Control-Allow-Headers','*');
+            if (req.method === 'OPTIONS') { res.end(); return; }
+            if (req.method === 'GET' && req.url.endsWith('/models') && modelListAvailable) { res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({ data:[{ id:'gpt-6.1-sol' },{ id:'deepseek-flash' }] })); return; }
+            if (req.method === 'POST' && countAvailable && /count_tokens|countTokens|tokenize-text|input_tokens/.test(req.url)) {
+                res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({input_tokens:321,totalTokens:321,token_ids:Array(321).fill(1)})); return;
+            }
+            if (req.method !== 'POST' || !req.url.endsWith('/responses')) { res.statusCode=404; res.end(JSON.stringify({ error:{ message:'count/model endpoint unavailable in test' } })); return; }
+            if (textRequestFails) { res.statusCode=500; res.end(JSON.stringify({error:{message:'mock request failed'}})); return; }
+            let source = ''; for await (const chunk of req) source += chunk;
+            requests.push(JSON.parse(source)); modelCalls++;
+            res.setHeader('Content-Type','text/event-stream');
+            const event = data => res.write(`data: ${JSON.stringify(data)}\n\n`);
+            if (modelCalls === 1) {
+                const call = { type:'function_call',name:'ask_user_question',call_id:'ask-1',arguments:JSON.stringify({ questions:[{ id:'color',question:'选择测试方案',options:[{ label:'方案 A',description:'继续执行' },{ label:'方案 B',description:'另一个方案' }] }] }) };
+                event({ type:'response.completed',response:{ status:'completed',output:[call],usage:{ input_tokens:100,output_tokens:5,input_tokens_details:{ cached_tokens:60 } } } });
+            } else {
+                event({ type:'response.output_text.delta',delta:'已收到' }); await sleep(30);
+                event({ type:'response.output_text.delta',delta:'方案 A。' });
+                event({ type:'response.completed',response:{ status:'completed',output:[{ type:'message',role:'assistant',content:[{ type:'output_text',text:'已收到方案 A。' }] },{ type:'function_call',name:'finish_task',call_id:'finish-1',arguments:'{}' }],usage:{ input_tokens:100,output_tokens:25,output_tokens_details:{ reasoning_tokens:10 },input_tokens_details:{ cached_tokens:40 } } } });
+            }
+            res.write('data: [DONE]\n\n'); res.end();
+        });
+        await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
+        const base = `http://127.0.0.1:${server.address().port}/v1`;
+        dialog.showOpenDialog = async () => ({ canceled:false,filePaths:[artifacts] });
+        await evaluate(main,`(async () => {
+            localStorage.setItem('base_url',${JSON.stringify(base)}); localStorage.setItem('api_key','test-only'); localStorage.setItem('request_endpoint','/responses'); localStorage.setItem('agent_native_notifications','false');
+            const chat=chats.find(c=>c.id===activeChatId); const selected=await electronAPI.selectAgentWorkspace(chat.id); await electronAPI.confirmAgentWorkspace(chat.id,selected.path,selected.selectionId); chat.agentWorkspace=selected.path; chat.agentWorkspaceAvailable=true; chat.messages=[{role:'user',content:'测试询问暂停'}]; chat.agentEnabled=true; chat.modelRequestSteps=0; chat.agentCompletedRounds=0; document.getElementById('model-select').value='gpt-6.1-sol'; onModelSelectionChange(); document.getElementById('model-select').dispatchEvent(new Event('change')); window.testAgentPromise=requestAgentLoop('gpt-6.1-sol',chat); return true;
+        })()`);
+        await until(() => evaluate(main,"Boolean(document.querySelector('.agent-question input[type=radio]'))"),'agent question');
+        assert.equal(modelCalls,1); await sleep(200); assert.equal(modelCalls,1);
+        await evaluate(main,"if (!document.body.classList.contains('agent-info-open')) document.getElementById('agent-info-toggle').click();"); await sleep(450);
+        assert.equal(await evaluate(main,"(() => { const form=document.querySelector('.agent-question'); const row=form.closest('.agent-tool-row'); const c=getComputedStyle(form); const f=form.getBoundingClientRect(); const r=row.getBoundingClientRect(); const chat=document.getElementById('chat-column').getBoundingClientRect(); return parseFloat(c.marginTop)>=12 && parseFloat(c.marginBottom)>=12 && Math.abs(f.right-r.right)<2 && f.right<=chat.right && f.width<=r.width; })()"),true);
+        await evaluate(main,"[...document.querySelectorAll('.agent-question-option')].find(button=>button.textContent==='手动输入').click()");
+        assert.equal(await evaluate(main,"document.querySelector('.agent-question input[type=text]').hidden"),false);
+        await evaluate(main,"document.querySelector('.agent-question-option').click()");
+        assert.equal(await evaluate(main,"document.querySelector('.agent-question input[type=text]').hidden"),true);
+        await fs.writeFile(path.join(artifacts,'agent-question.png'),(await main.webContents.capturePage()).toPNG());
+        await evaluate(main,'toggleSettings()');
+        const duringTask = await until(() => BrowserWindow.getAllWindows().find(win => /preferences=1/.test(win.webContents.getURL())),'preferences during agent');
+        await until(() => evaluate(duringTask,"Boolean(document.getElementById('input-max-lines'))"),'running settings ready');
+        await evaluate(duringTask,"document.getElementById('api-key-input').value='updated-key'; document.getElementById('base-url-input').value='http://127.0.0.1:1/v1'; document.getElementById('max-tokens-input').value='1234'; saveSettings(true);");
+        assert.equal(await evaluate(main,'getAPIKey()'),'test-only'); assert.equal(await evaluate(main,'getBaseURL()'),base);
+        await closePreferences(duringTask);
+        await evaluate(main,"document.querySelector('.agent-question-option').click(); document.querySelector('.agent-question').requestSubmit();");
+        await evaluate(main,'window.testAgentPromise');
+        assert.equal(modelCalls,2);
+        assert.equal(requests[0].reasoning.effort,'medium'); assert.equal(requests[0].temperature,undefined);
+        assert.ok(JSON.stringify(requests[1]).includes('方案 A'));
+        assert.notEqual(requests[1].max_output_tokens,1234);
+        await until(() => evaluate(main,'maxTokensLimit === 1234'),'deferred settings applied');
+        assert.equal(await evaluate(main,'getAPIKey()'),'updated-key');
+        await evaluate(main,`localStorage.setItem('base_url',${JSON.stringify(base)}); localStorage.setItem('api_key','test-only');`);
+        const stats = await evaluate(main,"(() => { const c=chats.find(c=>c.id===activeChatId); return {rounds:c.agentCompletedRounds,steps:c.modelRequestSteps,metrics:c.agentTaskMetrics,time:document.querySelector('.message-time')?.textContent}; })()");
+        assert.equal(stats.rounds,1); assert.equal(stats.steps,2); assert.equal(stats.metrics.input,200); assert.equal(stats.metrics.cached,100); assert.equal(stats.metrics.output,20); assert.ok(stats.metrics.streamMs>0); assert.match(stats.time,/^\d{2}:\d{2}$/);
+        await evaluate(main,"document.getElementById('user-input').value=''; updateTokenEstimate();"); await sleep(200);
+        assert.equal(await evaluate(main,"document.getElementById('context-generic-warning').textContent"),'通用预估');
+        assert.equal(await evaluate(main,"document.getElementById('context-generic-warning').parentElement.id"),'context-breakdown-note');
+        assert.equal(await evaluate(main,"document.getElementById('token-estimate').textContent.startsWith('Toks:')"),true);
+        countAvailable = true;
+        for (const model of ['claude-opus-4-8','gemini-4-argon','grok-4.6','gpt-6-luna']) {
+            const result = await evaluate(main,`estimateContextAccurately([{role:'user',content:'test text'}],{model:${JSON.stringify(model)},contextWindow:10000,reserveTokens:1000})`);
+            assert.equal(result.usedTokens,321); assert.equal(result.generic,false); assert.match(result.tokenizerLabel,/API/);
+        }
+        await evaluate(main,'toggleSettings()');
+        const fetchPrefs = await until(() => BrowserWindow.getAllWindows().find(win => /preferences=1/.test(win.webContents.getURL())),'fetch models preferences');
+        await until(() => evaluate(fetchPrefs,"Boolean(document.getElementById('input-max-lines'))"),'settings ready');
+        await evaluate(fetchPrefs,`document.getElementById('base-url-input').value=${JSON.stringify(base)}; [...document.querySelectorAll('button')].find(b=>b.textContent==='获取可用模型').click();`);
+        await until(() => evaluate(fetchPrefs,"document.getElementById('model-list-input').value === 'gpt-6.1-sol\\ndeepseek-flash'"),'model discovery');
+        modelListAvailable = false;
+        await evaluate(fetchPrefs,"[...document.querySelectorAll('button')].find(b=>b.textContent==='获取可用模型').click()");
+        await until(() => evaluate(fetchPrefs,"document.getElementById('model-list-input').nextElementSibling.textContent.includes('后端服务器未返回模型列表')"),'discovery error');
+        assert.equal(await evaluate(fetchPrefs,"document.getElementById('model-list-input').value"),'gpt-6.1-sol\ndeepseek-flash');
+        await closePreferences(fetchPrefs);
+        const process = await evaluate(main,"electronAPI.executeAgentTool({chatId:activeChatId,name:'start_process',arguments:{command:'ping -n 30 127.0.0.1'}})");
+        assert.equal(process.success,true);
+        await evaluate(main,'AIUIEnhancements.changed()');
+        await until(() => evaluate(main,"document.querySelector('#agent-sidebar-processes button')"),'background process sidebar');
+        await evaluate(main,"document.querySelector('#agent-sidebar-processes button').click()");
+        await until(async () => !(await evaluate(main,'electronAPI.listAgentProcesses()')).processes.some(item => item.running),'background stop');
+        console.log('background stopped; checking foreground command');
+        await evaluate(main,`(() => { const chat=chats.find(c=>c.id===activeChatId); const message={role:'tool',toolName:'run_shell',toolId:'smoke-shell',arguments:{command:"Write-Output 'regular-smoke'; Start-Sleep -Seconds 20"},status:'running',executionId:'smoke-shell'}; chat.messages.push(message); window.testShell=electronAPI.executeAgentTool({chatId:chat.id,name:'run_shell',executionId:message.executionId,arguments:message.arguments}).then(result=>{message.status='done';return result;}); AIUIEnhancements.changed(); return true; })()`);
+        await until(() => evaluate(main,"document.querySelector('#agent-sidebar-processes').textContent.includes('regular-smoke') && !document.querySelector('#agent-sidebar-processes button').disabled"),'regular shell sidebar');
+        await sleep(150); await evaluate(main,"document.querySelector('#agent-sidebar-processes button').click()");
+        console.log('foreground stop dispatched');
+        assert.equal((await evaluate(main,'window.testShell')).cancelled,true);
+        console.log('foreground stopped; checking archive');
+        await evaluate(main,"appendAgentToolMessageToUI({toolName:'start_process',arguments:{command:'a very long command '.repeat(100)},status:'done',toolId:'compact-background',result:{success:true}})");
+        assert.equal(await evaluate(main,"(() => {const n=document.querySelector('[data-agent-tool-id=compact-background] .agent-tool-summary-text'); return n.clientHeight<=parseFloat(getComputedStyle(n).lineHeight)+1;})()"),true);
+        const archiveResult = await evaluate(main,`(async () => {
+            const progress=[]; let busySeen=false;
+            const observer=new MutationObserver(()=>{const bar=document.querySelector('#voice-notification [role=progressbar]');if(bar){progress.push(Number(bar.getAttribute('aria-valuenow')));busySeen ||= document.getElementById('import-chats-btn').disabled && document.getElementById('export-chats-btn').disabled;}});
+            observer.observe(document.getElementById('voice-notification'),{subtree:true,childList:true,attributes:true});
+            const chat=chats.find(c=>c.id===activeChatId); const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7dQAAAAASUVORK5CYII=';
+            const ref=await ImageStore.storeImage(png); chat.messages.push({role:'user',content:'原始输入',attachments:[{isImage:true,fullDataUrl:png}]},{role:'assistant',content:'图片结果',generatedImages:['img:'+ref],completedAt:Date.now()});
+            const zip=await AIUIChatArchive.buildArchive(); const data=JSON.parse(await zip.file('conversations.json').async('string')); const exported=data.chats.find(c=>c.id===chat.id); const attachmentExcluded=!exported.messages.some(m=>m.attachments); const imageEmbedded=exported.messages.at(-1).generatedImages[0]===png; const before=chat.messages.length;
+            exported.messages.push({role:'assistant',content:'仅追加这一条',completedAt:12345}); zip.file('conversations.json',JSON.stringify(data)); const file=new File([await zip.generateAsync({type:'uint8array'})],'records.zip');
+            await AIUIChatArchive.importChats(file); const first=chats.find(c=>c.id===activeChatId).messages.length; await AIUIChatArchive.importChats(file); const second=chats.find(c=>c.id===activeChatId).messages.length;
+            const originalClick=HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click=function(){};
+            try {await AIUIChatArchive.exportChats();} finally {HTMLAnchorElement.prototype.click=originalClick;observer.disconnect();}
+            return {attachmentExcluded,imageEmbedded,before,first,second,progressSeen:progress.length>0,busySeen,buttonsRestored:!document.getElementById('import-chats-btn').disabled && !document.getElementById('export-chats-btn').disabled,toolContent:exported.messages.some(m=>m.toolName==='ask_user_question'&&m.content.includes('方案 A'))};
+        })()`);
+        assert.equal(archiveResult.attachmentExcluded,true); assert.equal(archiveResult.imageEmbedded,true); assert.equal(archiveResult.first,archiveResult.before+1); assert.equal(archiveResult.second,archiveResult.first); assert.equal(archiveResult.toolContent,true);
+        assert.equal(archiveResult.progressSeen,true); assert.equal(archiveResult.busySeen,true); assert.equal(archiveResult.buttonsRestored,true);
+        console.log('archive passed; checking ordinary chat');
+        await evaluate(main,"(() => {const chat=chats.find(c=>c.id===activeChatId); chat.agentEnabled=false; chat.messages.push({role:'user',content:'普通聊天测试'}); updateAgentUIForChat(chat); return requestAI('普通聊天测试','gpt-6.1-sol',chat,[]);})()");
+        const ordinary = await evaluate(main,"(() => {const chat=chats.find(c=>c.id===activeChatId); return {metrics:document.getElementById('task-metrics').textContent,sidebar:document.getElementById('agent-info-toggle').hidden,time:chat.messages.at(-1).completedAt};})()");
+        assert.equal(ordinary.sidebar,true); assert.doesNotMatch(ordinary.metrics,/轮|步/); assert.match(ordinary.metrics,/tok\/s/); assert.ok(ordinary.time>0);
+        console.log('ordinary chat passed; checking errors and narrow layout');
+        textRequestFails = true;
+        await evaluate(main,"requestAI('模拟错误','gpt-6.1-sol',chats.find(c=>c.id===activeChatId),[])");
+        assert.deepEqual(await evaluate(main,"[document.getElementById('task-metrics').textContent,document.getElementById('token-estimate').style.display,document.getElementById('context-meter').classList.contains('visible')]"),['','none',false]);
+        main.setSize(520,760); await sleep(250);
+        await evaluate(main,"(() => {const chat=chats.find(c=>c.id===activeChatId);chat.agentEnabled=true;updateAgentUIForChat(chat);document.getElementById('agent-info-toggle').click();})()");
+        assert.deepEqual(await evaluate(main,"[document.getElementById('agent-info-toggle').hidden,document.body.classList.contains('agent-info-open'),document.getElementById('agent-info-sidebar').inert]"),[true,false,true]);
+        assert.equal(await evaluate(main,"document.querySelector('main>header').getBoundingClientRect().height"),headerHeight);
+        await evaluate(main,"document.getElementById('user-input').value='窄屏统计';autoResize(document.getElementById('user-input'));chats.find(c=>c.id===activeChatId).lastRequestFailed=false;AIUIEnhancements.changed()");await sleep(250);
+        assert.equal(await evaluate(main,"(() => {const a=document.getElementById('model-selector-trigger').getBoundingClientRect(),b=document.getElementById('context-estimate-shell').getBoundingClientRect();return b.left>=a.right&&b.top>=a.top;})()"),true);
+        await evaluate(main,"toggleSidebar(true)");
+        assert.equal(await evaluate(main,"(() => {const b=document.getElementById('history-new-chat'),c=document.querySelector('.history-toolbar button:last-child');return b.textContent.trim()===''&&Math.abs(b.getBoundingClientRect().top-c.getBoundingClientRect().top)<1;})()"),true);
+        await evaluate(main,"document.querySelector('.history-toolbar button:last-child').click()");
+        assert.equal(await evaluate(main,"document.getElementById('sidebar').classList.contains('active')"),false);
+        await evaluate(main,"document.getElementById('model-selector-trigger').click()");
+        assert.equal(await evaluate(main,"(() => { const r=document.querySelector('.choice-popover.open').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()"),true);
+        await evaluate(main,"document.querySelector('.reasoning-footer').click()"); await sleep(180);
+        assert.equal(await evaluate(main,"(() => { const parent=document.querySelector('.model-choice-popover').getBoundingClientRect(),child=document.querySelector('.reasoning-choice-popover').getBoundingClientRect(); return child.left>=parent.right+7 && child.right<=innerWidth-11; })()"),true);
+        assert.equal(await evaluate(main,"document.getElementById('context-meter').classList.contains('compact')"),true);
+        await fs.writeFile(path.join(artifacts,'mobile-layout.png'),(await main.webContents.capturePage()).toPNG());
+        main.setSize(390,760); await sleep(250);
+        assert.equal(await evaluate(main,"(() => { const parent=document.querySelector('.model-choice-popover').getBoundingClientRect(),child=document.querySelector('.reasoning-choice-popover').getBoundingClientRect(); return child.left>=parent.right+7 && child.right<=innerWidth-11; })()"),true);
+        assert.equal(await evaluate(main,"(() => {const input=document.querySelector('#input-footer .input-area').getBoundingClientRect(),send=document.getElementById('send-btn').getBoundingClientRect();return send.right<=input.right&&document.getElementById('user-input').clientWidth>0&&document.getElementById('agent-info-toggle').hidden;})()"),true);
+        await fs.writeFile(path.join(artifacts,'phone-layout.png'),(await main.webContents.capturePage()).toPNG());
+        main.setSize(1180,800); await sleep(300);
+        assert.deepEqual(await evaluate(main,"[document.getElementById('agent-info-toggle').hidden,document.body.classList.contains('agent-info-open')]"),[false,false]);
+        assert.deepEqual(errors.filter(message => !/Unexpected token.*json|not valid JSON/.test(message)),[]);
+        await fs.writeFile(path.join(profile,'result.json'),JSON.stringify({passed:true,errors}));
+        console.log(JSON.stringify({ passed:true,artifacts,errors },null,2));
+        server?.close(); app.exit(0);
+    } catch (error) { server?.close(); console.error(error.stack || error); console.error(JSON.stringify({ errors,profile })); app.exit(1); }
+});

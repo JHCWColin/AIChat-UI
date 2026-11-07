@@ -51,12 +51,12 @@ test("counts file labels in the attachment category and reserves compaction spac
     assert.equal(result.freeTokens + result.usedTokens, 100);
 });
 
-test("uses local GPT and Anthropic tokenizers and labels unsupported vendors as references", () => {
+test("uses known local GPT vocabularies and labels unpublished vendor vocabularies as generic", () => {
     const localTokenizer = require("../tokenizer-runtime.cjs");
 
-    assert.equal(localTokenizer.describe("gpt-4"), "OpenAI cl100k_base");
-    assert.equal(localTokenizer.describe("gpt-5.6-sol"), "OpenAI o200k_base");
-    assert.equal(localTokenizer.describe("claude-sonnet-5"), "Anthropic 旧词表参考估算");
+    assert.equal(localTokenizer.describe("gpt-4"), "cl100k_base");
+    assert.equal(localTokenizer.describe("gpt-5.6-sol"), "o200k_base");
+    assert.equal(localTokenizer.describe("claude-sonnet-5"), "Claude Sonnet · 通用 o200k_base 参考估算");
     assert.equal(localTokenizer.describe("deepseek-v4-pro-0813"), "DeepSeek V4 官方词表（本地）");
     assert.match(localTokenizer.describe("deepseek-v5"), /参考估算/);
     assert(localTokenizer.count("中文 and code: const answer = 42;", "gpt-5.6-sol") > 0);

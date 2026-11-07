@@ -52,7 +52,7 @@
 |---|---|---|
 | 2086–2099 | 侧边栏 | `#sidebar`、`#chat-history`（会话历史列表） |
 | 2101–2110 | 顶部栏 | `#active-chat-title`、`#canvas-toggle-btn` |
-| 2111–2305 | 主聊天区 | `#messages-wrapper`、`#user-input`、`#model-select`、`#send-btn`、`#stop-btn`、`#attach-menu`、`#voice-btn` |
+| 2111–2305 | 主聊天区 | `#messages-wrapper`、`#user-input`、`#model-select`、`#send-btn`、`#stop-btn`、`#attach-menu` |
 | 2307–2321 | Canvas 画布 | `#canvas-panel`、`#canvas-codemirror`、`#canvas-status` |
 | 2323–2336 | 重试弹层 / 图片灯箱 | `#retry-popover`、`#retry-model-select`、`#image-lightbox` |
 | 2338–2352 | 语音提示 / 回放 | `#voice-notification`、`#voice-replay-island` |
@@ -153,7 +153,6 @@
 - `parseImageAspectRatio` / `sendImageMessage` / `retryImageGeneration`。
 
 #### (w) 语音输入（6717–6844）
-- `toggleVoiceRecording` / `encodeWAV` / `transcribeAudio` / `insertTextAtCursor`：录音 → 转文字 → 插入输入框（转写走 `voiceModel`，实际 STT 由主进程科大讯飞完成）。
 
 #### (x) 启动入口（6861–6944）
 - `window.onload`：**应用初始化**。加载主题/模型/会话、`renderChatHistory`、绑定事件、注册 `onUpdateAvailable` 等。
@@ -244,7 +243,7 @@
 | `sys_prompt` / `chat_temp` | 系统提示词 / 温度 |
 | `model_list` / `selected_model` | 模型列表 / 当前模型 |
 | `theme` / `font_size` / `accent_color` / `bg_image` / `layout_mode` | 外观 |
-| `voice_model` / `voice_*` / `xf_*` | 语音转写与 TTS 凭据 |
+| `voice_*` / `xf_*` | 独立语音聊天的 STT 与 TTS 凭据 |
 | `max_tokens_limit` / `auto_summary_interval` | 上下文与预算 |
 | `developer_mode` / `log_level` / `record_logs` | 调试 |
 | 图片 | IndexedDB 库 `AIChatImages`（不存 localStorage） |

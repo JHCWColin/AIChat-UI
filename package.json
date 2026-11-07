@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "8.2.0",
+  "version": "9.0.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
@@ -54,7 +54,8 @@
       "!*.ps1",
       "!*.zip",
       "!*.tar.*",
-      "!*.tmp"
+      "!*.tmp",
+      "!任务.txt"
     ],
     "win": {
       "target": [

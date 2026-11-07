@@ -491,7 +491,7 @@
 
     function hasMalformedToolCall(value) {
         const source = canonicalizeDsmlMarkers(normalizeJsonPunctuation(stripReasoningSections(value)));
-        return /(?:"tool_call"\s*:|"tool_calls"\s*:|"function_call"\s*:|<tool_call\b|<function\s*=|<tool\s*=|<\/?dsml(?:_[\w.-]+)?\b|(?:^|\n)\s*(?:to|recipient)\s*[=:])/i.test(source);
+        return /(?:"tool_call"\s*:|"tool_calls"\s*:|"function_call"\s*:|<tool_call\b|<dots_function_call\b|<\|tool_call_start\|>|<function\s*=|<tool\s*=|<\/?dsml(?:_[\w.-]+)?\b|(?:^|\n)\s*(?:to|recipient)\s*[=:])/i.test(source);
     }
 
     function diagnoseToolCallResponse(value) {
@@ -666,6 +666,7 @@
         if (!original) return "";
         const key = original.toLocaleLowerCase("en-US").replace(/^\/*/, "").replace(/[\s:-]+/g, "_");
         const aliases = {
+            "askuserquestion": "ask_user_question", "request_user_input": "ask_user_question", "ask_user": "ask_user_question", "functions.request_user_input": "ask_user_question",
             "functions.exec": "run_shell", "functions.exec_command": "run_shell", "tools.exec": "run_shell",
             "functions.run_shell": "run_shell", "tools.run_shell": "run_shell",
             "container.exec": "run_shell", "container.exec_command": "run_shell", "shell_command": "run_shell",
@@ -863,13 +864,94 @@
         return normalizeStructured(input);
     }
 
-    function parseAgentResponse(text, structuredCalls) {
+    function normalizeEnhancedFormat(text) {
+        // Parse Python-like literal arguments without eval or Function. Only
+        // strings, numbers, booleans, null, arrays and dictionaries are accepted.
+        function literalParser(source) {
+            let index = 0;
+            const space = () => { while (/\s/.test(source[index] || '') && index < source.length) index++; };
+            function value() {
+                space(); const char = source[index];
+                if (char === '"' || char === "'") {
+                    index++; let result = '';
+                    while (index < source.length) {
+                        const next = source[index++]; if (next === char) return result;
+                        if (next === '\\') {
+                            const escape = source[index++];
+                            const escapes = { n:'\n',r:'\r',t:'\t','\\':'\\',"'":"'",'"':'"' };
+                            if (escape === 'u' && /^[0-9a-f]{4}/i.test(source.slice(index))) { result += String.fromCharCode(parseInt(source.slice(index,index+4),16)); index += 4; }
+                            else result += escapes[escape] ?? `\\${escape}`;
+                        } else result += next;
+                    }
+                    throw new Error('unterminated string');
+                }
+                if (char === '[' || char === '{') {
+                    const array = char === '['; const result = array ? []:{}; index++; space();
+                    while (source[index] !== (array ? ']':'}')) {
+                        const item = value();
+                        if (array) result.push(item);
+                        else { space(); if (source[index++] !== ':') throw new Error('invalid dictionary'); if (typeof item !== 'string' || ['__proto__','prototype','constructor'].includes(item)) throw new Error('invalid key'); result[item] = value(); }
+                        space(); if (source[index] === ',') { index++; space(); } else break;
+                    }
+                    if (source[index++] !== (array ? ']':'}')) throw new Error('invalid container'); return result;
+                }
+                const match = source.slice(index).match(/^(?:-?\d+(?:\.\d+)?(?:e[+-]?\d+)?|True|False|None|true|false|null)\b/i);
+                if (!match) throw new Error('unsupported literal'); index += match[0].length;
+                if (/^(true|false|none|null)$/i.test(match[0])) return /^true$/i.test(match[0]) ? true:/^false$/i.test(match[0]) ? false:null;
+                return Number(match[0]);
+            }
+            const args = {}; space();
+            while (index < source.length) {
+                const key = source.slice(index).match(/^[A-Za-z_]\w*/); if (!key || ['__proto__','constructor','prototype'].includes(key[0])) throw new Error('invalid argument');
+                index += key[0].length; space(); if (source[index++] !== '=') throw new Error('named arguments required'); args[key[0]] = value(); space();
+                if (index < source.length && source[index++] !== ',') throw new Error('invalid argument delimiter'); space();
+            }
+            return args;
+        }
+        let source = String(text || '');
+        source = source.replace(/<\|tool_call_start\|>([\s\S]*?)<\|tool_call_end\|>/gi, (whole,body) => {
+            try {
+                let content = body.trim(); if (content.startsWith('[') && content.endsWith(']')) content = content.slice(1,-1);
+                const output = []; let index = 0;
+                while (index < content.length) {
+                    while (/[\s,]/.test(content[index] || '') && index < content.length) index++;
+                    if (index >= content.length) break;
+                    const name = content.slice(index).match(/^([A-Za-z_][\w.]*)\s*\(/); if (!name) throw new Error('invalid call'); index += name[0].length;
+                    const start = index; let depth = 1, quote = '', escaped = false;
+                    while (index < content.length && depth) {
+                        const char = content[index++];
+                        if (quote) { if (escaped) escaped = false; else if (char === '\\') escaped = true; else if (char === quote) quote = ''; }
+                        else if (char === '"' || char === "'") quote = char;
+                        else if (char === '(') depth++; else if (char === ')') depth--;
+                    }
+                    if (depth || quote) throw new Error('incomplete call');
+                    output.push(JSON.stringify({ tool_call:{ name:name[1],arguments:literalParser(content.slice(start,index-1)) } }));
+                }
+                return output.length ? output.join('\n'):whole;
+            } catch (_) { return whole; }
+        });
+        return source.replace(/<dots_function_call>([\s\S]*?)<\/dots_function_call>/gi,(whole,body) => {
+            const invocation = body.match(/<(?:invoke\s+name=["']([^"']+)["']|([A-Za-z_]\w*)["']?)\s*>([\s\S]*?)<\/invoke>/i);
+            if (!invocation) return whole;
+            const name = invocation[1] || invocation[2]; const content = invocation[3].trim();
+            const args = parseXmlArguments(content);
+            if (args && Object.keys(args).length) return JSON.stringify({ tool_call:{ name,arguments:args } });
+            try { const value = JSON.parse(content || '{}'); if (isRecord(value)) return JSON.stringify({ tool_call:{ name,arguments:value } }); } catch (_) {}
+            // A bare dot is an empty argument marker on Dot, not arbitrary code.
+            if (content === '.') return JSON.stringify({ tool_call:{ name,arguments:{} } });
+            return whole;
+        });
+    }
+
+    function parseAgentResponse(text, structuredCalls, options = {}) {
+        if (options.enhanced === true) text = normalizeEnhancedFormat(text);
         const parsedText = parseText(text);
         const calls = Array.isArray(structuredCalls) && structuredCalls.length ? structuredCalls : parsedText.calls;
         if (Array.isArray(structuredCalls) && structuredCalls.length) {
             // Native tool calls already have their own payload. Preserve the
             // original Markdown while removing any relay-only DSML envelope.
-            const prose = stripDsmlProtocol(String(text || "")).trim();
+            let prose = stripDsmlProtocol(String(text || "")).trim();
+            if (/^(?:\s*<\/tool_call>\s*)+$/i.test(prose)) prose = '';
             return { calls, segments: [...(prose ? [{ type: "text", text: prose }] : []), ...calls.map(call => ({ type: "tool_call", call }))], text: prose,
                 hasMalformedToolCall: parsedText.hasMalformedToolCall, diagnostics: parsedText.diagnostics };
         }
@@ -882,6 +964,7 @@
         normalizeToolCalls: normalize,
         parseText,
         parseAgentResponse,
+        normalizeEnhancedFormat,
         parseArguments,
         canonicalizeDsmlMarkers,
         stripDsmlProtocol,

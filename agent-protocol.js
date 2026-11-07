@@ -82,6 +82,10 @@ browse_web
 Arguments: {"url":"string","max_chars":number}
 Fetches and extracts readable text from a public web page.
 
+ask_user_question
+Arguments: {"questions":[{"id":"string","question":"string","options":[{"label":"string","description":"string"}],"allow_custom":boolean}]}
+Pauses the Agent Loop until the user answers. Use for missing information or a meaningful decision. Provide 2-4 concise choices or omit options for free text. The user can always type a custom answer or cancel. Do not ask questions only in prose when an answer is required.
+
 update_plan
 Arguments: {"explanation":"string","plan":[{"step":"string","status":"pending|in_progress|completed"}]}
 Records or updates the task plan. This tool does not execute any system operation. The plan is displayed to the user and stored for the session. At most one step may be in_progress at a time. Call this when starting a multi-step task or when the plan changes.

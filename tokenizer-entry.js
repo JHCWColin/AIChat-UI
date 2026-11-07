@@ -1,6 +1,5 @@
 import { encode as encodeCl100k } from "gpt-tokenizer/model/gpt-4";
 import { encode as encodeO200k } from "gpt-tokenizer/model/gpt-4o";
-import { countTokens as countClaudeTokens } from "@anthropic-ai/tokenizer";
 import { Tokenizer } from "@huggingface/tokenizers";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,14 +34,7 @@ module.exports = Object.freeze({
         if (!value) return 0;
         const family = deepSeekFamily(model);
         if (family) return getDeepSeekTokenizer(family).encode(value, { add_special_tokens: false }).ids.length;
-        if (/^claude-/i.test(String(model))) {
-            try {
-                return countClaudeTokens(value);
-            } catch (_) {
-                return encodeO200k(value).length;
-            }
-        }
-        const encoder = legacyOpenAIModel.test(String(model)) ? encodeCl100k : encodeO200k;
+        const encoder = legacyOpenAIModel.test(String(model).split('/').pop()) ? encodeCl100k : encodeO200k;
         return encoder(value).length;
     },
     describe(model = "") {
@@ -52,9 +44,10 @@ module.exports = Object.freeze({
         if (family === "deepseek-v41") return /^deepseek-flash$/i.test(name.split("/").pop())
             ? "DeepSeek Flash → V4.1 官方词表（本地）" : "DeepSeek V4.1 官方词表（本地）";
         if (/deepseek/i.test(name)) return "DeepSeek 版本未知 · 通用 o200k_base 参考估算";
-        if (/^claude-/i.test(name)) return "Anthropic 旧词表参考估算";
-        if (/^(?:gpt-|o[134](?:-|$))/i.test(name)) {
-            return legacyOpenAIModel.test(name) ? "OpenAI cl100k_base" : "OpenAI o200k_base";
+        const claudeFamily = name.split('/').pop().replace(/_/g,'-').match(/^claude-(?:(?:\d+(?:\.\d+)?-)+)?(sonnet|opus|fable)(?:-|$)/i);
+        if (claudeFamily) return `Claude ${claudeFamily[1][0].toUpperCase()+claudeFamily[1].slice(1).toLowerCase()} · 通用 o200k_base 参考估算`;
+        if (/^(?:gpt-(?:3\.5|4|5)(?:[.\-]|$)|o[134](?:-|$))/i.test(name.split('/').pop())) {
+            return legacyOpenAIModel.test(name.split('/').pop()) ? "cl100k_base" : "o200k_base";
         }
         return "通用 o200k_base 参考估算";
     }
