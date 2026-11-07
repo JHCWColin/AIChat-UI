@@ -141,3 +141,32 @@ body.preferences-window #settings-modal:not(.portrait-layout) .settings-sidebar-
 body.preferences-window #settings-modal .settings-sidebar-header h2 { white-space:nowrap; order:-1; }
 body.preferences-window #settings-modal.portrait-layout .settings-sidebar-header { display:none; }
 @media(prefers-reduced-motion:reduce) { .choice-popover,.context-breakdown,.agent-info-sidebar,#sidebar { transition:none!important; } }
+
+/* Main-window surfaces: change tint opacity without changing layout or edges. */
+body:not(.preferences-window) { --main-surface-bg:rgba(30,30,35,.4); --detail-bg:rgba(30,30,35,.58); --detail-shadow:none; }
+body.theme-light:not(.preferences-window) { --main-surface-bg:rgba(255,255,255,.4); --detail-bg:rgba(240,240,245,.65); }
+body:not(.preferences-window) :is(#sidebar,main>header,.input-area,#model-selector-trigger,.agent-info-sidebar section,.attachment-card,#canvas-panel) {
+    background:var(--main-surface-bg)!important;
+}
+body:not(.preferences-window) :is(#attach-menu,#retry-popover) { background:var(--detail-bg)!important; }
+body.theme-dark:not(.preferences-window) .msg-bubble.user-bubble { background:rgba(30,60,90,.38)!important; }
+body.theme-light:not(.preferences-window) .msg-bubble.user-bubble { background:rgba(220,230,255,.42)!important; }
+
+/* No surface highlights, glow, hover brightening, or animated text shine. */
+body:not(.preferences-window) *,
+body:not(.preferences-window) *::before,
+body:not(.preferences-window) *::after { box-shadow:none!important; text-shadow:none!important; }
+body:not(.preferences-window) :is(button,select,.action-btn,.delete-chat-btn):hover { filter:none!important; }
+body:not(.preferences-window) .attachment-card::before { display:none; }
+body:not(.preferences-window) .attachment-remove { background:#dc2626; }
+body:not(.preferences-window) :is(.agent-tool-row.running .agent-tool-summary-text,.agent-tool-row.running .ai-thinking-label,.ai-pending-text) {
+    color:var(--scan-text-base)!important;
+    background:none!important;
+    animation:none;
+}
+body:not(.preferences-window) .agent-reconnect-status { background:none; animation:none; }
+
+/* Preserve .chat-row's original 1000px limit, centering, and left padding. */
+.agent-tool-row { min-width:0; }
+.agent-tool-summary { min-width:0; }
+.agent-tool-summary-text { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
