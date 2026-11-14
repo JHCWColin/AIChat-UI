@@ -334,6 +334,20 @@ V8.2.0 将可见思考文字与实际模型上下文分离：普通 `reasoning` 
 
 `preload.js` 暴露 `selectAgentWorkspace`、`getAgentWorkspace`、`executeAgentTool`、`checkAgentCommand`、`saveAgentCommandAdditions`、`listAgentProcesses`、`stopAllAgentProcesses` 和 Shell 进度/取消接口；`main.js` 通过 `agent-workspaces.json` 绑定会话与工作区，并在每次文件操作再次校验路径和符号链接边界。后台进程在应用退出（`before-quit`）和停止 Agent 任务时统一回收。
 
+### 7.4 Tokenizer / 上下文容量规则（V9.5.0）
+
+| 文件 | 作用 |
+|---|---|
+| `tokenizer-rules.js` | UMD 共享规则模型：默认规则、引擎目录、前缀/正则匹配、冲突检测、`512K`/`1M`/`64万` 解析与格式化、默认规则（`tokenizerDefault` / `contextDefault`） |
+| `tokenizer-config.js` | 主进程持久化：`userData/tokenizers/config.json` + `files/`；导入前调用运行时解析并实际编码，失败不落盘 |
+| `tokenizer-worker.cjs` | 按规则计数；内置引擎走 `tokenizer-runtime.cjs`，`file:` 引擎加载 HF tokenizer.json，失败回退通用估算；未命中规则时使用 `defaultEngine` |
+| `tokenizer-entry.js` | 打包入口：`countByEngine` / `describeEngine` / `validateJsonTokenizer` / `loadJsonTokenizer`；Claude 词表为内置纯 JS BPE，DeepSeek V4/V4.1、Qwen、GLM、Llama、Mistral、Yi、InternLM、Gemma 为 `tokenizer-assets/*.json.gz`（Hugging Face 官方 tokenizer.json，懒加载） |
+
+设置页 `section-tokenizer` 与 `section-context-capacity` 均为行内编辑：模型名输入框 + 正则开关 + 词表选择或容量输入 + 启用/排序/删除，`change` 即保存；列表末尾有一行「新增」草稿和一条固定的「默认（未匹配的模型）」规则。配置通过 `getTokenizerConfigSync` 同步读取，保存走 `tokenizer:save-config`，主进程广播 `tokenizer:config-changed`。`getContextWindowForModel()` 只从规则解析，未命中回退 `contextDefault.value`。
+
+语音 TTS 过滤：`audiochat.html` 的 `stripParentheticalForSpeech()` 只作用于送入 Fish Audio 的文本，`cleanVoiceText()` 仍服务界面显示；开关来自 `getVoiceChatSettingsSnapshot().ttsIgnoreParentheses`（localStorage `voice_tts_ignore_parentheses`，默认开启）。语音会话的模型取自主界面当前选择，并在启动时一次性快照。
+
+
 ---
 
 ## 七、备注（给后续 AI 的提醒）

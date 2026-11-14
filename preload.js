@@ -4,6 +4,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
     isElectron: true,
     countContextTokens: (text, model) => ipcRenderer.invoke('context:count', [text], model).then(result => result.counts[0]),
     countContextBatch: (texts, model) => ipcRenderer.invoke('context:count', texts, model),
+    getTokenizerConfigSync: () => ipcRenderer.sendSync('tokenizer:config-sync'),
+    getTokenizerConfig: () => ipcRenderer.invoke('tokenizer:get-config'),
+    saveTokenizerConfig: (config) => ipcRenderer.invoke('tokenizer:save-config', config),
+    importTokenizerFile: (payload) => ipcRenderer.invoke('tokenizer:import-file', payload),
+    deleteTokenizerFile: (id) => ipcRenderer.invoke('tokenizer:delete-file', id),
+    previewTokenizer: (payload) => ipcRenderer.invoke('tokenizer:preview', payload),
+    onTokenizerConfigChanged: callback => {
+        const listener = (_event, config) => callback(config);
+        ipcRenderer.on('tokenizer:config-changed', listener);
+        return () => ipcRenderer.removeListener('tokenizer:config-changed', listener);
+    },
     openPreferences: () => ipcRenderer.invoke('preferences:open'),
     closePreferences: () => ipcRenderer.invoke('preferences:close'),
     getPreferencesState: () => ipcRenderer.invoke('preferences:state'),

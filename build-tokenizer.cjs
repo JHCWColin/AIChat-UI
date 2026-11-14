@@ -9,7 +9,7 @@ const root = __dirname;
 async function build() {
     const assetRoot = path.join(root, "tokenizer-assets");
     const manifest = JSON.parse(await fs.readFile(path.join(assetRoot, "manifest.json"), "utf8"));
-    for (const family of ["deepseek-v4", "deepseek-v41"]) {
+    for (const family of Object.keys(manifest)) {
         const data = gunzipSync(await fs.readFile(path.join(assetRoot, `${family}.json.gz`)));
         const sha256 = createHash("sha256").update(data).digest("hex");
         if (sha256 !== manifest[family]?.sha256) throw new Error(`Tokenizer asset integrity check failed: ${family}`);

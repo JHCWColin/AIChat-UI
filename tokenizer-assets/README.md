@@ -38,3 +38,28 @@ The bundled tokenizer implementation is `@huggingface/tokenizers` (Apache-2.0).
 Only text tokenization uses these exact vocabularies. Message framing, image
 patches, server-side templates, and hidden reasoning-token accounting remain
 estimates and are labeled separately in the context breakdown.
+
+## Additional bundled open-model vocabularies (added 2026-11-14)
+
+These `tokenizer.json` files are downloaded verbatim from Hugging Face and are
+loaded the same lazy, offline way. Each family's license is noted below.
+
+- `qwen.json.gz` — `Qwen/Qwen3-0.6B` `tokenizer.json` (Apache-2.0). Used for
+  the `qwen` prefix (Qwen3 / Qwen2.5 share this vocabulary).
+- `glm.json.gz` — `zai-org/GLM-4.5` `tokenizer.json` (MIT). Used for the `glm-`
+  prefix (GLM-4.5 and later; GLM-4 does not publish a tokenizer.json).
+- `llama.json.gz` — `NousResearch/Meta-Llama-3.1-8B` `tokenizer.json` (Llama 3.1
+  Community License). Used for the `llama-` prefix.
+- `mistral.json.gz` — `mistralai/Mistral-7B-v0.3` `tokenizer.json` (Apache-2.0).
+  Used for the `mistral` prefix.
+- `yi.json.gz` — `01-ai/Yi-1.5-9B` `tokenizer.json` (Apache-2.0). Used for the
+  `yi-` prefix.
+- `internlm.json.gz` — `internlm/internlm2_5-7b` `tokenizer.json` (Apache-2.0).
+  Used for the `internlm` prefix.
+- `gemma.json.gz` — `unsloth/gemma-3-1b-it` `tokenizer.json` (Gemma Terms of Use).
+  Used for the `gemma-` prefix.
+
+Not bundled because no `tokenizer.json` is published: Kimi (Moonshot) ships a
+`tiktoken.model`, xAI Grok, ByteDance Doubao, Tencent Hunyuan, StepFun Step, and
+Google Gemini. Those families keep the general-purpose estimate and can still be
+pointed at an uploaded vocabulary.

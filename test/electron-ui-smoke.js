@@ -43,10 +43,11 @@ async function captureWindow(width, height, fileName, prepare) {
     const win = new BrowserWindow({
         width,
         height,
-        x: 0,
-        y: 0,
+        x: -20000,
+        y: -20000,
         show: true,
         opacity: 0,
+        frame: false,
         webPreferences: {
             preload: path.join(projectRoot, "preload.js"),
             backgroundThrottling: false,
@@ -111,6 +112,7 @@ async function captureWindow(width, height, fileName, prepare) {
         canvasDisplay: getComputedStyle(document.getElementById('canvas-toggle-btn')).display,
         inputTopRightRadius: getComputedStyle(document.querySelector('.input-area')).borderTopRightRadius,
         agentToolRows: document.querySelectorAll('.agent-tool-row-wrapper:not(.agent-thinking-row)').length,
+        agentRoundSummaries: document.querySelectorAll('.agent-round-summary-wrapper').length,
         agentSegmentRows: document.querySelectorAll('.agent-segment-row').length,
         agentPreviewLines: document.querySelectorAll('.agent-tool-preview-line').length,
         agentToolCollapsed: document.querySelector('.agent-tool-row.collapsed') !== null,
@@ -329,6 +331,7 @@ app.whenReady().then(async () => {
             ];
             updateAgentUIForChat(chat);
             renderMessages(chat.messages);
+            document.querySelector('.agent-round-summary')?.click();
             document.querySelector('.agent-tool-summary.clickable')?.click();
         });
         const mixedProtocol = await captureWindow(1200, 800, "agent-mixed-protocol.png", async function () {
@@ -410,6 +413,7 @@ app.whenReady().then(async () => {
             await requestAgentLoop("deepseek-v4-flash", chat);
             window.__agentMockRequestBodies = requestBodies;
             window.__agentMockFinished = true;
+            document.querySelectorAll('.agent-round-summary').forEach(el => el.click());
         });
         const fallback = await captureWindow(1200, 800, "agent-501-fallback.png", async function () {
             localStorage.setItem("request_endpoint", "/responses");
@@ -465,10 +469,10 @@ app.whenReady().then(async () => {
         if (!contextMobile.state.contextBreakdownVisible || !contextMobile.state.contextBreakdownWithinViewport || !contextMobile.state.contextBreakdownInBody || contextMobile.state.bodyWidth > contextMobile.state.viewportWidth + 2 || contextMobile.state.contextBreakdownRows < 2) {
             process.exitCode = 1;
         }
-        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
+        if (!active.state.commandModeVisible || active.state.workspaceText !== "D:\\workspace\\demo" || active.state.canvasDisplay !== "none" || active.state.inputTopRightRadius !== "0px" || active.state.agentRoundSummaries !== 1 || active.state.agentToolRows !== 4 || active.state.agentSegmentRows !== 3 || active.state.agentPreviewLines !== 12 || !active.state.agentToolCollapsed || active.state.visibleHasToolJson || active.state.visibleHasJsonWrapper || !active.state.finishInsideFinal || !active.state.finishBeforeFooter || !active.state.agentShowsMilliseconds || !active.state.agentShowsChineseOutput || active.state.agentCompletedTaskTurns !== 2 || Math.abs(active.state.agentToolIconSize - active.state.agentToolFontSize) > 1) {
             process.exitCode = 1;
         }
-        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentMockReasoningRenderCount < 8 || !mixedProtocol.state.agentMockHasThinkingStrong || !mixedProtocol.state.agentMockThinkingWasLimited || mixedProtocol.state.agentPersistentThinkingRows !== 4 || !mixedProtocol.state.agentThinkingTitlesFinalized || mixedProtocol.state.agentThinkingRowsStillRunning || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
+        if (mixedProtocol.state.agentMockApiCalls !== 4 || !mixedProtocol.state.agentMockStructuredInput || !mixedProtocol.state.agentMockVisibleClean || !mixedProtocol.state.agentMockHasFinalAnswer || mixedProtocol.state.agentMockHasInternalNarration || mixedProtocol.state.agentMockReasoningRenderCount < 8 || !mixedProtocol.state.agentMockHasThinkingStrong || !mixedProtocol.state.agentMockThinkingWasLimited || mixedProtocol.state.agentPersistentThinkingRows !== 4 || !mixedProtocol.state.agentThinkingTitlesFinalized || mixedProtocol.state.agentThinkingRowsStillRunning || mixedProtocol.state.agentRoundSummaries !== 1 || mixedProtocol.state.agentToolRows !== 7 || mixedProtocol.state.agentSegmentRows !== 2 || !mixedProtocol.state.finishInsideFinal || !mixedProtocol.state.finishBeforeFooter) {
             process.exitCode = 1;
         }
         if (fallback.state.agentFallbackRequests.length !== 2 || !fallback.state.agentFallbackRequests[0].endsWith('/responses') || !fallback.state.agentFallbackRequests[1].endsWith('/chat/completions') || !fallback.state.agentSaw501Warning || fallback.state.agentFallbackHasProtocolError) {

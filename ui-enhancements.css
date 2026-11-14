@@ -58,7 +58,7 @@ body.preferences-window #settings-modal .setting-stepper input { background:tran
 #context-estimate-shell>:not(.context-breakdown) { flex-shrink:0; }
 .context-meter.compact .context-meter-track { width:12px; height:12px; border-radius:50%; background:conic-gradient(var(--accent-strong) calc(var(--usage-percent,0)*1%),var(--detail-line) 0); mask:radial-gradient(farthest-side,transparent calc(100% - 1.5px),#000 calc(100% - 1px)); -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 1.5px),#000 calc(100% - 1px)); }
 .context-meter.compact #context-meter-fill,.context-meter.compact .context-meter-label { display:none; }
-.agent-info-sidebar { --agent-sidebar-width:290px; width:0; min-width:0; flex:0 0 0; opacity:0; overflow:hidden; transition:width .2s,flex-basis .2s,opacity .2s; pointer-events:none; padding:0; color:var(--detail-text); }
+.agent-info-sidebar { --agent-sidebar-width:340px; width:0; min-width:0; flex:0 0 0; opacity:0; overflow:hidden; transition:width .2s,flex-basis .2s,opacity .2s; pointer-events:none; padding:0; color:var(--detail-text); }
 /* Keep card geometry and scroll position stable while the outer slot collapses. */
 .agent-info-sidebar-content { width:var(--agent-sidebar-width); height:100%; box-sizing:border-box; padding:20px 15px 20px 5px; overflow-x:hidden; overflow-y:auto; scrollbar-width:none; -ms-overflow-style:none; }
 .agent-info-sidebar-content::-webkit-scrollbar { display:none; width:0; height:0; }
@@ -170,3 +170,52 @@ body:not(.preferences-window) .agent-reconnect-status { background:none; animati
 .agent-tool-row { min-width:0; }
 .agent-tool-summary { min-width:0; }
 .agent-tool-summary-text { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Agent sidebar: 统计信息 metrics */
+.agent-sidebar-metric {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 12px;
+    line-height: 20px;
+}
+.agent-sidebar-metric + .agent-sidebar-metric { border-top: 1px solid var(--detail-line); }
+.agent-sidebar-metric-label { color: var(--detail-muted); }
+.agent-sidebar-metric-value {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--detail-text);
+    transform-origin: right center;
+}
+.metric-roll-window {
+    display: inline-block;
+    overflow: hidden;
+    height: 1.15em;
+    line-height: 1.15em;
+    vertical-align: bottom;
+}
+.metric-roll-tape { display: flex; flex-direction: column; will-change: transform; }
+.metric-roll-cell { height: 1.15em; line-height: 1.15em; white-space: nowrap; }
+.agent-sidebar-metric.is-bumping .agent-sidebar-metric-value { animation: agentMetricBreath .5s ease; }
+@keyframes agentMetricBreath {
+    0% { transform: scale(1); opacity: .7; }
+    30% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.agent-sidebar-diff-value {
+    display: inline-flex;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 15px;
+}
+.agent-sidebar-diff-value .diff-add { color: #34d399; }
+.agent-sidebar-diff-value .diff-remove { color: #f87171; }
+@media (prefers-reduced-motion: reduce) {
+    .agent-sidebar-metric.is-bumping .agent-sidebar-metric-value { animation: none; }
+    .metric-roll-tape { transition: none !important; }
+}

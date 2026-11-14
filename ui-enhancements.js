@@ -203,6 +203,128 @@
         clone.removeAttribute('id'); clone.removeAttribute('role'); clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
         clone.classList.remove('is-open'); container.replaceChildren(clone);
     }
+    const ACTIVITY_ROWS = [
+        { key: 'files', label: '探索文件' },
+        { key: 'commands', label: '运行指令' },
+        { key: 'web', label: '浏览网页' },
+        { key: 'writes', label: '文件变更' }
+    ];
+    const ROLL_MARKUP = '<span class="metric-roll-window"><span class="metric-roll-tape"><span class="metric-roll-cell"></span><span class="metric-roll-cell"></span></span></span>';
+
+    function formatMetric(value) { return Number(value || 0).toLocaleString('zh-CN'); }
+
+    function rollCells(el) {
+        const tape = el ? el.querySelector('.metric-roll-tape') : null;
+        return tape ? tape.children : null;
+    }
+
+    function setMetricDirect(el, text) {
+        const cells = rollCells(el);
+        if (!cells) { el.textContent = text; return; }
+        cells[0].textContent = text;
+        cells[1].textContent = '';
+        const tape = cells[0].parentElement;
+        tape.style.transition = 'none';
+        tape.style.transform = 'translateY(0)';
+    }
+
+    function rollMetricTo(el, text) {
+        const cells = rollCells(el);
+        if (!cells || matchMedia('(prefers-reduced-motion: reduce)').matches) { setMetricDirect(el, text); return; }
+        const tape = cells[0].parentElement;
+        cells[1].textContent = cells[0].textContent;
+        cells[0].textContent = text;
+        tape.style.transition = 'none';
+        tape.style.transform = 'translateY(-100%)';
+        void tape.offsetWidth;
+        tape.style.transition = 'transform .3s cubic-bezier(.25, .7, .25, 1)';
+        tape.style.transform = 'translateY(0)';
+    }
+
+    function bump(row) {
+        if (!row) return;
+        row.classList.remove('is-bumping');
+        void row.offsetWidth;
+        row.classList.add('is-bumping');
+        clearTimeout(row._bumpTimer);
+        row._bumpTimer = setTimeout(() => row.classList.remove('is-bumping'), 520);
+    }
+
+    function applyMetric(name, target, prefix = '') {
+        const box = $('agent-sidebar-diff');
+        const el = box ? box.querySelector('[data-metric="' + name + '"]') : null;
+        if (!el) return;
+        const text = prefix + formatMetric(target);
+        if (el.dataset.value === undefined) {
+            el.dataset.value = String(target);
+            setMetricDirect(el, text);
+            return;
+        }
+        const previous = Number(el.dataset.value);
+        if (previous === target) {
+            const cells = rollCells(el);
+            if (cells && cells[0].textContent !== text) setMetricDirect(el, text);
+            return;
+        }
+        el.dataset.value = String(target);
+        rollMetricTo(el, text);
+        bump(el.closest('.agent-sidebar-metric'));
+    }
+
+    function renderSidebarDiff(chat) {
+        const section = $('agent-sidebar-diff-section'), box = $('agent-sidebar-diff');
+        if (!section || !box) return;
+        const stats = chat && chat.agentActivity ? chat.agentActivity : {};
+        const values = {
+            files: Number(stats.files) || 0,
+            commands: Number(stats.commands) || 0,
+            web: Number(stats.web) || 0,
+            writes: Number(stats.writes) || 0
+        };
+        const added = Number(stats.added) || 0;
+        const removed = Number(stats.removed) || 0;
+        const visible = ACTIVITY_ROWS.filter(row => values[row.key] > 0).map(row => row.key);
+        const hasDiff = added > 0 || removed > 0;
+        section.hidden = !visible.length && !hasDiff;
+        if (section.hidden) { box.replaceChildren(); box.dataset.signature = ''; return; }
+        if (box.dataset.chatId !== String(chat.id)) {
+            box.dataset.chatId = String(chat.id);
+            box.dataset.signature = '';
+        }
+        const signature = visible.join(',') + '|d' + (added > 0 ? 1 : 0) + (removed > 0 ? 1 : 0);
+        if (box.dataset.signature !== signature) {
+            box.dataset.signature = signature;
+            box.replaceChildren();
+            for (const key of visible) {
+                const row = document.createElement('div'); row.className = 'agent-sidebar-metric';
+                const label = document.createElement('span'); label.className = 'agent-sidebar-metric-label';
+                const meta = ACTIVITY_ROWS.find(item => item.key === key);
+                label.textContent = meta ? meta.label : key;
+                const value = document.createElement('span'); value.className = 'agent-sidebar-metric-value';
+                value.dataset.metric = key; value.innerHTML = ROLL_MARKUP;
+                row.append(label, value); box.append(row);
+            }
+            if (hasDiff) {
+                const row = document.createElement('div'); row.className = 'agent-sidebar-metric';
+                const label = document.createElement('span'); label.className = 'agent-sidebar-metric-label';
+                label.textContent = '代码变更';
+                const wrap = document.createElement('span'); wrap.className = 'agent-sidebar-diff-value';
+                if (added > 0) {
+                    const value = document.createElement('span'); value.className = 'diff-add';
+                    value.dataset.metric = 'added'; value.innerHTML = ROLL_MARKUP; wrap.append(value);
+                }
+                if (removed > 0) {
+                    const value = document.createElement('span'); value.className = 'diff-remove';
+                    value.dataset.metric = 'removed'; value.innerHTML = ROLL_MARKUP; wrap.append(value);
+                }
+                row.append(label, wrap); box.append(row);
+            }
+        }
+        for (const key of visible) applyMetric(key, values[key]);
+        if (added > 0) applyMetric('added', added, '+');
+        if (removed > 0) applyMetric('removed', removed, '-');
+    }
+
     async function renderSidebar() {
         if (!$('agent-info-toggle')) return;
         const chat = currentChat(), agent = Boolean(chat?.agentEnabled);
@@ -215,6 +337,7 @@
         $('agent-info-sidebar').inert = !open;
         if (!open) return;
         renderSidebarContext();
+        renderSidebarDiff(chat);
         const plans = $('agent-sidebar-plan'); plans.replaceChildren();
         const plan = chat.agentPlan;
         $('agent-sidebar-plan-section').hidden = !plan?.steps?.length;
@@ -238,7 +361,7 @@
         const button = document.createElement('button'); button.type = 'button'; button.id = 'agent-info-toggle'; button.title = 'Agent 侧栏'; button.setAttribute('aria-label','切换 Agent 侧栏'); button.setAttribute('aria-expanded','false'); button.innerHTML = icon('panel-right'); button.hidden = true;
         document.querySelector('main>header').append(button);
         const sidebar = document.createElement('aside'); sidebar.id = 'agent-info-sidebar'; sidebar.className = 'agent-info-sidebar'; sidebar.inert = true;
-        sidebar.innerHTML = '<div class="agent-info-sidebar-content"><section><h3>上下文详细用量</h3><div id="agent-sidebar-context"></div></section><section id="agent-sidebar-process-section" hidden><h3>正在运行</h3><div id="agent-sidebar-processes"></div></section><section id="agent-sidebar-plan-section" hidden><h3>任务计划</h3><div id="agent-sidebar-plan"></div></section></div>';
+        sidebar.innerHTML = '<div class="agent-info-sidebar-content"><section><h3>上下文详细用量</h3><div id="agent-sidebar-context"></div></section><section id="agent-sidebar-diff-section" hidden><h3>统计信息</h3><div id="agent-sidebar-diff"></div></section><section id="agent-sidebar-process-section" hidden><h3>正在运行</h3><div id="agent-sidebar-processes"></div></section><section id="agent-sidebar-plan-section" hidden><h3>任务计划</h3><div id="agent-sidebar-plan"></div></section></div>';
         $('main-content').append(sidebar);
         button.onclick = () => { if (button.hidden) return; const open = document.body.classList.toggle('agent-info-open'); button.setAttribute('aria-expanded',String(open)); renderSidebar(); };
         const toolbar = document.createElement('div'); toolbar.className = 'history-toolbar';
@@ -314,11 +437,12 @@
         addSetting('developer-options','enhanced-tool-parser','增强的工具调用解析','checkbox',localStorage.getItem('enhanced_tool_parser') === 'true','兼容 Dot / Liquid 平台的特殊工具标记，默认关闭。');
         const immediateSettings = {
             'sys-prompt':'sys_prompt',
-            'voice-chat-model-input':'voice_chat_model', 'voice-fish-base-input':'voice_fish_base',
+            'voice-fish-base-input':'voice_fish_base',
             'voice-fish-key-input':'voice_fish_key', 'voice-fish-name-input':'voice_fish_name',
             'voice-fish-id-input':'voice_fish_id', 'voice-xf-appid-input':'voice_xf_appid',
             'voice-xf-key-input':'voice_xf_key', 'voice-xf-secret-input':'voice_xf_secret',
             'voice-preset-probability':'voice_preset_probability',
+            'voice-tts-ignore-parentheses':'voice_tts_ignore_parentheses',
             'desktop-shortcut-input':'desktop_shortcut', 'desktop-image-quality-input':'desktop_image_quality',
             'desktop-skip-b-preset-input':'desktop_skip_b_preset', 'desktop-auto-screenshot-input':'desktop_auto_screenshot',
             'math-render-toggle':'math_rendering_enabled', 'auto-update-toggle':'auto_update_enabled',
@@ -407,6 +531,7 @@
     }
     window.AIUIEnhancements = {
         closeChoices,
+        refreshAgentSidebar:() => { if (document.body.classList.contains('agent-info-open')) renderSidebar(); },
         reasoningFor:model => { const cap = capabilities.get(model); return model === $('model-select').value ? reasoningValue : savedReasoning()[model] || cap.default; },
         modelRequest:() => { const chat = currentChat(); if (!chat) return; chat.modelRequestSteps = (chat.modelRequestSteps || 0)+1; chat.lastRequestFailed = false; renderMetrics(); },
         beginRequestTask:() => { freezeRuntimeAPI(); syncAppStateToMain(); },

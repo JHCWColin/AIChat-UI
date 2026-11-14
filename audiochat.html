@@ -592,6 +592,28 @@
                 .trim();
         }
 
+        // Speech-only cleanup: drop stage directions such as （笑） or (sigh)
+        // without touching what is shown on screen. Brackets are matched
+        // non-greedily and re-run so nested pairs collapse from the inside out.
+        function stripParentheticalForSpeech(text) {
+            let output = String(text || '');
+            for (let round = 0; round < 4; round += 1) {
+                const next = output
+                    .replace(/（[^（）]*）/g, '')
+                    .replace(/\([^()]*\)/g, '');
+                if (next === output) break;
+                output = next;
+            }
+            // An unmatched opener means the closing bracket was cut off by the
+            // streaming sentence splitter; never speak the dangling fragment.
+            output = output.replace(/[（(][^）)]*$/, '');
+            return output.replace(/[ \t]{2,}/g, ' ').replace(/\s+([，。！？；：,.!?;:])/g, '$1').trim();
+        }
+
+        function shouldIgnoreParentheses(settings) {
+            return settings?.ttsIgnoreParentheses !== false;
+        }
+
         function audioBufferToBase64(buffer) {
             const bytes = new Uint8Array(buffer);
             let binary = '';
@@ -1647,6 +1669,10 @@
             enqueueSpeech(text) {
                 const clean = cleanVoiceText(text);
                 if (!clean) return;
+                // Display and history keep the original wording; only the text
+                // handed to the TTS backend is stripped.
+                const spoken = shouldIgnoreParentheses(this.settings) ? stripParentheticalForSpeech(clean) : clean;
+                if (!spoken) return;
                 const index = this.currentVoiceSegmentPromises.length;
                 let displayEnd = 0;
                 if (desktopMode) {
@@ -1659,8 +1685,8 @@
                         : Math.min(display.length, searchStart + segment.length);
                     this.desktopAIQueuedTextEnd = Math.max(searchStart, displayEnd);
                 }
-                console.info(`[AudioChat][TTS] enqueue sentence=${index + 1} chars=${clean.length} voiceId=${this.settings.fishVoiceId || '(empty)'}`);
-                const audioPromise = requestFishSpeechDirect(clean, this.settings);
+                console.info(`[AudioChat][TTS] enqueue sentence=${index + 1} chars=${spoken.length} voiceId=${this.settings.fishVoiceId || '(empty)'}`);
+                const audioPromise = requestFishSpeechDirect(spoken, this.settings);
                 audioPromise
                     .then(audioBase64 => console.info(`[AudioChat][TTS] received sentence=${index + 1} bytes=${String(audioBase64 || '').length}`))
                     .catch(error => console.error(`[AudioChat][TTS] failed sentence=${index + 1}`, error));

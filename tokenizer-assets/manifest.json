@@ -12,5 +12,54 @@
     "sha256": "d61b8c48a04783579ecd50467a4a8eaa511b1d32e596209e18234c02fc0f393c",
     "vocabularySize": 128000,
     "addedTokenCount": 1283
+  },
+  "qwen": {
+    "uncompressedBytes": 11422654,
+    "compressedBytes": 2056634,
+    "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+    "vocabularySize": 151643,
+    "addedTokenCount": 26
+  },
+  "glm": {
+    "uncompressedBytes": 19970699,
+    "compressedBytes": 2963178,
+    "sha256": "9340665016419c825c4bdabbcc9acc43b7ca2c68ce142724afa829abb1be5efd",
+    "vocabularySize": 151329,
+    "addedTokenCount": 36
+  },
+  "llama": {
+    "uncompressedBytes": 9085658,
+    "compressedBytes": 2273738,
+    "sha256": "76e48799b099d43365bd24ccd8ecc5aedac831718da780552f03b0a6eb4412aa",
+    "vocabularySize": 128000,
+    "addedTokenCount": 256
+  },
+  "mistral": {
+    "uncompressedBytes": 1961548,
+    "compressedBytes": 470863,
+    "sha256": "e553af6fff7d7ad76e830608b218c5c0b0822998d5a1a96099a74cd3c1cb1a49",
+    "vocabularySize": 32768,
+    "addedTokenCount": 771
+  },
+  "yi": {
+    "uncompressedBytes": 3602758,
+    "compressedBytes": 1031667,
+    "sha256": "a13ccc285aea27f5e9a98d40e04e330b01d89db6de7af10b013f56eec8eae8a2",
+    "vocabularySize": 63992,
+    "addedTokenCount": 232
+  },
+  "internlm": {
+    "uncompressedBytes": 5753125,
+    "compressedBytes": 1415643,
+    "sha256": "1193d3a1aa3d9f74866287ca3c1f7bf64fe54dd6ecf015e751f13ebce509e411",
+    "vocabularySize": 92544,
+    "addedTokenCount": 9
+  },
+  "gemma": {
+    "uncompressedBytes": 33384568,
+    "compressedBytes": 5438558,
+    "sha256": "4667f2089529e8e7657cfb6d1c19910ae71ff5f28aa7ab2ff2763330affad795",
+    "vocabularySize": 262144,
+    "addedTokenCount": 6415
   }
 }

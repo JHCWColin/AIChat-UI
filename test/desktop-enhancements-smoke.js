@@ -135,7 +135,7 @@ app.whenReady().then(async () => {
         await evaluate(prefs,"document.querySelector('input[name=auto-summary-interval][value=\"15\"]').click()");
         assert.equal(await evaluate(prefs,"localStorage.getItem('auto_summary_interval')"),'15');
         await evaluate(prefs,"document.querySelector('input[name=auto-summary-interval][value=\"0\"]').click()");
-        assert.equal(await evaluate(prefs,"document.getElementById('voice-model-select')===null && Boolean(document.getElementById('voice-chat-model-input')) && Boolean(document.getElementById('math-render-toggle'))"),true);
+        assert.equal(await evaluate(prefs,"document.getElementById('voice-model-select')===null && document.getElementById('voice-chat-model-input')===null && Boolean(document.getElementById('voice-tts-ignore-parentheses')) && Boolean(document.getElementById('math-render-toggle'))"),true);
         assert.equal(await evaluate(prefs,"document.getElementById('settings-back-btn')===null"),true);
         assert.deepEqual(await evaluate(prefs,"(() => { const input=document.getElementById('input-max-lines'); const buttons=input.closest('.setting-stepper').querySelectorAll('button'); input.value='6'; buttons[1].click(); const plus=input.value; buttons[0].click(); const minus=input.value; input.value='30'; buttons[1].click(); const max=input.value; input.value='1'; buttons[0].click(); const min=input.value; input.value='6'; return [plus,minus,max,min]; })()"),['7','6','30','1']);
         assert.deepEqual(await evaluate(prefs,"[...document.querySelectorAll('[id^=bg-thumb-]')].slice(0,3).map(img=>[img.id,img.alt])"),[['bg-thumb-7','Duo Light'],['bg-thumb-8','Duo Dark'],['bg-thumb-9','Golden Gate']]);

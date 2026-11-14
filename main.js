@@ -320,8 +320,8 @@ function createWindow(htmlFile = "index.html", options = {}) {
     const win = new BrowserWindow({
         width: options.width || 1200,
         height: options.height || 800,
-        minWidth: options.minWidth,
-        minHeight: options.minHeight,
+        minWidth: options.minWidth || 380,
+        minHeight: options.minHeight || 540,
         maxWidth: options.maxWidth,
         maxHeight: options.maxHeight,
         parent: options.parent,

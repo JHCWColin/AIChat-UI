@@ -71,3 +71,21 @@ test("tokenizer runtime works outside the project cwd without network or install
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout), [4, 1]);
 });
+
+test("bundled open-model vocabularies load, count and are not generic", () => {
+    const engines = [
+        ["builtin:qwen", "Qwen 词表（本地）"],
+        ["builtin:glm", "GLM 词表（本地）"],
+        ["builtin:llama", "Llama 词表（本地）"],
+        ["builtin:mistral", "Mistral 词表（本地）"],
+        ["builtin:yi", "Yi 词表（本地）"],
+        ["builtin:internlm", "InternLM 词表（本地）"],
+        ["builtin:gemma", "Gemma 词表（本地）"]
+    ];
+    for (const [engine, label] of engines) {
+        const count = localTokenizer.countByEngine(engine, "你好，世界！ Hello, world!", "");
+        assert.ok(count > 0, `${engine} should produce tokens`);
+        assert.equal(localTokenizer.describeEngine(engine, ""), label);
+        assert.equal(localTokenizer.isGenericEngine(engine), false);
+    }
+});

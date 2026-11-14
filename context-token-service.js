@@ -77,9 +77,12 @@
         const counts = new Map(source.map((text,index) => [text,result?.counts[index]]));
         const breakdown = await AIUIContextEstimator.estimate(messages, { ...options, tokenizer:result ? { count:text => counts.get(text), describe:() => result.label } : null });
         breakdown.generic = result ? result.generic : true;
+        breakdown.engine = result ? result.engine : null;
         // Accurate local vocabularies always win. Modern Claude/Gemini/Grok have
         // no published compatible local vocabulary, so try their counting API.
-        if (breakdown.generic && getAPIKey()) {
+        // Claude's published vocabulary is local and instant but Anthropic warns
+        // that it is approximate for Claude 3+, so the exact API still refines it.
+        if ((breakdown.generic || breakdown.engine === 'builtin:anthropic') && getAPIKey()) {
             const counted = await officialCount(messages, options.model);
             if (counted) {
                 const scale = breakdown.usedTokens > 0 ? counted.count / breakdown.usedTokens : 0;

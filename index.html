@@ -22,6 +22,7 @@
     <script src="javascript.min.js"></script>
     <script src="agent-protocol.js"></script>
     <script src="tool-call-normalizer.js"></script>
+    <script src="tokenizer-rules.js"></script>
     <style>
         :root {
             --accent-primary: #10b981;
@@ -902,7 +903,10 @@
         #settings-modal.portrait-layout .settings-body-inner {
             padding: 1rem;
             overflow-y: auto;
-            max-height: calc(100vh - 7rem);
+            flex: 1 1 auto;
+            height: auto;
+            min-height: 0;
+            max-height: none;
         }
 
         @media (max-aspect-ratio: 1/1),
@@ -971,7 +975,10 @@
             #settings-modal .settings-body-inner {
                 padding: 1rem;
                 overflow-y: auto;
-                max-height: calc(100vh - 7rem);
+                flex: 1 1 auto;
+                height: auto;
+                min-height: 0;
+                max-height: none;
             }
         }
 
@@ -1469,6 +1476,7 @@
             width: min(360px, calc(100vw - 24px));
             max-height: calc(100vh - 24px);
             overflow-y: auto;
+            overflow-x: hidden;
             padding: 14px;
             border: 1px solid rgba(148, 163, 184, 0.25);
             border-radius: 8px;
@@ -1517,6 +1525,17 @@
         #context-breakdown-used {
             color: #f3f4f6;
             font-weight: 600;
+        }
+
+        #context-breakdown-model,
+        .context-breakdown-model {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin-left: 12px;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         #context-breakdown-window {
@@ -1939,7 +1958,7 @@
         }
 
         #settings-modal .settings-sidebar {
-            width: 120px;
+            width: 138px;
             flex-shrink: 0;
             border-right: 1px solid rgba(255, 255, 255, 0.1);
             overflow-y: auto;
@@ -2011,6 +2030,320 @@
             height: 100%;
             max-height: none;
             overflow-y: auto;
+        }
+
+        /* Tokenizer / context-capacity rule editor */
+        #settings-modal .rule-row {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            background: #171717;
+            border: 1px solid #374151;
+            border-radius: 0.7rem;
+            padding: 0.3rem 0.45rem;
+            min-height: 46px;
+        }
+
+        #settings-modal .rule-row.is-conflict {
+            border-color: rgba(239, 68, 68, 0.5);
+            background: rgba(127, 29, 29, 0.16);
+        }
+
+        #settings-modal .rule-row.is-off {
+            opacity: 0.55;
+        }
+
+        #settings-modal .rule-row.is-dragging {
+            opacity: 0.6;
+            border-color: var(--accent-primary);
+            border-style: dashed;
+        }
+
+        #settings-modal .rule-row.rule-default {
+            background: #1f1f1f;
+            border-style: dashed;
+        }
+
+        /* One shared control height keeps inputs, selects and buttons aligned. */
+        #settings-modal .rule-drag,
+        #settings-modal .rule-regex-btn,
+        #settings-modal .rule-icon-btn,
+        #settings-modal .rule-engine,
+        #settings-modal .rule-value,
+        #settings-modal .rule-pattern-input {
+            height: 32px;
+            min-height: 32px;
+            box-sizing: border-box;
+        }
+
+        #settings-modal .rule-drag {
+            width: 24px;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: #9ca3af;
+            cursor: grab;
+            padding: 0;
+            user-select: none;
+        }
+
+        #settings-modal .rule-drag:hover {
+            color: #e5e7eb;
+        }
+
+        #settings-modal .rule-drag:active {
+            cursor: grabbing;
+        }
+
+        #settings-modal .rule-grip {
+            width: 16px;
+            height: 11px;
+            background-image: linear-gradient(currentColor, currentColor),
+                linear-gradient(currentColor, currentColor),
+                linear-gradient(currentColor, currentColor);
+            background-size: 16px 1.75px;
+            background-position: 0 0, 0 4.6px, 0 9.2px;
+            background-repeat: no-repeat;
+        }
+
+        #settings-modal .rule-index {
+            width: 1.8rem;
+            flex-shrink: 0;
+            text-align: center;
+            font-size: 0.74rem;
+            color: #6b7280;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        #settings-modal .rule-index.is-conflict {
+            color: #f87171;
+        }
+
+        /* Invisible columns that keep the draft and default rows aligned with
+           the draggable rows, which own a handle, a delete button and a switch. */
+        #settings-modal .rule-ghost {
+            flex-shrink: 0;
+        }
+
+        #settings-modal .rule-ghost.handle {
+            width: 24px;
+        }
+
+        #settings-modal .rule-ghost.regex {
+            width: 32px;
+        }
+
+        #settings-modal .rule-ghost.icon {
+            width: 30px;
+        }
+
+        #settings-modal .rule-ghost.toggle {
+            width: 38px;
+        }
+
+        #settings-modal .rule-pattern-input {
+            flex: 1 1 auto;
+            min-width: 5rem;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 0.4rem;
+            padding: 0 0.45rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 0.88rem;
+            line-height: 30px;
+            color: #e5e7eb;
+            outline: none;
+        }
+
+        #settings-modal .rule-pattern-input::placeholder {
+            color: #6b7280;
+        }
+
+        #settings-modal .rule-pattern-input:hover {
+            border-color: #374151;
+        }
+
+        #settings-modal .rule-pattern-input:focus {
+            border-color: var(--accent-primary);
+            background: #111;
+        }
+
+        #settings-modal .rule-pattern-input.is-invalid {
+            border-color: #ef4444;
+        }
+
+        #settings-modal .rule-regex-btn {
+            width: 32px;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.4rem;
+            border: 1px solid #374151;
+            background: #1f1f1f;
+            color: #9ca3af;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 1.05rem;
+            font-weight: 600;
+            line-height: 1;
+            padding: 0;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+
+        #settings-modal .rule-regex-btn:hover {
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        #settings-modal .rule-regex-btn.active {
+            color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            background: rgba(var(--accent-rgb), 0.18);
+        }
+
+        #settings-modal .rule-engine {
+            width: 200px;
+            flex-shrink: 0;
+            background: #1f1f1f;
+            border: 1px solid #374151;
+            border-radius: 0.4rem;
+            padding: 0 0.35rem;
+            font-size: 0.8rem;
+            color: #e5e7eb;
+            outline: none;
+        }
+
+        #settings-modal .rule-value {
+            width: 92px;
+            flex-shrink: 0;
+            background: #1f1f1f;
+            border: 1px solid #374151;
+            border-radius: 0.4rem;
+            padding: 0 0.45rem;
+            font-size: 0.9rem;
+            color: #e5e7eb;
+            text-align: right;
+            outline: none;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #settings-modal .rule-value:focus {
+            border-color: var(--accent-primary);
+        }
+
+        #settings-modal .rule-default-label {
+            flex: 1 1 auto;
+            font-size: 0.86rem;
+            color: #cbd5e1;
+        }
+
+        #settings-modal .rule-icon-btn {
+            width: 30px;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.4rem;
+            border: 1px solid #374151;
+            background: #1f1f1f;
+            color: #9ca3af;
+            font-size: 0.7rem;
+            line-height: 1;
+            padding: 0;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+
+        #settings-modal .rule-icon-btn:hover:not(:disabled) {
+            color: #e5e7eb;
+            border-color: #4b5563;
+        }
+
+        #settings-modal .rule-icon-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        #settings-modal .rule-toggle {
+            width: 38px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        #settings-modal .rule-toggle .slider {
+            border-radius: 20px;
+        }
+
+        #settings-modal .rule-toggle .slider:before {
+            width: 16px;
+            height: 16px;
+            left: 2px;
+            bottom: 2px;
+        }
+
+        #settings-modal .rule-toggle input:checked+.slider:before {
+            transform: translateX(18px);
+        }
+
+        body.theme-light #settings-modal .rule-row {
+            background: #fff;
+            border-color: rgba(0, 0, 0, 0.12);
+        }
+
+        body.theme-light #settings-modal .rule-row.is-conflict {
+            background: rgba(254, 226, 226, 0.7);
+            border-color: rgba(220, 38, 38, 0.4);
+        }
+
+        body.theme-light #settings-modal .rule-row.rule-default {
+            background: #f7f7fa;
+        }
+
+        body.theme-light #settings-modal .rule-pattern-input,
+        body.theme-light #settings-modal .rule-engine,
+        body.theme-light #settings-modal .rule-value {
+            background: #fff !important;
+            border-color: rgba(0, 0, 0, 0.12) !important;
+            color: #1f1f1f !important;
+        }
+
+        body.theme-light #settings-modal .rule-pattern-input {
+            background: transparent !important;
+        }
+
+        body.theme-light #settings-modal .rule-pattern-input:focus {
+            background: #fff !important;
+        }
+
+        body.theme-light #settings-modal .rule-drag {
+            color: #9ca3af;
+        }
+
+        body.theme-light #settings-modal .rule-drag:hover {
+            color: #4b5563;
+        }
+
+        body.theme-light #settings-modal .rule-icon-btn,
+        body.theme-light #settings-modal .rule-regex-btn {
+            background: #f3f4f6;
+            border-color: rgba(0, 0, 0, 0.12);
+            color: #4b5563;
+        }
+
+        body.theme-light #settings-modal .rule-regex-btn.active {
+            color: var(--accent-strong);
+            border-color: var(--accent-primary);
+            background: rgba(var(--accent-rgb), 0.14);
+        }
+
+        body.theme-light #settings-modal #tokenizer-conflict-banner,
+        body.theme-light #settings-modal #context-conflict-banner {
+            color: #b91c1c !important;
+            background: rgba(254, 226, 226, 0.92) !important;
+            border-color: rgba(220, 38, 38, 0.35) !important;
         }
 
         .plain-text-content {
@@ -2468,9 +2801,54 @@
             margin-top: 0.5rem;
         }
 
-        .agent-segment-row+.agent-tool-row-wrapper,
-        .agent-tool-row-wrapper+.agent-segment-row {
-            margin-top: 0.75rem !important;
+        .agent-round-summary-wrapper {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+        }
+
+        .agent-round-summary {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .agent-round-summary .agent-tool-toggle {
+            margin-left: auto;
+            transition: transform 0.25s ease;
+        }
+
+        .agent-round-summary.expanded .agent-tool-toggle {
+            transform: rotate(90deg);
+        }
+
+        .agent-round-summary-wrapper + .chat-row {
+            margin-top: 0.5rem !important;
+        }
+
+        .agent-round-detail {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows 0.25s ease;
+        }
+
+        .agent-round-detail.is-open {
+            grid-template-rows: 1fr;
+        }
+
+        .agent-round-detail-inner {
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .agent-round-detail .chat-row {
+            max-width: none;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .agent-round-detail .chat-row + .chat-row {
+            margin-top: 0.75rem;
         }
 
         .agent-tool-summary {
@@ -3106,7 +3484,7 @@
                                         <span id="context-meter-label" class="context-meter-label"></span>
                                     </div>
                                     <div id="context-breakdown" class="context-breakdown" role="tooltip">
-                                        <div class="context-breakdown-heading"><span>Context</span><span id="context-breakdown-model"></span></div>
+                                        <div class="context-breakdown-heading"><span>Context</span><span id="context-breakdown-model" class="context-breakdown-model"></span></div>
                                         <div class="context-breakdown-usage">
                                             <span id="context-breakdown-used">0% used</span>
                                             <span id="context-breakdown-window">0 / 0</span>
@@ -3256,6 +3634,8 @@
                         onclick="switchSettingsSection('desktop-work', this)"><i data-lucide="monitor-up" aria-hidden="true"></i><span>桌面协作</span></button>
                     <button data-section="other" onclick="switchSettingsSection('other', this)"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span>其他</span></button>
                     <button data-section="voice-chat" onclick="switchSettingsSection('voice-chat', this)"><i data-lucide="audio-lines" aria-hidden="true"></i><span>语音聊天</span></button>
+                    <button data-section="tokenizer" onclick="switchSettingsSection('tokenizer', this)"><i data-lucide="braces" aria-hidden="true"></i><span>Tokenizer</span></button>
+                    <button data-section="context-capacity" onclick="switchSettingsSection('context-capacity', this)"><i data-lucide="gauge" aria-hidden="true"></i><span>上下文容量</span></button>
                     <button data-section="agent" onclick="switchSettingsSection('agent', this)"><i data-lucide="bot" aria-hidden="true"></i><span>Agent</span></button>
                     <button data-section="advanced" onclick="switchSettingsSection('advanced', this)"><i data-lucide="bug" aria-hidden="true"></i><span>开发调试</span></button>
                     <button data-section="guide" onclick="switchSettingsSection('guide', this)"><i data-lucide="book-open" aria-hidden="true"></i><span>使用指导</span></button>
@@ -3263,8 +3643,11 @@
                 </nav>
             </aside>
             <div class="flex-grow p-5 settings-body-inner">
-                <div id="section-ai-chat" class="settings-content-section active-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">AI对话设置</h3>
+                <div id="section-ai-chat" class="settings-content-section active-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="messages-square" class="w-[18px] h-[18px]" aria-hidden="true"></i>AI对话设置
+                    </h3>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                     <div>
                         <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
                         <textarea id="sys-prompt"
@@ -3279,6 +3662,7 @@
                             <button class="temp-btn rounded-xl" data-temp="1.2"
                                 onclick="setTemp(1.2, this)">创意性</button>
                         </div>
+                    </div>
                     </div>
                     <div id="context-compaction-card" class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div>
@@ -3324,8 +3708,11 @@
                         </div>
                     </div>
                 </div>
-                <div id="section-appearance" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">外观设置</h3>
+                <div id="section-appearance" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="palette" class="w-[18px] h-[18px]" aria-hidden="true"></i>外观设置
+                    </h3>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                     <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">视觉主题</label>
                         <div class="flex gap-2">
@@ -3375,6 +3762,8 @@
                                 onclick="setFontSize('huge', this)">巨大</button>
                         </div>
                     </div>
+                    </div>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                     <div>
                         <label class="block text-sm font-medium mb-3 text-gray-300">背景图片</label>
                         <div class="grid grid-cols-3 gap-3">
@@ -3434,37 +3823,42 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div id="section-coding" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">编码模式设置</h3>
-                    <div>
-                        <label class="block text-sm font-medium mb-3 text-gray-300">页面布局</label>
-                        <div class="flex gap-2">
-                            <button class="layout-btn rounded-xl" data-layout="classic"
-                                onclick="setLayoutMode('classic', this)">经典</button>
-                            <button class="layout-btn rounded-xl" data-layout="split"
-                                onclick="setLayoutMode('split', this)">分栏</button>
-                        </div>
-                        <p class="text-[11px] text-gray-500 mt-2">
-                            <strong>经典</strong>：输入框横跨底部，Canvas与对话并排。<br>
-                            <strong>分栏</strong>：输入框仅在左侧对话区下方，右侧Canvas编辑器延伸至底部。
-                        </p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-3 text-gray-300">代码大小 (Canvas)</label>
-                        <div class="flex gap-2">
-                            <button class="code-size-btn rounded-xl" data-size="small"
-                                onclick="setCanvasFontSize('small', this)">小</button>
-                            <button class="code-size-btn rounded-xl" data-size="medium"
-                                onclick="setCanvasFontSize('medium', this)">中</button>
-                            <button class="code-size-btn rounded-xl" data-size="large"
-                                onclick="setCanvasFontSize('large', this)">大</button>
-                        </div>
                     </div>
                 </div>
-                <div id="section-api" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="key" class="w-4 h-4"></i>API 配置
+                <div id="section-coding" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="code-2" class="w-[18px] h-[18px]" aria-hidden="true"></i>编码模式设置
+                    </h3>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div>
+                            <label class="block text-sm font-medium mb-3 text-gray-300">页面布局</label>
+                            <div class="flex gap-2">
+                                <button class="layout-btn rounded-xl" data-layout="classic"
+                                    onclick="setLayoutMode('classic', this)">经典</button>
+                                <button class="layout-btn rounded-xl" data-layout="split"
+                                    onclick="setLayoutMode('split', this)">分栏</button>
+                            </div>
+                            <p class="text-[11px] text-gray-500 mt-2">
+                                <strong>经典</strong>：输入框横跨底部，Canvas与对话并排。<br>
+                                <strong>分栏</strong>：输入框仅在左侧对话区下方，右侧Canvas编辑器延伸至底部。
+                            </p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-3 text-gray-300">代码大小 (Canvas)</label>
+                            <div class="flex gap-2">
+                                <button class="code-size-btn rounded-xl" data-size="small"
+                                    onclick="setCanvasFontSize('small', this)">小</button>
+                                <button class="code-size-btn rounded-xl" data-size="medium"
+                                    onclick="setCanvasFontSize('medium', this)">中</button>
+                                <button class="code-size-btn rounded-xl" data-size="large"
+                                    onclick="setCanvasFontSize('large', this)">大</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="section-api" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="key-round" class="w-[18px] h-[18px]" aria-hidden="true"></i>API 配置
                     </h3>
                     <p class="text-xs text-gray-400 mb-3">选择配置后会立即载入并生效；修改下方内容后，点击「保存修改」。</p>
                     <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
@@ -3565,7 +3959,7 @@
                             </div>
                             <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。任一端点返回 501 时会自动依次尝试其余端点。</p>
                         </div>
-                        <div>
+                        <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                             <div class="flex items-center justify-between gap-3 mb-2">
                                 <label class="block text-sm font-medium text-gray-300">模型列表</label>
                                 <button type="button" onclick="resetModelListEditor()"
@@ -3587,19 +3981,21 @@
                     </div>
                 </div>
                 <div id="section-voice-chat" class="settings-content-section space-y-4">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="audio-lines" class="w-4 h-4"></i>语音聊天
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="audio-lines" class="w-[18px] h-[18px]" aria-hidden="true"></i>语音聊天
                     </h3>
-                    <p class="text-xs text-gray-400">使用 Silero VAD、科大讯飞流式听写和 Fish Audio HTTP TTS。</p>
-                    <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">语音对话模型</label>
-                            <input type="text" id="voice-chat-model-input"
-                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"
-                                placeholder="gemini-3.5-flash-nothinking">
-                            <p class="text-[11px] text-gray-500 mt-2">推荐选择速度优先的模型。</p>
+                    <p class="text-sm text-gray-400 mt-1">使用 Silero VAD、科大讯飞流式听写和 Fish Audio HTTP TTS。</p>
+                    <div class="flex items-center justify-between gap-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="min-w-0">
+                            <label class="block text-sm font-medium text-gray-200" for="voice-tts-ignore-parentheses">语音合成时忽略括号内的文字</label>
+                            <p class="text-[11px] text-gray-500 mt-1 leading-relaxed">默认开启。语音聊天与桌面协作中，送给语音合成的内容会先去掉中文括号（）和英文括号 () 里的文字，例如旁白、动作说明与语气标注；屏幕显示与模型上下文仍然保留原文。</p>
                         </div>
+                        <label class="cloud-toggle shrink-0">
+                            <input type="checkbox" id="voice-tts-ignore-parentheses">
+                            <span class="slider"></span>
+                        </label>
                     </div>
+                    
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <p class="text-xs font-semibold text-gray-300">Fish Audio TTS</p>
                         <div>
@@ -3671,8 +4067,56 @@
                         </button>
                     </div>
                 </div>
-                <div id="section-desktop-work" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">桌面协作</h3>
+                <div id="section-tokenizer" class="settings-content-section space-y-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                                <i data-lucide="braces" class="w-[18px] h-[18px]"></i>Tokenizer
+                            </h3>
+                            <p class="text-sm text-gray-400 mt-1">按模型名匹配词表，自上而下取第一条。</p>
+                        </div>
+                        <button type="button" onclick="resetTokenizerRules()"
+                            class="shrink-0 px-3.5 py-2 rounded-xl border border-gray-700 bg-[#171717] text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">恢复默认</button>
+                    </div>
+                    <div id="tokenizer-conflict-banner" class="hidden rounded-xl border border-red-500/50 bg-red-500/10 p-3 text-[11px] text-red-300 space-y-1"></div>
+                    <div class="space-y-2 bg-[#1a1a1a] rounded-xl p-3 border border-gray-700">
+                        <div id="tokenizer-rule-list" class="space-y-2"></div>
+                        <div id="tokenizer-default-row"></div>
+                    </div>
+                    <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <p class="text-sm font-semibold text-gray-300">自定义词表</p>
+                        <p class="text-xs text-gray-500 leading-relaxed">HuggingFace 的 tokenizer.json（Qwen、Llama、GLM、Kimi 等），文件会复制到应用数据目录。</p>
+                        <div id="tokenizer-file-list" class="space-y-2"></div>
+                        <label
+                            class="flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl border border-dashed border-gray-600 bg-[#171717] text-sm text-gray-300 cursor-pointer hover:border-emerald-500 hover:text-emerald-400 transition-colors">
+                            <i data-lucide="upload" class="w-5 h-5"></i>上传 tokenizer.json
+                            <input type="file" id="tokenizer-file-input" accept=".json" class="hidden"
+                                onchange="uploadTokenizerFile(this)">
+                        </label>
+                        <p id="tokenizer-file-status" class="text-xs text-gray-500"></p>
+                    </div>
+                </div>
+                <div id="section-context-capacity" class="settings-content-section space-y-4">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                                <i data-lucide="gauge" class="w-[18px] h-[18px]"></i>上下文容量
+                            </h3>
+                            <p class="text-sm text-gray-400 mt-1">按模型名指定上下文窗口，支持 512K、1M、256000。</p>
+                        </div>
+                        <button type="button" onclick="resetContextRules()"
+                            class="shrink-0 px-3.5 py-2 rounded-xl border border-gray-700 bg-[#171717] text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">恢复默认</button>
+                    </div>
+                    <div id="context-conflict-banner" class="hidden rounded-xl border border-red-500/50 bg-red-500/10 p-3 text-[11px] text-red-300 space-y-1"></div>
+                    <div class="space-y-2 bg-[#1a1a1a] rounded-xl p-3 border border-gray-700">
+                        <div id="context-rule-list" class="space-y-2"></div>
+                        <div id="context-default-row"></div>
+                    </div>
+                </div>
+                <div id="section-desktop-work" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="monitor-up" class="w-[18px] h-[18px]" aria-hidden="true"></i>桌面协作
+                    </h3>
                     <div class="space-y-4">
                         <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                             <label class="block text-sm font-medium mb-2 text-gray-300">传图快捷键</label>
@@ -3719,8 +4163,10 @@
                         </div>
                     </div>
                 </div>
-                <div id="section-other" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">其他</h3>
+                <div id="section-other" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="sliders-horizontal" class="w-[18px] h-[18px]" aria-hidden="true"></i>其他
+                    </h3>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex flex-col">
                             <span class="text-sm font-medium text-gray-200">LATEX 渲染</span>
@@ -3745,8 +4191,10 @@
                         </label>
                     </div>
                 </div>
-                <div id="section-advanced" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">开发调试</h3>
+                <div id="section-advanced" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="bug" class="w-[18px] h-[18px]" aria-hidden="true"></i>开发调试
+                    </h3>
                     <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div class="flex flex-col">
                             <span class="text-sm font-medium text-gray-200">开发者模式</span>
@@ -3807,8 +4255,8 @@
                     </div>
                 </div>
                 <div id="section-guide" class="settings-content-section space-y-4">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="book-open" class="w-4 h-4"></i>使用指导
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="book-open" class="w-[18px] h-[18px]" aria-hidden="true"></i>使用指导
                     </h3>
                     <div>
                         <p style="font-size:1.8em; font-weight:bold; margin:1em 0 0.5em;">欢迎使用 AIChatUI</p>
@@ -3910,83 +4358,86 @@
                         <p style="margin:0.3em 0;">2026年6月18日<br>开发者JHCWColin</p>
                     </div>
                 </div>
-                <div id="section-agent" class="settings-content-section space-y-5">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3">Agent</h3>
+                <div id="section-agent" class="settings-content-section space-y-4">
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="bot" class="w-[18px] h-[18px]" aria-hidden="true"></i>Agent
+                    </h3>
                     <p id="settings-lock-agent" class="hidden text-sm text-red-400">正在执行 Agent Loop，部分设置项暂不可更改。</p>
-                    <div class="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex flex-col pr-3"><span
-                                class="text-sm font-medium text-gray-200">自动滚动到末尾</span><span
-                                class="text-[11px] text-gray-500 mt-0.5">每次生成新的工具调用提示或纯文本时滚动到底部。</span></div>
-                        <label class="cloud-toggle shrink-0"><input id="agent-auto-scroll" type="checkbox"><span
-                                class="slider"></span></label>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div class="flex flex-col pr-3"><span
+                                    class="text-sm font-medium text-gray-200">自动滚动到末尾</span><span
+                                    class="text-[11px] text-gray-500 mt-0.5">每次生成新的工具调用提示或纯文本时滚动到底部。</span></div>
+                            <label class="cloud-toggle shrink-0"><input id="agent-auto-scroll" type="checkbox"><span
+                                    class="slider"></span></label>
+                        </div>
+                        <div>
+                            <label for="agent-diff-max-lines"
+                                class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
+                            <select id="agent-diff-max-lines"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                                <option value="0">不省略</option>
+                            </select>
+                        </div>
                     </div>
-                    <p class="text-sm leading-relaxed text-red-400">
-                        内测功能：建议使用默认或干净的 API 分组。Codex CLI、Claude Code 等 Agent 转接分组会优先遵循其原生工具规则，可能大幅降低本应用工具调用准确率。
-                    </p>
-                    <div>
-                        <label for="agent-diff-max-lines"
-                            class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
-                        <select id="agent-diff-max-lines"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                            <option value="10">10</option>
-                            <option value="20">20</option>
-                            <option value="50">50</option>
-                            <option value="0">不省略</option>
-                        </select>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div>
+                            <label for="agent-search-engine"
+                                class="block text-sm font-medium mb-2 text-gray-300">联网搜索默认引擎</label>
+                            <select id="agent-search-engine"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <option value="bing" selected>Bing</option>
+                                <option value="duckduckgo">DuckDuckGo</option>
+                            </select>
+                            <p class="text-[11px] text-gray-500 mt-2">模型调用 web_search 时未指定引擎则使用此选项。所选引擎无结果时会自动尝试另一个引擎。</p>
+                        </div>
+                        <div>
+                            <label for="agent-detail-default-behavior"
+                                class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
+                            <select id="agent-detail-default-behavior"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <option value="expanded" selected>展开（默认）</option>
+                                <option value="collapsed">折叠</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="agent-view-image-detail"
+                                class="block text-sm font-medium mb-2 text-gray-300">Agent image detail</label>
+                            <select id="agent-view-image-detail"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <option value="low">Low (fast)</option>
+                                <option value="medium" selected>Medium (balanced)</option>
+                                <option value="high">High (detailed)</option>
+                                <option value="original">Original (lossless)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="agent-shell-timeout-seconds"
+                                class="block text-sm font-medium mb-2 text-gray-300">命令执行超时（秒）</label>
+                            <input id="agent-shell-timeout-seconds" type="number" min="5" max="3600" step="1"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                        </div>
                     </div>
-                    <div>
-                        <label for="agent-search-engine"
-                            class="block text-sm font-medium mb-2 text-gray-300">联网搜索默认引擎</label>
-                        <select id="agent-search-engine"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                            <option value="bing" selected>Bing</option>
-                            <option value="duckduckgo">DuckDuckGo</option>
-                        </select>
-                        <p class="text-[11px] text-gray-500 mt-2">模型调用 web_search 时未指定引擎则使用此选项。所选引擎无结果时会自动尝试另一个引擎。</p>
-                    </div>
-                    <div>
-                        <label for="agent-detail-default-behavior"
-                            class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
-                        <select id="agent-detail-default-behavior"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                            <option value="expanded" selected>展开（默认）</option>
-                            <option value="collapsed">折叠</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="agent-shell-timeout-seconds"
-                            class="block text-sm font-medium mb-2 text-gray-300">命令执行超时（秒）</label>
-                        <label for="agent-view-image-detail" class="block text-sm font-medium mb-2 text-gray-300">Agent
-                            image detail</label>
-                        <select id="agent-view-image-detail"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                            <option value="low">Low (fast)</option>
-                            <option value="medium" selected>Medium (balanced)</option>
-                            <option value="high">High (detailed)</option>
-                            <option value="original">Original (lossless)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="agent-shell-timeout-seconds"
-                            class="block text-sm font-medium mb-2 text-gray-300">Agent shell timeout (seconds)</label>
-                        <input id="agent-shell-timeout-seconds" type="number" min="5" max="3600" step="1"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2 text-gray-300">内置安全命令前缀</label>
-                        <textarea id="agent-default-commands" rows="8" readonly
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-xs font-mono text-gray-400 outline-none"></textarea>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2 text-gray-300">用户始终允许的命令前缀</label>
-                        <textarea id="agent-command-additions" rows="8"
-                            class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-xs font-mono outline-none focus:border-emerald-500 transition-colors"
-                            placeholder="每行一个命令前缀"></textarea>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">内置安全命令前缀</label>
+                            <textarea id="agent-default-commands" rows="8" readonly
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-xs font-mono text-gray-400 outline-none"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-gray-300">用户始终允许的命令前缀</label>
+                            <textarea id="agent-command-additions" rows="8"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-xs font-mono outline-none focus:border-emerald-500 transition-colors"
+                                placeholder="每行一个命令前缀"></textarea>
+                        </div>
                     </div>
                 </div>
                 <div id="section-about" class="settings-content-section space-y-4">
-                    <h3 class="text-base font-semibold text-gray-200 mb-3 flex items-center gap-2">
-                        <i data-lucide="info" class="w-4 h-4"></i>关于信息
+                    <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                        <i data-lucide="info" class="w-[18px] h-[18px]" aria-hidden="true"></i>关于信息
                     </h3>
                     <div class="text-xs text-gray-400 space-y-3">
                         <p class="leading-relaxed">
@@ -4004,7 +4455,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V9.4.0 Release</span>
+                            <span id="app-version">V9.5.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -6227,19 +6678,9 @@
             }, 90);
         }
 
-        // Context windows are per-model; unknown models fall back to a conservative
-        // default so the meter stays meaningful instead of showing 0%.
+        // Context windows come from the user-editable capacity rules; unknown
+        // models fall back to the conservative default so the meter stays useful.
         const DEFAULT_CONTEXT_WINDOW = 128000;
-        const MODEL_CONTEXT_WINDOWS = [
-            { test: /claude-(fable|mythos|opus-5|sonnet-5|haiku-5|opus-4-6|opus-4-7|opus-4-8|sonnet-4-6)/i, tokens: 1000000 },
-            { test: /claude-.*(haiku-4-5)/i, tokens: 200000 },
-            { test: /^claude-/i, tokens: 200000 },
-            { test: /(gpt-5|gpt-4\.1|o3|o4)/i, tokens: 400000 },
-            { test: /^gpt-/i, tokens: 128000 },
-            { test: /(gemini-2|gemini-3)/i, tokens: 1000000 },
-            { test: /(deepseek-(?:v4-)?pro|deepseek-v4(?:\.1)?-flash|deepseek-flash)/i, tokens: 1000000 },
-            { test: /(kimi|glm-5|qwen|deepseek)/i, tokens: 256000 }
-        ];
         // Trigger compaction at 92% of the window, matching Claude Code's behaviour
         // of compacting as the window approaches full rather than on a turn count.
         const AGENT_COMPACTION_THRESHOLD = 0.92;
@@ -6247,8 +6688,14 @@
         function getContextWindowForModel(model) {
             const name = String(model || document.getElementById('model-select')?.value || '').trim();
             if (!name) return DEFAULT_CONTEXT_WINDOW;
-            const match = MODEL_CONTEXT_WINDOWS.find(entry => entry.test.test(name));
-            return match ? match.tokens : DEFAULT_CONTEXT_WINDOW;
+            try {
+                const config = typeof getTokenizerConfig === 'function' ? getTokenizerConfig() : null;
+                if (config && window.AIUITokenizerRules) {
+                    const fallback = Number(config.contextDefault?.value) || DEFAULT_CONTEXT_WINDOW;
+                    return window.AIUITokenizerRules.resolveContextWindow(config.contextRules, name, fallback);
+                }
+            } catch (_) { /* fall through to the default */ }
+            return DEFAULT_CONTEXT_WINDOW;
         }
 
         function formatTokenCount(value) {
@@ -6796,63 +7243,157 @@
             }
             const activeChat = chats.find(chat => chat.id === activeChatId);
             const renderingAgentChat = Boolean(activeChat?.agentEnabled);
-            let pendingFinalRow = null;
-            let deferredFinishMessage = null;
-            messages.forEach((msg, idx) => {
-                if (msg?.hidden === true) {
-                    if (msg.agentThinking === true && msg.reasoning && window.appendAgentThinkingMessageToUI) {
-                        appendAgentThinkingMessageToUI(msg);
-                        pendingFinalRow = null;
+            if (!renderingAgentChat) {
+                let pendingFinalRow = null;
+                let deferredFinishMessage = null;
+                messages.forEach((msg, idx) => {
+                    if (msg?.hidden === true) {
+                        if (msg.agentThinking === true && msg.reasoning && window.appendAgentThinkingMessageToUI) {
+                            appendAgentThinkingMessageToUI(msg);
+                            pendingFinalRow = null;
+                        }
+                        return;
                     }
-                    return;
-                }
-                if (msg?.role === 'tool') {
-                    if (msg.toolName === 'finish_task' && pendingFinalRow) {
+                    if (msg?.role === 'tool') {
+                        if (msg.toolName === 'finish_task' && pendingFinalRow) {
+                            const contentCol = pendingFinalRow.querySelector('.message-content-col');
+                            appendAgentToolMessageToUI(msg, {
+                                inline: true,
+                                container: contentCol,
+                                before: contentCol?.querySelector('.message-footer')
+                            });
+                        } else if (msg.toolName === 'finish_task') {
+                            const nextVisibleMessage = messages.slice(idx + 1).find(message => message?.hidden !== true);
+                            if (nextVisibleMessage?.role === 'assistant' && nextVisibleMessage.agentFinal === true) {
+                                deferredFinishMessage = msg;
+                            } else {
+                                appendAgentToolMessageToUI(msg);
+                            }
+                        } else {
+                            appendAgentToolMessageToUI(msg);
+                        }
+                        pendingFinalRow = null;
+                        return;
+                    }
+                    const isLast = idx === messages.length - 1;
+                    const renderedRow = appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
+                        .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
+                        completedAt: msg.completedAt,
+                        failed: msg.failed === true,
+                        agentFinal: msg.agentFinal === true,
+                        agentSegment: msg.agentSegment === true,
+                        agentMessage: renderingAgentChat && msg.role === 'assistant'
+                    });
+                    pendingFinalRow = msg.role === 'assistant' && msg.agentFinal === true ? renderedRow : null;
+                    if (pendingFinalRow && deferredFinishMessage) {
                         const contentCol = pendingFinalRow.querySelector('.message-content-col');
-                        appendAgentToolMessageToUI(msg, {
+                        appendAgentToolMessageToUI(deferredFinishMessage, {
                             inline: true,
                             container: contentCol,
                             before: contentCol?.querySelector('.message-footer')
                         });
-                    } else if (msg.toolName === 'finish_task') {
-                        const nextVisibleMessage = messages.slice(idx + 1).find(message => message?.hidden !== true);
-                        if (nextVisibleMessage?.role === 'assistant' && nextVisibleMessage.agentFinal === true) {
-                            deferredFinishMessage = msg;
-                        } else {
-                            appendAgentToolMessageToUI(msg);
-                        }
-                    } else {
-                        appendAgentToolMessageToUI(msg);
+                        deferredFinishMessage = null;
                     }
-                    pendingFinalRow = null;
+                });
+                wrapper.scrollTop = wrapper.scrollHeight;
+                return;
+            }
+
+            // Agent chat: collapse completed rounds into one summary row and
+            // lazy-load the intermediate rows only when the user expands them.
+            let roundIntermediates = [];
+            let lastFinalRow = null;
+            let pendingFinish = null;
+
+            const renderIntermediate = (m, container) => {
+                if (m.agentThinking === true) {
+                    window.appendAgentThinkingMessageToUI?.(m, { container });
+                } else if (m.role === 'tool') {
+                    appendAgentToolMessageToUI(m, { container });
+                } else {
+                    appendMessageToUI('assistant', m.content, m.model, false, m.reasoning || '', m.attachments || [], m
+                        .generatedImages || [], m.voiceRecordId || '', {
+                        completedAt: m.completedAt,
+                        failed: m.failed === true,
+                        agentSegment: true,
+                        agentMessage: true,
+                        container
+                    });
+                }
+            };
+
+            const flushRound = collapsed => {
+                if (!roundIntermediates.length) { roundIntermediates = []; return; }
+                if (collapsed) {
+                    window.appendAgentRoundSummaryUI?.({ messages: roundIntermediates, container: wrapper });
+                } else {
+                    for (const m of roundIntermediates) renderIntermediate(m, wrapper);
+                }
+                roundIntermediates = [];
+            };
+
+            messages.forEach(msg => {
+                if (msg?.hidden === true) {
+                    if (msg.agentThinking === true && msg.reasoning) roundIntermediates.push(msg);
                     return;
                 }
-                const isLast = idx === messages.length - 1;
-                const renderedRow = appendMessageToUI(msg.role, msg.content, msg.model, isLast && msg.role === 'assistant', msg
-                    .reasoning || '', msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
-                    completedAt: msg.completedAt,
-                    failed: msg.failed === true,
-                    agentFinal: msg.agentFinal === true,
-                    agentSegment: msg.agentSegment === true,
-                    agentMessage: renderingAgentChat && msg.role === 'assistant'
-                });
-                pendingFinalRow = msg.role === 'assistant' && msg.agentFinal === true ? renderedRow : null;
-                if (pendingFinalRow && deferredFinishMessage) {
-                    const contentCol = pendingFinalRow.querySelector('.message-content-col');
-                    appendAgentToolMessageToUI(deferredFinishMessage, {
-                        inline: true,
-                        container: contentCol,
-                        before: contentCol?.querySelector('.message-footer')
-                    });
-                    deferredFinishMessage = null;
+                if (msg?.role === 'user') {
+                    flushRound(false);
+                    lastFinalRow = null;
+                    appendMessageToUI('user', msg.content, msg.model, false, '', msg.attachments || [], msg
+                        .generatedImages || [], msg.voiceRecordId || '', {});
+                    return;
                 }
+                if (msg?.role === 'tool') {
+                    if (msg.toolName === 'finish_task') {
+                        if (lastFinalRow) {
+                            const contentCol = lastFinalRow.querySelector('.message-content-col');
+                            appendAgentToolMessageToUI(msg, {
+                                inline: true,
+                                container: contentCol,
+                                before: contentCol?.querySelector('.message-footer')
+                            });
+                        } else {
+                            pendingFinish = msg;
+                        }
+                    } else {
+                        roundIntermediates.push(msg);
+                    }
+                    return;
+                }
+                if (msg?.agentFinal === true) {
+                    flushRound(true);
+                    lastFinalRow = appendMessageToUI('assistant', msg.content, msg.model, true, msg.reasoning || '', msg
+                        .attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
+                        completedAt: msg.completedAt,
+                        failed: msg.failed === true,
+                        agentFinal: true,
+                        agentMessage: true
+                    });
+                    if (pendingFinish) {
+                        const contentCol = lastFinalRow?.querySelector('.message-content-col');
+                        appendAgentToolMessageToUI(pendingFinish, {
+                            inline: true,
+                            container: contentCol,
+                            before: contentCol?.querySelector('.message-footer')
+                        });
+                        pendingFinish = null;
+                    }
+                    return;
+                }
+                if (msg?.agentSegment === true) {
+                    roundIntermediates.push(msg);
+                    return;
+                }
+                appendMessageToUI('assistant', msg.content, msg.model, false, msg.reasoning || '', msg.attachments || [], msg
+                    .generatedImages || [], msg.voiceRecordId || '', { agentMessage: true });
             });
+            flushRound(false);
             wrapper.scrollTop = wrapper.scrollHeight;
         }
-
         function appendMessageToUI(role, content, model, showActions = false, reasoning = '', attachments = [],
             generatedImages = [], voiceRecordId = '', messageOptions = {}) {
-            const wrapper = document.getElementById('messages-wrapper');
+            const wrapper = messageOptions.container || document.getElementById('messages-wrapper');
             const isAI = role === 'assistant';
             const displayContent = isAI && messageOptions.agentMessage && window.AgentProtocol
                 ? AgentProtocol.stripToolCallsForDisplay(content)
@@ -7167,7 +7708,6 @@
 
         function populateVoiceChatSettings() {
             const values = {
-                'voice-chat-model-input': localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
                 'voice-fish-base-input': localStorage.getItem('voice_fish_base') || DEFAULT_FISH_AUDIO_BASE,
                 'voice-fish-key-input': localStorage.getItem('voice_fish_key') || DEFAULT_FISH_AUDIO_KEY,
                 'voice-fish-name-input': localStorage.getItem('voice_fish_name') || DEFAULT_FISH_VOICE_NAME,
@@ -7182,6 +7722,8 @@
             });
             const probability = document.getElementById('voice-preset-probability');
             if (probability) probability.value = localStorage.getItem('voice_preset_probability') || '50';
+            const ignoreParentheses = document.getElementById('voice-tts-ignore-parentheses');
+            if (ignoreParentheses) ignoreParentheses.checked = localStorage.getItem('voice_tts_ignore_parentheses') !== 'false';
             updateVoicePresetProbabilityLabel();
         }
 
@@ -7194,6 +7736,505 @@
             if (quality) quality.value = localStorage.getItem('desktop_image_quality') || 'balanced';
             if (skipB) skipB.checked = localStorage.getItem('desktop_skip_b_preset') === 'true';
             if (autoScreenshot) autoScreenshot.checked = localStorage.getItem('desktop_auto_screenshot') === 'true';
+        }
+
+        /* ================= Tokenizer / 上下文容量规则 ================= */
+        const TOKENIZER_MIRROR_KEY = 'tokenizer_rules_config';
+        let tokenizerConfigCache = null;
+        let tokenizerDraft = { pattern: '', regex: false, engine: 'builtin:fallback' };
+        let contextDraft = { pattern: '', regex: false };
+        let ruleConflictMap = new Map();
+
+        function makeRuleId(prefix) {
+            return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+        }
+
+        function readTokenizerMirror() {
+            try {
+                const raw = JSON.parse(localStorage.getItem(TOKENIZER_MIRROR_KEY) || 'null');
+                if (raw) return { ...AIUITokenizerRules.normalizeConfig(raw), files: [], storageDir: '' };
+            } catch (_) { /* ignore a broken mirror */ }
+            return { ...AIUITokenizerRules.normalizeConfig(null), files: [], storageDir: '' };
+        }
+
+        function getTokenizerConfig(force = false) {
+            if (!force && tokenizerConfigCache) return tokenizerConfigCache;
+            let remote = null;
+            try { remote = window.electronAPI?.getTokenizerConfigSync?.(); } catch (_) { remote = null; }
+            tokenizerConfigCache = remote && Array.isArray(remote.tokenizerRules) && Array.isArray(remote.contextRules)
+                ? { ...remote, files: Array.isArray(remote.files) ? remote.files : [] }
+                : readTokenizerMirror();
+            return tokenizerConfigCache;
+        }
+
+        function setTokenizerConfigCache(config) {
+            if (!config) return;
+            tokenizerConfigCache = { ...config, files: Array.isArray(config.files) ? config.files : [] };
+            renderRules('tokenizer');
+            renderRules('context');
+            renderTokenizerFiles();
+            updateTokenEstimate();
+        }
+
+        function rulesOfKind(kind) {
+            const config = getTokenizerConfig();
+            return AIUITokenizerRules.cloneRules(kind === 'tokenizer' ? config.tokenizerRules : config.contextRules);
+        }
+
+        async function persistConfig(next, kind, options = {}) {
+            const validation = AIUITokenizerRules.validateConfig(next);
+            if (!validation.ok) {
+                showVoiceNotification(validation.errors[0].message, true, 3500);
+                if (kind) renderRules(kind);
+                return false;
+            }
+            if (window.electronAPI?.saveTokenizerConfig) {
+                const result = await window.electronAPI.saveTokenizerConfig({
+                    tokenizerRules: validation.config.tokenizerRules,
+                    contextRules: validation.config.contextRules,
+                    tokenizerDefault: validation.config.tokenizerDefault,
+                    contextDefault: validation.config.contextDefault
+                });
+                if (!result || !result.ok) {
+                    showVoiceNotification(result?.errors?.[0]?.message || '规则保存失败', true, 3500);
+                    if (kind) renderRules(kind);
+                    return false;
+                }
+                setTokenizerConfigCache(result.config);
+            } else {
+                localStorage.setItem(TOKENIZER_MIRROR_KEY, JSON.stringify(validation.config));
+                setTokenizerConfigCache({ ...validation.config, files: getTokenizerConfig().files || [] });
+            }
+            if (!options.silent) showVoiceNotification('规则已保存', false, 1500);
+            return true;
+        }
+
+        async function saveRulesOfKind(kind, rules, options = {}) {
+            const config = getTokenizerConfig();
+            // Empty patterns are drafts in the editor, never persisted.
+            const cleaned = AIUITokenizerRules.cloneRules(rules)
+                .filter(rule => AIUITokenizerRules.normalizePattern(rule.pattern, rule.regex === true));
+            return persistConfig({
+                tokenizerRules: kind === 'tokenizer' ? cleaned : AIUITokenizerRules.cloneRules(config.tokenizerRules),
+                contextRules: kind === 'tokenizer' ? AIUITokenizerRules.cloneRules(config.contextRules) : cleaned,
+                tokenizerDefault: { ...config.tokenizerDefault },
+                contextDefault: { ...config.contextDefault }
+            }, kind, options);
+        }
+
+        function displayTokenValue(value) {
+            const text = AIUITokenizerRules.formatTokenValue(value);
+            return AIUITokenizerRules.parseTokenValue(text) === Number(value) ? text : String(value);
+        }
+
+        function engineOptions(selected) {
+            const config = getTokenizerConfig();
+            const options = AIUITokenizerRules.ENGINES.map(engine =>
+                `<option value="${engine.id}"${engine.id === selected ? ' selected' : ''}>${escapeHtml(engine.label)}</option>`);
+            for (const file of config.files || []) {
+                const value = `file:${file.id}`;
+                options.push(`<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>自定义词表：${escapeHtml(file.name)}</option>`);
+            }
+            if (selected && String(selected).startsWith('file:') && !(config.files || []).some(file => `file:${file.id}` === selected)) {
+                options.push(`<option value="${escapeHtml(selected)}" selected>⚠ 词表文件缺失</option>`);
+            }
+            return options.join('');
+        }
+
+        function ruleControlHtml(kind, rule, idAttr) {
+            if (kind === 'tokenizer') {
+                return `<select class="rule-engine" ${idAttr} onchange="onRuleEngineChange(this)">${engineOptions(rule.engine)}</select>`;
+            }
+            return `<input class="rule-value" ${idAttr} value="${escapeHtml(displayTokenValue(rule.value))}"
+                title="${Number(rule.value).toLocaleString('zh-CN')} tokens" placeholder="1M"
+                onchange="onRuleValueChange(this)">`;
+        }
+
+        function ruleRowHtml(rule, index, total, kind) {
+            const id = escapeHtml(rule.id);
+            const conflict = ruleConflictMap.get(rule.id);
+            const regex = rule.regex === true;
+            const invalid = AIUITokenizerRules.regexError(rule);
+            return `<div class="rule-row${conflict ? ' is-conflict' : ''}${rule.enabled === false ? ' is-off' : ''}"
+                    data-id="${id}" data-kind="${kind}" title="${conflict ? escapeHtml(conflict) : ''}"
+                    ondragstart="onRuleDragStart(event,this)" ondragover="onRuleDragOver(event,this)"
+                    ondrop="event.preventDefault()" ondragend="onRuleDragEnd()">
+                <button type="button" class="rule-drag" title="按住拖动排序"
+                    onmousedown="enableRuleDrag(event,'${kind}','${id}')"><span class="rule-grip"></span></button>
+                <span class="rule-index${conflict ? ' is-conflict' : ''}">${index + 1}</span>
+                <input class="rule-pattern-input${regex ? ' is-regex' : ''}${invalid ? ' is-invalid' : ''}"
+                    data-kind="${kind}" data-id="${id}" value="${escapeHtml(rule.pattern)}"
+                    placeholder="模型名开头" spellcheck="false" onchange="onRulePatternChange(this)">
+                ${ruleControlHtml(kind, rule, `data-kind="${kind}" data-id="${id}"`)}
+                <button type="button" class="rule-regex-btn${regex ? ' active' : ''}" title="正则表达式"
+                    onclick="toggleRuleRegex('${kind}','${id}')">.*</button>
+                <button type="button" class="rule-icon-btn" title="删除"
+                    onclick="deleteRule('${kind}','${id}')">✕</button>
+                <label class="cloud-toggle rule-toggle" title="${rule.enabled === false ? '已停用' : '已启用'}">
+                    <input type="checkbox"${rule.enabled === false ? '' : ' checked'}
+                        onchange="onRuleEnableChange('${kind}','${id}',this.checked)">
+                    <span class="slider"></span>
+                </label>
+            </div>`;
+        }
+
+        function newRuleRowHtml(kind) {
+            const isTokenizer = kind === 'tokenizer';
+            const draft = isTokenizer ? tokenizerDraft : contextDraft;
+            const control = isTokenizer
+                ? `<select class="rule-engine" onchange="tokenizerDraft.engine=this.value">${engineOptions(draft.engine)}</select>`
+                : `<input class="rule-value" placeholder="1M" value="" oninput="contextDraft.rawValue=this.value">`;
+            return `<div class="rule-row rule-new">
+                <span class="rule-ghost handle"></span>
+                <span class="rule-index">+</span>
+                <input class="rule-pattern-input${draft.regex ? ' is-regex' : ''}" id="new-rule-pattern-${kind}" spellcheck="false"
+                    placeholder="输入模型名，如 Qwen" value="${escapeHtml(draft.pattern)}"
+                    oninput="onDraftPatternInput('${kind}',this)" onchange="commitDraftRule('${kind}')">
+                ${control}
+                <button type="button" class="rule-regex-btn${draft.regex ? ' active' : ''}" title="正则表达式"
+                    onclick="toggleDraftRegex('${kind}')">.*</button>
+                <span class="rule-ghost icon"></span>
+                <span class="rule-ghost toggle"></span>
+            </div>`;
+        }
+
+        function defaultRowHtml(kind) {
+            const config = getTokenizerConfig();
+            const isTokenizer = kind === 'tokenizer';
+            const control = isTokenizer
+                ? `<select class="rule-engine" onchange="onDefaultEngineChange(this)">${engineOptions(config.tokenizerDefault?.engine || 'builtin:fallback')}</select>`
+                : `<input class="rule-value" value="${escapeHtml(displayTokenValue(config.contextDefault?.value || AIUITokenizerRules.DEFAULT_CONTEXT_WINDOW))}"
+                    title="${Number(config.contextDefault?.value || AIUITokenizerRules.DEFAULT_CONTEXT_WINDOW).toLocaleString('zh-CN')} tokens"
+                    placeholder="1M" onchange="onDefaultValueChange(this)">`;
+            return `<div class="rule-row rule-default">
+                <span class="rule-ghost handle"></span>
+                <span class="rule-index">默认</span>
+                <span class="rule-default-label">未匹配的模型</span>
+                ${control}
+                <span class="rule-ghost regex"></span>
+                <span class="rule-ghost icon"></span>
+                <span class="rule-ghost toggle"></span>
+            </div>`;
+        }
+
+        function renderRules(kind) {
+            const isTokenizer = kind === 'tokenizer';
+            const rules = rulesOfKind(kind);
+            const conflicts = AIUITokenizerRules.detectConflicts(rules);
+            if (isTokenizer) {
+                const known = new Set((getTokenizerConfig().files || []).map(file => `file:${file.id}`));
+                for (const rule of rules) {
+                    if (rule.enabled !== false && String(rule.engine).startsWith('file:') && !known.has(rule.engine)) {
+                        conflicts.push({ ruleId: rule.id, message: '词表文件缺失，会回退到默认词表' });
+                    }
+                }
+            }
+            ruleConflictMap = new Map();
+            for (const conflict of conflicts) if (!ruleConflictMap.has(conflict.ruleId)) ruleConflictMap.set(conflict.ruleId, conflict.message);
+
+            const list = document.getElementById(isTokenizer ? 'tokenizer-rule-list' : 'context-rule-list');
+            const banner = document.getElementById(isTokenizer ? 'tokenizer-conflict-banner' : 'context-conflict-banner');
+            if (banner) {
+                if (conflicts.length) {
+                    banner.classList.remove('hidden');
+                    banner.innerHTML = [`<p class="font-semibold">${conflicts.length} 处冲突</p>`]
+                        .concat(conflicts.slice(0, 5).map(item => `<p>· ${escapeHtml(item.message)}</p>`)).join('');
+                } else {
+                    banner.classList.add('hidden');
+                    banner.innerHTML = '';
+                }
+            }
+            if (list) list.innerHTML = rules.map((rule, index) => ruleRowHtml(rule, index, rules.length, kind)).join('') + newRuleRowHtml(kind);
+            const defaultRow = document.getElementById(isTokenizer ? 'tokenizer-default-row' : 'context-default-row');
+            if (defaultRow) defaultRow.innerHTML = defaultRowHtml(kind);
+        }
+
+        function renderTokenizerFiles() {
+            const list = document.getElementById('tokenizer-file-list');
+            if (!list) return;
+            const config = getTokenizerConfig();
+            const files = config.files || [];
+            if (!files.length) {
+                list.innerHTML = `<p class="text-[11px] text-gray-500">尚未上传自定义词表。</p>`;
+                return;
+            }
+            list.innerHTML = files.map(file => {
+                const used = config.tokenizerRules.filter(rule => rule.engine === `file:${file.id}`).length;
+                return `<div class="flex items-center gap-2 bg-[#171717] border border-gray-700 rounded-lg px-3 py-2">
+                    <span class="text-xs text-gray-200 truncate min-w-0">${escapeHtml(file.name)}</span>
+                    <span class="text-[10px] text-gray-500 shrink-0">${Number(file.size || 0) >= 1048576 ? `${(Number(file.size || 0) / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(Number(file.size || 0) / 1024))} KB`}</span>
+                    <span class="ml-auto text-[10px] text-gray-500 shrink-0">${used ? `${used} 条规则在用` : '未被引用'}</span>
+                    <button type="button" class="rule-icon-btn" title="删除文件"
+                        onclick="deleteTokenizerFile('${escapeHtml(file.id)}')">✕</button>
+                </div>`;
+            }).join('');
+        }
+
+        function onRulePatternChange(input) {
+            const { kind, id } = input.dataset;
+            const rules = rulesOfKind(kind);
+            const rule = rules.find(item => item.id === id);
+            if (!rule) return;
+            const pattern = AIUITokenizerRules.normalizePattern(input.value, rule.regex === true);
+            if (!pattern) {
+                showVoiceNotification('模型名不能为空', true, 2500);
+                renderRules(kind);
+                return;
+            }
+            rule.pattern = pattern;
+            saveRulesOfKind(kind, rules, { silent: true });
+        }
+
+        function toggleRuleRegex(kind, id) {
+            const rules = rulesOfKind(kind);
+            const rule = rules.find(item => item.id === id);
+            if (!rule) return;
+            rule.regex = rule.regex !== true;
+            if (rule.regex) rule.pattern = String(rule.pattern || '').trim();
+            saveRulesOfKind(kind, rules, { silent: true });
+        }
+
+        function onRuleEngineChange(select) {
+            const { kind, id } = select.dataset;
+            const rules = rulesOfKind(kind);
+            const rule = rules.find(item => item.id === id);
+            if (!rule) return;
+            rule.engine = select.value;
+            saveRulesOfKind(kind, rules, { silent: true });
+        }
+
+        function onRuleValueChange(input) {
+            const { kind, id } = input.dataset;
+            const rules = rulesOfKind(kind);
+            const rule = rules.find(item => item.id === id);
+            if (!rule) return;
+            const value = AIUITokenizerRules.parseTokenValue(input.value);
+            if (!value) {
+                showVoiceNotification('请输入 512K、1M 或 256000 这样的数值', true, 3000);
+                renderRules(kind);
+                return;
+            }
+            rule.value = value;
+            saveRulesOfKind(kind, rules, { silent: true });
+        }
+
+        function onRuleEnableChange(kind, id, enabled) {
+            const rules = rulesOfKind(kind);
+            const rule = rules.find(item => item.id === id);
+            if (!rule) return;
+            rule.enabled = Boolean(enabled);
+            saveRulesOfKind(kind, rules, { silent: true });
+        }
+
+        function moveRule(kind, id, delta) {
+            // Re-read before reordering so two quick clicks cannot apply to the
+            // same stale snapshot and cancel each other out.
+            const config = getTokenizerConfig(true);
+            const rules = AIUITokenizerRules.cloneRules(kind === 'tokenizer' ? config.tokenizerRules : config.contextRules);
+            const index = rules.findIndex(rule => rule.id === id);
+            const target = index + delta;
+            if (index < 0 || target < 0 || target >= rules.length) return;
+            [rules[index], rules[target]] = [rules[target], rules[index]];
+            saveRulesOfKind(kind, rules, { silent: true });
+        }
+
+        /* 拖动排序：按住左侧三横线手柄后拖动整行 */
+        let ruleDragState = { kind: null, id: null, allowed: false, dragging: false };
+
+        function enableRuleDrag(event, kind, id) {
+            if (event.button !== 0) return;
+            const row = event.currentTarget.closest('.rule-row');
+            if (!row) return;
+            ruleDragState = { kind, id, allowed: true, dragging: false };
+            row.draggable = true;
+        }
+
+        function onRuleDragStart(event, row) {
+            if (!ruleDragState.allowed || ruleDragState.id !== row.dataset.id) {
+                event.preventDefault();
+                return;
+            }
+            ruleDragState.dragging = true;
+            ruleDragState.kind = row.dataset.kind;
+            row.classList.add('is-dragging');
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', row.dataset.id);
+            }
+        }
+
+        function onRuleDragOver(event, row) {
+            if (!ruleDragState.dragging) return;
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+            const dragging = document.querySelector('.rule-row.is-dragging');
+            if (!dragging || dragging === row || dragging.parentElement !== row.parentElement) return;
+            const rect = row.getBoundingClientRect();
+            const insertAfter = event.clientY > rect.top + rect.height / 2;
+            row.parentElement.insertBefore(dragging, insertAfter ? row.nextSibling : row);
+        }
+
+        function onRuleDragEnd() {
+            const dragging = document.querySelector('.rule-row.is-dragging');
+            const kind = ruleDragState.kind;
+            const moved = ruleDragState.dragging;
+            document.querySelectorAll('#tokenizer-rule-list .rule-row, #context-rule-list .rule-row').forEach(row => {
+                row.draggable = false;
+                row.classList.remove('is-dragging');
+            });
+            ruleDragState = { kind: null, id: null, allowed: false, dragging: false };
+            if (!moved || !kind || !dragging) return;
+            const list = document.getElementById(kind === 'tokenizer' ? 'tokenizer-rule-list' : 'context-rule-list');
+            if (!list) return;
+            applyRuleOrder(kind, [...list.querySelectorAll('.rule-row[data-id]')].map(row => row.dataset.id));
+        }
+
+        function applyRuleOrder(kind, ids) {
+            const rules = rulesOfKind(kind);
+            const byId = new Map(rules.map(rule => [rule.id, rule]));
+            const ordered = ids.map(id => byId.get(id)).filter(Boolean);
+            for (const rule of rules) if (!ordered.includes(rule)) ordered.push(rule);
+            saveRulesOfKind(kind, ordered, { silent: true });
+        }
+
+        window.addEventListener('mouseup', () => {
+            if (!ruleDragState.dragging) ruleDragState.allowed = false;
+        });
+
+        function deleteRule(kind, id) {
+            const rules = rulesOfKind(kind);
+            const rule = rules.find(item => item.id === id);
+            if (!rule) return;
+            if (!confirm(`删除规则「${rule.pattern || '未命名'}」？`)) return;
+            saveRulesOfKind(kind, rules.filter(item => item.id !== id), { silent: true });
+        }
+
+        function onDefaultEngineChange(select) {
+            const config = getTokenizerConfig();
+            persistConfig({
+                tokenizerRules: AIUITokenizerRules.cloneRules(config.tokenizerRules),
+                contextRules: AIUITokenizerRules.cloneRules(config.contextRules),
+                tokenizerDefault: { engine: select.value },
+                contextDefault: { ...config.contextDefault }
+            }, 'tokenizer', { silent: true });
+        }
+
+        function onDefaultValueChange(input) {
+            const config = getTokenizerConfig();
+            const value = AIUITokenizerRules.parseTokenValue(input.value);
+            if (!value) {
+                showVoiceNotification('请输入 512K、1M 或 256000 这样的数值', true, 3000);
+                renderRules('context');
+                return;
+            }
+            persistConfig({
+                tokenizerRules: AIUITokenizerRules.cloneRules(config.tokenizerRules),
+                contextRules: AIUITokenizerRules.cloneRules(config.contextRules),
+                tokenizerDefault: { ...config.tokenizerDefault },
+                contextDefault: { value }
+            }, 'context', { silent: true });
+        }
+
+        function onDraftPatternInput(kind, input) {
+            if (kind === 'tokenizer') tokenizerDraft.pattern = input.value;
+            else contextDraft.pattern = input.value;
+        }
+
+        function toggleDraftRegex(kind) {
+            if (kind === 'tokenizer') tokenizerDraft.regex = !tokenizerDraft.regex;
+            else contextDraft.regex = !contextDraft.regex;
+            renderRules(kind);
+            document.getElementById('new-rule-pattern-' + kind)?.focus();
+        }
+
+        async function commitDraftRule(kind) {
+            const draft = kind === 'tokenizer' ? tokenizerDraft : contextDraft;
+            const pattern = AIUITokenizerRules.normalizePattern(draft.pattern, draft.regex === true);
+            if (!pattern) return;
+            const rules = rulesOfKind(kind);
+            if (kind === 'tokenizer') {
+                rules.push({ id: makeRuleId('tok'), pattern, regex: draft.regex === true, engine: tokenizerDraft.engine || 'builtin:fallback', enabled: true, builtin: false });
+            } else {
+                const value = AIUITokenizerRules.parseTokenValue(contextDraft.rawValue || '1M');
+                if (!value) {
+                    showVoiceNotification('请输入 512K、1M 或 256000 这样的数值', true, 3000);
+                    return;
+                }
+                rules.push({ id: makeRuleId('ctx'), pattern, regex: draft.regex === true, value, enabled: true, builtin: false });
+            }
+            const saved = await saveRulesOfKind(kind, rules, { silent: true });
+            if (saved) {
+                if (kind === 'tokenizer') tokenizerDraft = { pattern: '', regex: false, engine: tokenizerDraft.engine };
+                else contextDraft = { pattern: '', regex: false, rawValue: '' };
+                renderRules(kind);
+                document.getElementById('new-rule-pattern-' + kind)?.focus();
+            }
+        }
+
+        async function uploadTokenizerFile(input) {
+            const file = input?.files?.[0];
+            const status = document.getElementById('tokenizer-file-status');
+            if (!file) return;
+            try {
+                if (!window.electronAPI?.importTokenizerFile) throw new Error('自定义词表只能在桌面端导入');
+                const content = await file.text();
+                const result = await window.electronAPI.importTokenizerFile({ name: file.name, originalName: file.name, content });
+                if (!result?.ok) throw new Error(result?.error || '导入失败');
+                setTokenizerConfigCache(result.config);
+                tokenizerDraft.engine = `file:${result.file.id}`;
+                renderRules('tokenizer');
+                if (status) status.textContent = `已导入「${result.file.name}」，已为下一条新规则预选。`;
+                showVoiceNotification(`已导入 ${result.file.name}`, false, 2000);
+            } catch (error) {
+                // The file is rejected before it is copied into app storage.
+                if (status) status.textContent = error.message || String(error);
+                showVoiceNotification(error.message || '导入失败', true, 4000);
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+
+        async function deleteTokenizerFile(id) {
+            if (!window.electronAPI?.deleteTokenizerFile) return;
+            if (!confirm('删除这个词表文件？引用它的规则会一并删除。')) return;
+            const result = await window.electronAPI.deleteTokenizerFile(id);
+            if (result?.config) {
+                setTokenizerConfigCache(result.config);
+                showVoiceNotification('词表文件已删除', false, 1500);
+            }
+        }
+
+        function resetTokenizerRules() {
+            if (!confirm('恢复默认 Tokenizer 规则？现有的自定义规则会被覆盖。')) return;
+            const defaults = AIUITokenizerRules.normalizeConfig(null);
+            persistConfig({
+                tokenizerRules: AIUITokenizerRules.cloneRules(defaults.tokenizerRules),
+                contextRules: AIUITokenizerRules.cloneRules(getTokenizerConfig().contextRules),
+                tokenizerDefault: { ...defaults.tokenizerDefault },
+                contextDefault: { ...getTokenizerConfig().contextDefault }
+            }, 'tokenizer');
+        }
+
+        function resetContextRules() {
+            if (!confirm('恢复默认上下文容量规则？现有的自定义规则会被覆盖。')) return;
+            const defaults = AIUITokenizerRules.normalizeConfig(null);
+            persistConfig({
+                tokenizerRules: AIUITokenizerRules.cloneRules(getTokenizerConfig().tokenizerRules),
+                contextRules: AIUITokenizerRules.cloneRules(defaults.contextRules),
+                tokenizerDefault: { ...getTokenizerConfig().tokenizerDefault },
+                contextDefault: { ...defaults.contextDefault }
+            }, 'context');
+        }
+
+        function populateTokenizerSettings() {
+            getTokenizerConfig(true);
+            renderRules('tokenizer');
+            renderTokenizerFiles();
+        }
+
+        function populateContextCapacitySettings() {
+            getTokenizerConfig(true);
+            renderRules('context');
         }
 
         function updateVoicePresetProbabilityLabel() {
@@ -7251,6 +8292,12 @@
             }
             if (sectionId === 'voice-chat') {
                 populateVoiceChatSettings();
+            }
+            if (sectionId === 'tokenizer') {
+                populateTokenizerSettings();
+            }
+            if (sectionId === 'context-capacity') {
+                populateContextCapacitySettings();
             }
             if (sectionId === 'desktop-work') {
                 populateDesktopWorkSettings();
@@ -7688,7 +8735,6 @@
             if (contextModelSelect && savedContextModel) contextModelSelect.value = savedContextModel;
             if (savedContextModel) localStorage.setItem('context_compaction_model', savedContextModel);
             const voiceChatFields = {
-                voice_chat_model: 'voice-chat-model-input',
                 voice_fish_base: 'voice-fish-base-input',
                 voice_fish_key: 'voice-fish-key-input',
                 voice_fish_name: 'voice-fish-name-input',
@@ -7703,6 +8749,8 @@
             });
             const voicePresetProbability = document.getElementById('voice-preset-probability');
             if (voicePresetProbability) localStorage.setItem('voice_preset_probability', voicePresetProbability.value);
+            const voiceIgnoreParentheses = document.getElementById('voice-tts-ignore-parentheses');
+            if (voiceIgnoreParentheses) localStorage.setItem('voice_tts_ignore_parentheses', voiceIgnoreParentheses.checked ? 'true' : 'false');
             const desktopShortcutInput = document.getElementById('desktop-shortcut-input');
             const desktopQualityInput = document.getElementById('desktop-image-quality-input');
             const desktopSkipBInput = document.getElementById('desktop-skip-b-preset-input');
@@ -7762,7 +8810,7 @@
             ['外观', '外观设置会立即应用到当前窗口：选择浅色或深色主题、强调色、界面字号和背景图片。按钮的高亮状态表示当前正在使用的选项。', 'guide/3.gif'],
             ['上下文压缩', '当会话轮数较多时，应用可以按指定频次生成摘要，减少后续请求携带的上下文长度。你可以关闭自动压缩，或选择 10、15、20 轮以及摘要所用模型。', 'guide/4.gif'],
             ['编码模式', 'Canvas 用于持续编辑代码或文档。经典布局让输入框横跨底部，分栏布局则把编辑器固定在右侧；代码字号只影响 Canvas 编辑器。', 'guide/5.gif'],
-            ['语音聊天', '语音聊天会使用这里指定的对话模型生成回复，语音识别和语音合成仍按语音聊天页面中的凭据工作。建议选择响应速度快、支持流式输出的模型。', 'guide/6.gif'],
+            ['语音聊天', '语音聊天与桌面协作直接使用主界面当前选择的模型，会话开始后切换模型不会影响已经打开的语音会话；语音识别和语音合成仍按本页凭据工作。', 'guide/6.gif'],
             ['桌面协作', '桌面协作可以在语音输入后附带当前显示器截图。你可以设置全局传图快捷键、截图清晰度，并决定是否在没有手动截图时自动传图。', 'guide/7.gif'],
             ['Agent', 'Agent 设置控制工具调用信息的展示、Shell 超时、图片查看细节以及自动滚动行为。命令前缀仍需在偏好设置 Agent 页面单独维护。', 'guide/8.gif'],
             ['其他设置', '其他设置集中管理 LaTeX 数学公式渲染和启动时的自动更新检查。每项旁边的说明会帮助你了解关闭后的影响。', 'guide/9.gif']
@@ -7774,12 +8822,11 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.4.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.5.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[[7, 'Duo Light'], [8, 'Duo Dark'], [9, 'Golden Gate'], [1, '花谱1'], [2, '花谱2'], [3, '洛天依1'], [4, '洛天依2'], [5, '初音未来1'], [6, '初音未来2']].map(([x, name]) => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${name}"><span class="block text-[11px] text-gray-400 mt-1">${name}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
                 setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode === 'classic' ? 'active' : ''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode === 'split' ? 'active' : ''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'small' ? 'active' : ''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'medium' ? 'active' : ''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'large' ? 'active' : ''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
-                setupGuidePage === 5 ? `<label class="block text-sm text-gray-300">语音对话模型<input id="guide-voice-model" value="${escapeHtml(localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL)}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label>` : '',
                 setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
                 setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label><label class="block text-sm text-gray-300">联网搜索默认引擎<select id="guide-agent-search-engine" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="bing">Bing</option><option value="duckduckgo">DuckDuckGo</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
                 setupGuidePage === 8 ? `${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染', '开启后将数学公式、化学方程式渲染为排版结果；关闭后按原始文本显示。')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新', '仅 Setup 安装版会在启动时检查 GitHub Release；Portable 版本不会主动检查。')}` : '',
@@ -7787,7 +8834,6 @@
             ].join('');
             c.innerHTML = `<div class="setup-guide-page"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3><img src="${page[2]}" class="setup-guide-gif mb-3" alt="" onerror="this.remove()"><p class="setup-guide-description">${page[1]}</p>${blocks}</div>`;
             if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval'); if (i) i.value = String(autoSummaryInterval); const s = document.getElementById('guide-summary-model'); if (s) { renderModelOptions(s, textModelList.length ? textModelList : loadModelList()); s.value = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL; } }
-            if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model'); if (v) v.value = localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL; }
             if (setupGuidePage === 6) { const q = document.getElementById('guide-desktop-quality'); if (q) q.value = localStorage.getItem('desktop_image_quality') || 'balanced'; }
             if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = localStorage.getItem('agent_detail_default_behavior') || 'expanded'; const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const se = document.getElementById('guide-agent-search-engine'); if (se) se.value = localStorage.getItem('agent_search_engine') === 'duckduckgo' ? 'duckduckgo' : 'bing'; const sc = document.getElementById('guide-agent-scroll'); if (sc) sc.checked = localStorage.getItem('agent_auto_scroll') !== 'false'; }
             document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
@@ -7801,7 +8847,6 @@
         function syncSetupGuidePage() {
             if (setupGuidePage === 1) { const b = document.getElementById('guide-base-url')?.value.trim(); const k = document.getElementById('guide-api-key')?.value.trim(); const mt = Number(document.getElementById('guide-max-tokens')?.value || 0); if (b) localStorage.setItem('base_url', b); if (k) localStorage.setItem('api_key', k); localStorage.setItem('max_tokens_limit', String(Number.isFinite(mt) ? Math.max(0, mt) : 0)); maxTokensLimit = Math.max(0, mt) || 0; const maxInput = document.getElementById('max-tokens-input'); if (maxInput) maxInput.value = String(maxTokensLimit); const baseInput = document.getElementById('base-url-input'); if (baseInput && b) baseInput.value = b; const keyInput = document.getElementById('api-key-input'); if (keyInput && k) keyInput.value = k; if (window._guideEndpoint) { localStorage.setItem('request_endpoint', window._guideEndpoint); const endpointInput = document.querySelector(`input[name="request-endpoint"][value="${window._guideEndpoint}"]`); if (endpointInput) endpointInput.checked = true; } }
             if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval')?.value; const m = document.getElementById('guide-summary-model')?.value; if (i) { autoSummaryInterval = Number(i); localStorage.setItem('auto_summary_interval', i); const radio = document.querySelector(`input[name="auto-summary-interval"][value="${i}"]`); if (radio) radio.checked = true; } if (m) { localStorage.setItem('context_compaction_model', m); const select = document.getElementById('context-compaction-model-select'); if (select) select.value = m; } }
-            if (setupGuidePage === 5) { const v = document.getElementById('guide-voice-model')?.value.trim(); if (v) { localStorage.setItem('voice_chat_model', v); const input = document.getElementById('voice-chat-model-input'); if (input) input.value = v; } }
             if (setupGuidePage === 6) { const s = document.getElementById('guide-desktop-shortcut')?.value.trim(); const q = document.getElementById('guide-desktop-quality')?.value; if (s) { localStorage.setItem('desktop_shortcut', s); const input = document.getElementById('desktop-shortcut-input'); if (input) input.value = s; } if (q) { localStorage.setItem('desktop_image_quality', q); const select = document.getElementById('desktop-image-quality-input'); if (select) select.value = q; } const auto = document.getElementById('guide-desktop-auto')?.checked ? 'true' : 'false'; localStorage.setItem('desktop_auto_screenshot', auto); const toggle = document.getElementById('desktop-auto-screenshot-input'); if (toggle) toggle.checked = auto === 'true'; }
             if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const guideEngine = document.getElementById('guide-agent-search-engine')?.value; if (guideEngine) localStorage.setItem('agent_search_engine', guideEngine === 'duckduckgo' ? 'duckduckgo' : 'bing'); const autoScroll = document.getElementById('guide-agent-scroll')?.checked ? 'true' : 'false'; localStorage.setItem('agent_auto_scroll', autoScroll); const autoScrollInput = document.getElementById('agent-auto-scroll'); if (autoScrollInput) autoScrollInput.checked = autoScroll === 'true'; }
             if (setupGuidePage === 8) { mathRenderingEnabled = Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled = Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false'); localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false'); }
@@ -8402,7 +9447,7 @@
             return {
                 apiKey: getAPIKey(),
                 baseUrl: getBaseURL(),
-                model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
+                model: getSelectedModelName() || DEFAULT_VOICE_CHAT_MODEL,
                 systemPrompt: systemPrompt || '',
                 fishApiBase: localStorage.getItem('voice_fish_base') || DEFAULT_FISH_AUDIO_BASE,
                 fishApiKey: localStorage.getItem('voice_fish_key') || DEFAULT_FISH_AUDIO_KEY,
@@ -8412,6 +9457,7 @@
                 xfApiKey: localStorage.getItem('voice_xf_key') || DEFAULT_XF_API_KEY,
                 xfApiSecret: localStorage.getItem('voice_xf_secret') || DEFAULT_XF_API_SECRET,
                 presetBProbability: parseInt(localStorage.getItem('voice_preset_probability') || '50', 10) || 0,
+                ttsIgnoreParentheses: localStorage.getItem('voice_tts_ignore_parentheses') !== 'false',
                 requestEndpoint: getRequestEndpoint(),
                 desktopShortcut: localStorage.getItem('desktop_shortcut') || 'Ctrl+A',
                 desktopImageQuality: localStorage.getItem('desktop_image_quality') || 'balanced',
@@ -8449,10 +9495,14 @@
                 .filter(message => message.content.trim());
             try {
                 const open = mode === 'desktop' ? window.electronAPI.openDesktopWork : window.electronAPI.openAudioChat;
+                const settings = getVoiceChatSettingsSnapshot();
+                // The model is captured once; changing it later in the main
+                // selector must not switch an in-flight voice session.
+                window._voiceSessionModel = settings.model;
                 await open({
                     targetChatId: chat.id,
                     context,
-                    settings: getVoiceChatSettingsSnapshot()
+                    settings
                 });
             } catch (error) {
                 showVoiceNotification(error.message || (mode === 'desktop' ? '桌面协作窗口启动失败' : '语音聊天窗口启动失败'), true, 5000);
@@ -8493,7 +9543,7 @@
                     content: String(turn.content || ''),
                     ...(turn.role === 'assistant' ? { completedAt:Number(turn.completedAt) || Date.now() } : {}),
                     ...(turn.role === 'assistant' ? {
-                        model: localStorage.getItem('voice_chat_model') || DEFAULT_VOICE_CHAT_MODEL,
+                        model: window._voiceSessionModel || getSelectedModelName() || DEFAULT_VOICE_CHAT_MODEL,
                         voiceRecordId: String(turn.voiceRecordId || '').trim()
                     } : {})
                 };
@@ -8933,6 +9983,8 @@
         window.onload = async () => {
             const preferencesPage = new URLSearchParams(location.search).has('preferences');
             if (!preferencesPage) await migrateOldChats();
+            getTokenizerConfig(true);
+            window.electronAPI?.onTokenizerConfigChanged?.(config => setTokenizerConfigCache(config));
             const savedTheme = localStorage.getItem('theme') || 'light';
             const savedAccentColor = localStorage.getItem('accent_color') || 'green';
             setAccentColor(savedAccentColor, false);
@@ -9572,6 +10624,7 @@
         }
     </script>
     <script src="context-estimator.js"></script>
+    <script src="agent-activity.js"></script>
     <script src="agent-ui.js"></script>
     <script src="gateway-renderer.js"></script>
     <script src="context-token-service.js"></script>

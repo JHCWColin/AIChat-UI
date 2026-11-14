@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "9.4.0",
+  "version": "9.5.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "main.js",
@@ -12,6 +12,7 @@
     "test": "node --test test/*.test.js",
     "test:api-profiles": "electron test/api-profiles-smoke.js",
     "test:gateway-ui": "electron test/gateway-electron-smoke.js",
+    "test:tokenizer-ui": "electron test/tokenizer-rules-smoke.js",
     "test:agent-live": "electron test/agent-live-smoke.js"
   },
   "devDependencies": {

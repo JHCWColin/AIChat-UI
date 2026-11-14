@@ -22,3 +22,6 @@ Thumbs.db
 
 # Local task notes
 /任务.txt
+
+# WorkBuddy agent working notes (not shipped)
+.workbuddy/

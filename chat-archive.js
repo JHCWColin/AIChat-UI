@@ -108,9 +108,18 @@
                     for (const existing of staged) if (await digest(await Promise.all((existing.messages || []).map(materialize))) === incomingHash) { duplicate = true; break; }
                     if (duplicate) continue;
                     target = { ...incoming,id:incoming.id || crypto.randomUUID(),messages:[] };
+                    const importedActivity = window.AgentActivity ? window.AgentActivity.normalize(incoming.agentActivity) : null;
+                    if (importedActivity && !window.AgentActivity.isEmpty(importedActivity)) target.agentActivity = importedActivity;
+                    else delete target.agentActivity;
                     // A workspace trust decision cannot be imported from an archive.
                     delete target.agentWorkspace; delete target.agentWorkspaceConfirmed; delete target.agentEnvironment;
                     staged.push(target); addedChats++;
+                }
+                // Counters belong to the chat; re-importing the same archive must
+                // not double them, so an existing record always wins.
+                if (!target.agentActivity && incoming.agentActivity && window.AgentActivity) {
+                    const adopted = window.AgentActivity.normalize(incoming.agentActivity);
+                    if (!window.AgentActivity.isEmpty(adopted)) target.agentActivity = adopted;
                 }
                 const existingHashes = new Map();
                 for (const existing of target.messages) {
