@@ -17,6 +17,7 @@ const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
 const https = require("https");
+const http = require("http");
 const WebSocket = require("ws");
 const {
     AgentWorkspaceStore,
@@ -73,7 +74,7 @@ const desktopEnhancements = require('./desktop-enhancements').registerDesktopEnh
     getRuntimeState: () => ({ ...rendererRuntimeState, audio: Boolean(audioSession), desktop: Boolean(audioSession?.mode === 'desktop') })
 });
 
-const FETCH_PUBLIC_TIMEOUT_MS = 30000;
+const FETCH_PUBLIC_TIMEOUT_MS = 60000; // 1 分钟无响应即视为连接重置
 const FETCH_PUBLIC_MAX_BYTES = 2000000;
 
 const agentGateway = registerAgentGateway({
@@ -86,30 +87,49 @@ const agentGateway = registerAgentGateway({
 
 /**
  * Fetches a public URL with a browser-like User-Agent, following redirects.
- * Search engines and most sites reject unknown clients, so the UA matters here.
+ * Supports both http:// and https:// schemes. Search engines and most sites
+ * reject unknown clients, so the UA matters here. A shared `deadline` (absolute
+ * ms timestamp) can be passed in so that the whole request — including every
+ * redirect hop and the response body — is aborted within a single time budget
+ * instead of resetting the clock on each hop.
  */
 function fetchPublicText(url, options = {}) {
+    const target = String(url || '');
+    const useHttps = /^https:\/\//i.test(target);
+    if (!/^https?:\/\//i.test(target)) {
+        return Promise.reject(new Error(`不支持的协议：${target}`));
+    }
     const redirectsRemaining = Number.isFinite(options.redirects) ? Number(options.redirects) : 5;
     const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : FETCH_PUBLIC_MAX_BYTES;
+    const deadline = Number.isFinite(options.deadline) ? Number(options.deadline) : (Date.now() + FETCH_PUBLIC_TIMEOUT_MS);
+    const remainingMs = Math.max(0, deadline - Date.now());
+    if (remainingMs <= 0) {
+        return Promise.reject(Object.assign(
+            new Error(`Connection Reset（请求 ${Math.round(FETCH_PUBLIC_TIMEOUT_MS / 1000)} 秒内无响应）：${target}`),
+            { code: 'ECONNRESET' }
+        ));
+    }
     return new Promise((resolve, reject) => {
         let settled = false;
+        let timer = null;
         const finish = (error, value) => {
             if (settled) return;
             settled = true;
+            if (timer) clearTimeout(timer);
             if (error) reject(error);
             else resolve(value);
         };
         let request;
         try {
-            request = https.get(String(url), {
+            request = (useHttps ? https : http).get(target, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
                 },
-                timeout: FETCH_PUBLIC_TIMEOUT_MS
+                timeout: remainingMs
             }, response => {
-                intakePublicResponse(response, options, redirectsRemaining, maxBytes).then(
+                intakePublicResponse(response, { ...options, deadline }, redirectsRemaining, maxBytes).then(
                     value => finish(null, value),
                     error => finish(error)
                 );
@@ -118,10 +138,14 @@ function fetchPublicText(url, options = {}) {
             finish(error);
             return;
         }
-        request.on('timeout', () => {
-            request.destroy(new Error(`请求超时（${Math.round(FETCH_PUBLIC_TIMEOUT_MS / 1000)}秒）：${url}`));
-        });
+        const abort = () => request.destroy(Object.assign(
+            new Error(`Connection Reset（请求 ${Math.round(FETCH_PUBLIC_TIMEOUT_MS / 1000)} 秒内无响应）：${target}`),
+            { code: 'ECONNRESET' }
+        ));
+        // 硬性兜底：即使 DNS/连接阶段卡住（socket 尚未建立），也按 1 分钟预算强制中止。
+        request.on('timeout', abort);
         request.on('error', error => finish(error));
+        timer = setTimeout(abort, remainingMs);
     });
 }
 
@@ -172,12 +196,17 @@ async function runAgentWebSearch(args = {}) {
     const limit = AgentSearch.normalizeLimit(args.limit);
     const attempts = [requestedEngine, ...AgentSearch.SEARCH_ENGINES.map(engine => engine.id).filter(id => id !== requestedEngine)];
     const failures = [];
+    const deadline = Date.now() + FETCH_PUBLIC_TIMEOUT_MS;
     for (const engine of attempts) {
+        if (Date.now() >= deadline) {
+            failures.push(`${engine}: 一分钟内无响应`);
+            break;
+        }
         try {
             const html = await fetchPublicText(AgentSearch.buildSearchUrl(engine, query, {
                 market: args.market,
                 language: args.language
-            }), { baseUrl: engine === 'duckduckgo' ? 'https://duckduckgo.com' : 'https://www.bing.com' });
+            }), { baseUrl: engine === 'duckduckgo' ? 'https://duckduckgo.com' : 'https://www.bing.com', deadline });
             const results = AgentSearch.parseSearchHtml(engine, html, limit);
             if (results.length) {
                 return {

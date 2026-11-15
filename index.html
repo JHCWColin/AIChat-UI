@@ -2053,10 +2053,25 @@
             opacity: 0.55;
         }
 
+        /* 被拖拽的行：悬浮于列表之上跟随指针移动 */
         #settings-modal .rule-row.is-dragging {
-            opacity: 0.6;
+            position: fixed;
+            z-index: 10000;
+            pointer-events: none;
+            opacity: 0.96;
             border-color: var(--accent-primary);
-            border-style: dashed;
+            border-style: solid;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+            transform: none !important;
+            will-change: left, top;
+        }
+
+        /* 拖拽时的占位元素：标记将落到的位置 */
+        #settings-modal .rule-row.rule-placeholder {
+            background: rgba(var(--accent-rgb), 0.08);
+            border: 1px dashed var(--accent-primary);
+            opacity: 0.5;
+            pointer-events: none;
         }
 
         #settings-modal .rule-row.rule-default {
@@ -2088,6 +2103,7 @@
             cursor: grab;
             padding: 0;
             user-select: none;
+            touch-action: none;
         }
 
         #settings-modal .rule-drag:hover {
@@ -4455,7 +4471,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V9.5.0 Release</span>
+                            <span id="app-version">V9.6.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -7856,11 +7872,9 @@
             const regex = rule.regex === true;
             const invalid = AIUITokenizerRules.regexError(rule);
             return `<div class="rule-row${conflict ? ' is-conflict' : ''}${rule.enabled === false ? ' is-off' : ''}"
-                    data-id="${id}" data-kind="${kind}" title="${conflict ? escapeHtml(conflict) : ''}"
-                    ondragstart="onRuleDragStart(event,this)" ondragover="onRuleDragOver(event,this)"
-                    ondrop="event.preventDefault()" ondragend="onRuleDragEnd()">
+                    data-id="${id}" data-kind="${kind}" title="${conflict ? escapeHtml(conflict) : ''}">
                 <button type="button" class="rule-drag" title="按住拖动排序"
-                    onmousedown="enableRuleDrag(event,'${kind}','${id}')"><span class="rule-grip"></span></button>
+                    onpointerdown="onRulePointerDown(event,'${kind}','${id}')"><span class="rule-grip"></span></button>
                 <span class="rule-index${conflict ? ' is-conflict' : ''}">${index + 1}</span>
                 <input class="rule-pattern-input${regex ? ' is-regex' : ''}${invalid ? ' is-invalid' : ''}"
                     data-kind="${kind}" data-id="${id}" value="${escapeHtml(rule.pattern)}"
@@ -8038,55 +8052,170 @@
             saveRulesOfKind(kind, rules, { silent: true });
         }
 
-        /* 拖动排序：按住左侧三横线手柄后拖动整行 */
-        let ruleDragState = { kind: null, id: null, allowed: false, dragging: false };
+        /* 拖动排序：按住左侧三横线手柄后拖动整行。
+           使用 Pointer 事件 + FLIP 动画实现平滑换位——被挤压的行会滑动让位，
+           松手时被拖行会平滑滑入目标位置，而不是瞬移。 */
+        let ruleDragState = {
+            kind: null, id: null, active: false,
+            el: null, list: null, placeholder: null,
+            placeholderIndex: 0,
+            grabOffsetX: 0, grabOffsetY: 0,
+            listWidth: 0
+        };
 
-        function enableRuleDrag(event, kind, id) {
+        const RULE_DRAG_DURATION = 180;
+        const RULE_DRAG_EASE = 'cubic-bezier(0.2, 0, 0, 1)';
+
+        function ruleListEl(kind) {
+            return document.getElementById(kind === 'tokenizer' ? 'tokenizer-rule-list' : 'context-rule-list');
+        }
+
+        function ruleRowsOf(list, excludeEl) {
+            return Array.from(list.querySelectorAll('.rule-row[data-id]')).filter(row => row !== excludeEl);
+        }
+
+        function onRulePointerDown(event, kind, id) {
             if (event.button !== 0) return;
             const row = event.currentTarget.closest('.rule-row');
             if (!row) return;
-            ruleDragState = { kind, id, allowed: true, dragging: false };
-            row.draggable = true;
-        }
-
-        function onRuleDragStart(event, row) {
-            if (!ruleDragState.allowed || ruleDragState.id !== row.dataset.id) {
-                event.preventDefault();
-                return;
-            }
-            ruleDragState.dragging = true;
-            ruleDragState.kind = row.dataset.kind;
-            row.classList.add('is-dragging');
-            if (event.dataTransfer) {
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', row.dataset.id);
-            }
-        }
-
-        function onRuleDragOver(event, row) {
-            if (!ruleDragState.dragging) return;
-            event.preventDefault();
-            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-            const dragging = document.querySelector('.rule-row.is-dragging');
-            if (!dragging || dragging === row || dragging.parentElement !== row.parentElement) return;
-            const rect = row.getBoundingClientRect();
-            const insertAfter = event.clientY > rect.top + rect.height / 2;
-            row.parentElement.insertBefore(dragging, insertAfter ? row.nextSibling : row);
-        }
-
-        function onRuleDragEnd() {
-            const dragging = document.querySelector('.rule-row.is-dragging');
-            const kind = ruleDragState.kind;
-            const moved = ruleDragState.dragging;
-            document.querySelectorAll('#tokenizer-rule-list .rule-row, #context-rule-list .rule-row').forEach(row => {
-                row.draggable = false;
-                row.classList.remove('is-dragging');
-            });
-            ruleDragState = { kind: null, id: null, allowed: false, dragging: false };
-            if (!moved || !kind || !dragging) return;
-            const list = document.getElementById(kind === 'tokenizer' ? 'tokenizer-rule-list' : 'context-rule-list');
+            const list = ruleListEl(kind);
             if (!list) return;
-            applyRuleOrder(kind, [...list.querySelectorAll('.rule-row[data-id]')].map(row => row.dataset.id));
+
+            event.preventDefault();
+            const rect = row.getBoundingClientRect();
+            const listRect = list.getBoundingClientRect();
+            const initialIndex = ruleRowsOf(list, row).filter(r => r.getBoundingClientRect().top < rect.top).length;
+
+            const placeholder = document.createElement('div');
+            placeholder.className = 'rule-row rule-placeholder';
+            placeholder.style.height = Math.round(rect.height) + 'px';
+
+            ruleDragState = {
+                kind, id, active: true,
+                el: row, list, placeholder,
+                placeholderIndex: initialIndex,
+                grabOffsetX: event.clientX - rect.left,
+                grabOffsetY: event.clientY - rect.top,
+                listWidth: listRect.width
+            };
+
+            // 占位元素先补到被拖行之后，再把被拖行拎出文档流悬浮跟随指针
+            list.insertBefore(placeholder, row.nextSibling);
+            row.classList.add('is-dragging');
+            row.style.width = Math.round(listRect.width) + 'px';
+            row.style.left = Math.round(rect.left) + 'px';
+            row.style.top = Math.round(rect.top) + 'px';
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'grabbing';
+
+            window.addEventListener('pointermove', onRulePointerMove);
+            window.addEventListener('pointerup', onRulePointerUp);
+            window.addEventListener('pointercancel', onRulePointerUp);
+        }
+
+        function onRulePointerMove(event) {
+            const s = ruleDragState;
+            if (!s.active) return;
+            event.preventDefault();
+
+            s.el.style.left = Math.round(event.clientX - s.grabOffsetX) + 'px';
+            s.el.style.top = Math.round(event.clientY - s.grabOffsetY) + 'px';
+
+            const rows = ruleRowsOf(s.list, s.el);
+            let target = 0;
+            for (let i = 0; i < rows.length; i++) {
+                const r = rows[i].getBoundingClientRect();
+                if (event.clientY > r.top + r.height / 2) target = i + 1;
+            }
+            if (target === s.placeholderIndex) return;
+            moveRulePlaceholder(s, rows, target);
+        }
+
+        function moveRulePlaceholder(s, rows, target) {
+            // FLIP：先记录受影响元素当前的布局位置
+            const elements = rows.concat([s.placeholder]);
+            for (const el of elements) {
+                el.style.transition = 'none';
+                el.style.transform = '';
+            }
+            const first = new Map();
+            for (const el of elements) first.set(el, el.getBoundingClientRect());
+
+            // 移动占位元素到目标位置（触发 DOM 重排）
+            const newRow = s.list.querySelector('.rule-row.rule-new');
+            if (target < rows.length) {
+                s.list.insertBefore(s.placeholder, rows[target]);
+            } else {
+                s.list.insertBefore(s.placeholder, newRow || null);
+            }
+
+            // 反推位移，播放滑动动画
+            for (const el of elements) {
+                const before = first.get(el);
+                const after = el.getBoundingClientRect();
+                const dx = before.left - after.left;
+                const dy = before.top - after.top;
+                if (dx === 0 && dy === 0) continue;
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+            }
+            void s.placeholder.offsetHeight;
+            for (const el of elements) {
+                if (!el.style.transform) continue;
+                el.style.transition = `transform ${RULE_DRAG_DURATION}ms ${RULE_DRAG_EASE}`;
+                el.style.transform = 'translate(0, 0)';
+            }
+            s.placeholderIndex = target;
+        }
+
+        function onRulePointerUp() {
+            const s = ruleDragState;
+            if (!s.active) return;
+            window.removeEventListener('pointermove', onRulePointerMove);
+            window.removeEventListener('pointerup', onRulePointerUp);
+            window.removeEventListener('pointercancel', onRulePointerUp);
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+
+            const el = s.el;
+            const kind = s.kind;
+            const list = s.list;
+            const oldRect = el.getBoundingClientRect();
+
+            // 把被拖行放回占位元素的位置，移除占位元素
+            list.insertBefore(el, s.placeholder);
+            s.placeholder.remove();
+            el.classList.remove('is-dragging');
+            el.style.position = '';
+            el.style.left = '';
+            el.style.top = '';
+            el.style.width = '';
+            el.style.zIndex = '';
+            el.style.transition = 'none';
+            el.style.transform = '';
+
+            // 从悬浮位置平滑滑入最终槽位
+            const newRect = el.getBoundingClientRect();
+            const dx = oldRect.left - newRect.left;
+            const dy = oldRect.top - newRect.top;
+            const animate = (dx !== 0 || dy !== 0);
+            if (animate) {
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+                void el.offsetHeight;
+                el.style.transition = `transform ${RULE_DRAG_DURATION}ms ${RULE_DRAG_EASE}`;
+                el.style.transform = 'translate(0, 0)';
+            }
+
+            const ids = Array.from(list.querySelectorAll('.rule-row[data-id]')).map(r => r.dataset.id);
+            ruleDragState = {
+                kind: null, id: null, active: false,
+                el: null, list: null, placeholder: null,
+                placeholderIndex: 0,
+                grabOffsetX: 0, grabOffsetY: 0,
+                listWidth: 0
+            };
+
+            // 等动画播完再持久化并重渲染（重渲染会重建 DOM）
+            setTimeout(() => applyRuleOrder(kind, ids), animate ? RULE_DRAG_DURATION + 20 : 0);
         }
 
         function applyRuleOrder(kind, ids) {
@@ -8096,10 +8225,6 @@
             for (const rule of rules) if (!ordered.includes(rule)) ordered.push(rule);
             saveRulesOfKind(kind, ordered, { silent: true });
         }
-
-        window.addEventListener('mouseup', () => {
-            if (!ruleDragState.dragging) ruleDragState.allowed = false;
-        });
 
         function deleteRule(kind, id) {
             const rules = rulesOfKind(kind);
@@ -8822,7 +8947,7 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.5.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.6.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[[7, 'Duo Light'], [8, 'Duo Dark'], [9, 'Golden Gate'], [1, '花谱1'], [2, '花谱2'], [3, '洛天依1'], [4, '洛天依2'], [5, '初音未来1'], [6, '初音未来2']].map(([x, name]) => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${name}"><span class="block text-[11px] text-gray-400 mt-1">${name}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
