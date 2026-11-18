@@ -25,3 +25,4 @@ Thumbs.db
 
 # WorkBuddy agent working notes (not shipped)
 .workbuddy/
+.workbuddy-ai/

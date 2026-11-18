@@ -1,8 +1,8 @@
 <div align="center">
 
-![Logo](logo.png)
+![Logo](docs/logo.png)
 
-![preview](screenshot/preview.png)
+![preview](docs/screenshots/preview.png)
 
 # Your Next Gen Vibe Coding Toolkit
 # Free Yourself with AGENT
@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V9.6.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V9.6.1_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -38,6 +38,15 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V9.6.1 Release
+
+本次为纯目录结构整理，不包含功能改动，界面与行为与 V9.6.0 一致。
+
+- 根目录仅保留配置、文档、脚本与 `src/`；60 余个源码与资源文件按职责迁入 `src/main`、`src/renderer`、`src/shared`、`src/vendor`、`src/assets`、`src/remote-control`、`src/test`。
+- 入口页仍在 `src/` 根，`src/` 即 Web 根，本地调试、Electron 打包与移动端构建共用同一套相对路径。
+- 配图与 logo 迁入 `docs/`，构建脚本迁入 `scripts/`，`.workbuddy-ai/` 不再进入安装包与版本库。
+- 全部引用路径已同步更新，并通过单元测试、Electron 真实渲染与 Windows 打包验证。
 
 ### V9.6.0 Release
 
@@ -148,8 +157,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 1. Agent 工作流
 
-![agent-security](screenshot/agent-security.png)
-![agent](screenshot/agent.png)
+![agent-security](docs/screenshots/agent-security.png)
+![agent](docs/screenshots/agent.png)
 
 - 点击“+”进入Agent模式，绑定工作区后AI可以在此工作区内行动。
 - AI通过五个基础工具来帮你操作本地文件，包括增查改删（CRUD）和运行指令，以及结束任务的工具。
@@ -158,7 +167,7 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 2. Canvas 编码模式
 
-![canvas](screenshot/code%20with%20canvas.png)
+![canvas](docs/screenshots/code%20with%20canvas.png)
 
 - 在输入框发送 `/canvas` 后，右侧进入代码画布模式。
 - 画布基于 CodeMirror，支持语法高亮、行号与手动编辑。
@@ -166,8 +175,8 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 3. 语音聊天模式
 
-![audio-chat](screenshot/audiochat.png)
-![audio-text](screenshot/audiochat%20can%20be%20saved%20to%20textchat.png)
+![audio-chat](docs/screenshots/audiochat.png)
+![audio-text](docs/screenshots/audiochat%20can%20be%20saved%20to%20textchat.png)
 
 - 独立 `audiochat.html` 页面，采用上下双分区字幕布局。
 - 上半区显示 AI 字幕，下半区显示用户识别文本。
@@ -178,7 +187,7 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 4. 桌面协作模式
 
-![desktop-work](screenshot/desktop%20work.png)
+![desktop-work](docs/screenshots/desktop%20work.png)
 
 - 透明、无边框、始终置顶的横向字幕窗口默认停靠当前显示器底部。
 - AI 与用户语音内容各占一行，白色字幕使用黑色文字阴影保证可读性。
@@ -198,7 +207,7 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 ### 6. 多模型与 API 配置
 
-![nulti-model-endpoint](screenshot/multi-model-and-endpoint.png)
+![nulti-model-endpoint](docs/screenshots/multi-model-and-endpoint.png)
 
 - 支持自定义 Base URL、API Key、模型列表和默认模型。
 - 模型配置保存在本地，适合长期个人环境使用。
@@ -234,8 +243,8 @@ npm run build  //构建
 
 ## 版本信息
 
-- 当前版本：`V9.6.0 Release`
-- 当前构建标识：`build20261101`
+- 当前版本：`V9.6.1 Release`
+- 当前构建标识：`build20261118`
 
 ---
 

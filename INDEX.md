@@ -6,19 +6,45 @@
 
 ## 一、文件总览
 
+仓库采用 `src/` 单目录承载全部源码与运行时资源，根目录只保留构建配置、脚本、文档与发布产物。
+
+### 1.1 目录结构
+
+```
+.
+├─ package.json / package-lock.json    # 依赖与 electron-builder 配置（main 指向 src/main/main.js）
+├─ scripts/                            # 构建脚本：build-tokenizer.cjs、build-release.ps1/.bat
+├─ docs/                               # 文档资源：logo.png、screenshots/（README 配图）
+├─ src/
+│  ├─ index.html                       # 主窗口（Web 根入口）
+│  ├─ audiochat.html                   # 语音聊天 / 桌面协作窗口
+│  ├─ desktopwork.html                 # 桌面协作空壳重定向
+│  ├─ main/                            # Electron 主进程、preload、网关、tokenizer 运行时
+│  ├─ renderer/                        # 渲染层脚本与样式、网关控制台页面
+│  ├─ shared/                          # 主进程与渲染进程共用的模块（tokenizer-rules.js）
+│  ├─ vendor/                          # 第三方浏览器库（marked、katex、codemirror 等）
+│  ├─ assets/                          # 背景图、引导 GIF、KaTeX 字体、图标、模型与词表
+│  ├─ remote-control/                  # 局域网浏览器控制界面（由网关静态托管）
+│  └─ test/                            # 单元测试与 Electron 冒烟测试
+├─ README.md / INDEX.md / MODEL_SUPPORT.md / UPDATE.md
+└─ 1.keystore / eula.txt / LICENSE
+```
+
+### 1.2 关键文件
+
 | 文件 | 作用 |
 |------|------|
-| `index.html` | **主窗口**：聊天界面 + 全部前端逻辑（单文件，含 CSS / HTML / 内联 JS） |
-| `voicechat-api.js` | **语音/协作窗口共用的 API 适配层**，暴露 `window.VoiceChatAPI`（流式请求 + 响应解析） |
-| `audiochat.html` | 语音聊天 / 桌面协作实际运行的窗口，引用 `voicechat-api.js` |
-| `desktopwork.html` | 只是 `location.replace('./audiochat.html?mode=desktop')` 的空壳重定向 |
-| `main.js` | Electron 主进程：窗口管理、托盘、自动更新、科大讯飞 STT、Fish Audio TTS、IPC |
-| `preload.js` | 预加载桥，把主进程能力暴露为 `window.electronAPI.*` |
-| `agent-gateway.js` | 独立 HTTP 网关：网卡排序、认证、轮询、权限、设备管理与配置持久化 |
-| `gateway-electron.js` / `gateway-preload.js` | 网关与 Electron 的受限 IPC、独立控制台窗口与生命周期 |
-| `gateway-renderer.js` | 当前 Agent 会话的脱敏摘要投影、远程追加消息桥接 |
-| `gateway-console.html` / `.js` / `.css` | 桌面网关控制台（独立窗口，仅本机管理） |
-| `remote-control/` | 独立局域网浏览器界面，仅通过网关 HTTP API 工作 |
+| `src/index.html` | **主窗口**：聊天界面 + 全部前端逻辑（单文件，含 CSS / HTML / 内联 JS） |
+| `src/renderer/voicechat-api.js` | **语音/协作窗口共用的 API 适配层**，暴露 `window.VoiceChatAPI`（流式请求 + 响应解析） |
+| `src/audiochat.html` | 语音聊天 / 桌面协作实际运行的窗口，引用 `renderer/voicechat-api.js` |
+| `src/desktopwork.html` | 只是 `location.replace('./audiochat.html?mode=desktop')` 的空壳重定向 |
+| `src/main/main.js` | Electron 主进程：窗口管理、托盘、自动更新、科大讯飞 STT、Fish Audio TTS、IPC |
+| `src/main/preload.js` | 预加载桥，把主进程能力暴露为 `window.electronAPI.*` |
+| `src/main/agent-gateway.js` | 独立 HTTP 网关：网卡排序、认证、轮询、权限、设备管理与配置持久化 |
+| `src/main/gateway-electron.js` / `gateway-preload.js` | 网关与 Electron 的受限 IPC、独立控制台窗口与生命周期 |
+| `src/renderer/gateway-renderer.js` | 当前 Agent 会话的脱敏摘要投影、远程追加消息桥接 |
+| `src/renderer/gateway-console.html` / `.js` / `.css` | 桌面网关控制台（独立窗口，仅本机管理） |
+| `src/remote-control/` | 独立局域网浏览器界面，仅通过网关 HTTP API 工作 |
 
 **核心结论**：`index.html` 是独立、自包含的前端（浏览器直接打开也能跑基础功能）；它通过 `window.electronAPI` 与 Electron 主进程通信。`voicechat-api.js` 只被 `audiochat.html` 使用，**不被** `index.html` 直接引用，但它复刻了 `index.html` 内部的流式请求逻辑（见下文「代码之间的联系」）。
 
@@ -257,7 +283,7 @@
 | AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`（约 4882–5300） |
 | Claude `/v1/messages` 协议转换 | `index.html` `buildMessagesPayloadFromBase` / `extractMessagesStreamUpdate`；语音窗口对应 `voicechat-api.js` 的 `buildMessagesPayload` / `extractUpdate` |
 | API 配置档案（多组 Key 切换） | `index.html` `readApiProfiles` / `switchApiProfile` / `createApiProfile` / `saveApiProfileEdits` / `cancelApiProfileEdits`（约 7433 起）+ HTML `#api-profile-select`；`npm run test:api-profiles` 验证独立偏好窗口中的配置切换与保存 |
-| 上下文 token 统计与悬停分解 | `context-estimator.js` / `tokenizer-entry.js` / `build-tokenizer.cjs`；`index.html` `updateContextMeter` / `getContextWindowForModel` + `#context-meter` |
+| 上下文 token 统计与悬停分解 | `context-estimator.js` / `src/main/tokenizer-entry.js` / `scripts/build-tokenizer.cjs`；`index.html` `updateContextMeter` / `getContextWindowForModel` + `#context-meter` |
 | Agent 阈值压缩触发 | `agent-ui.js` `compactAgentContextIfNeeded`（在 Agent Loop 每轮开头调用） |
 | AI 回复如何渲染 / Markdown / 防 XSS | `renderAssistantMarkdown` + `sanitizeHtml`（约 4610–4642） |
 | 发送消息流程 | `sendMessage`（6081）+ `requestAI`（7158） |
@@ -283,13 +309,13 @@
 
 | 文件 | 作用 |
 |---|---|
-| `agent-protocol.js` | 固定 Tool Definitions/Core Rules、连续独立 JSON 对象与交错正文段解析、当前时间格式化。浏览器和 Node 测试均可复用。 |
-| `agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、批量原子编辑、glob 匹配、路径增删移动复制、行差异生成、Shell 执行器、后台进程管理器、命令前缀匹配。 |
-| `agent-search.js` | `web_search` 的引擎适配层：Bing 与 DuckDuckGo 免密钥 HTML 结果解析、Bing 跳转链接还原、Bing 官方 API 响应映射、引擎与结果数量归一化。浏览器和 Node 测试均可复用。 |
-| `agent-ui.js` | Agent 会话绑定、上下文组装、正文/工具顺序渲染、模型请求循环、工具结果 IndexedDB 持久化、正文内命令授权、阈值上下文压缩、可折叠 diff/命令输出和绿竖线工具状态。 |
-| `alwaysAllowedCommand.txt` | 发布包内置安全命令前缀；用户增项写入 Electron `userData/alwaysAllowedCommand.user.txt`。 |
-| `test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单、搜索解析和 Shell 单元测试。 |
-| `test/agent-live-smoke.js` | 显式启用的真实模型与工具回归；复制连接设置到临时档案，仅操作隔离工作区，退出后清理。 |
+| `src/renderer/agent-protocol.js` | 固定 Tool Definitions/Core Rules、连续独立 JSON 对象与交错正文段解析、当前时间格式化。浏览器和 Node 测试均可复用。 |
+| `src/main/agent-tools.js` | 主进程使用的工作区 realpath 校验、行范围读取、覆盖写入、唯一文本替换、批量原子编辑、glob 匹配、路径增删移动复制、行差异生成、Shell 执行器、后台进程管理器、命令前缀匹配。 |
+| `src/main/agent-search.js` | `web_search` 的引擎适配层：Bing 与 DuckDuckGo 免密钥 HTML 结果解析、Bing 跳转链接还原、Bing 官方 API 响应映射、引擎与结果数量归一化。浏览器和 Node 测试均可复用。 |
+| `src/renderer/agent-ui.js` | Agent 会话绑定、上下文组装、正文/工具顺序渲染、模型请求循环、工具结果 IndexedDB 持久化、正文内命令授权、阈值上下文压缩、可折叠 diff/命令输出和绿竖线工具状态。 |
+| `src/main/alwaysAllowedCommand.txt` | 发布包内置安全命令前缀；用户增项写入 Electron `userData/alwaysAllowedCommand.user.txt`。 |
+| `src/test/agent-*.test.js` | 不调用 AI API 的协议、路径、文件、白名单、搜索解析和 Shell 单元测试。 |
+| `src/test/agent-live-smoke.js` | 显式启用的真实模型与工具回归；复制连接设置到临时档案，仅操作隔离工作区，退出后清理。 |
 | `test/gateway-electron-smoke.js` | 真实 Electron 网关、移动端亮暗主题、安全 Markdown、桌面队列与设备权限集成测试。 |
 
 ### 7.1.1 Agent 工具清单
@@ -328,7 +354,7 @@ Agent 工具 JSON 不直接渲染给用户。Agent 的 `/responses` 请求使用
 
 V8.2.0 将可见思考文字与实际模型上下文分离：普通 `reasoning` / `reasoning_content` 仅用于界面展示，不回灌后续请求；Responses 端点返回的原生 `type: reasoning` item（含需原样回传的 opaque / encrypted 协议数据）仍按顺序保留。不可读取的协议数据无法在本地精确分词，界面明确标记其限制。
 
-`context-estimator.js` 按实际请求消息划分消息、工具结果、系统工具、系统提示、附件、图片与 Reasoning 项，并由 `tokenizer-entry.js` 提供对应文本计数：OpenAI 本地编码、DeepSeek V4 / V4.1 官方离线词表、Claude 旧词表参考估算及其他厂商通用参考估算。`build-tokenizer.cjs` 生成打包用的 `tokenizer-runtime.cjs`；运行所需 WASM、词表 gzip 与许可证随应用保留。图片、封装和不可读取的 reasoning 数据仍为预估，实际用量以 API 返回的 usage 为准，不根据没有依据的比例校准。
+`context-estimator.js` 按实际请求消息划分消息、工具结果、系统工具、系统提示、附件、图片与 Reasoning 项，并由 `src/main/tokenizer-entry.js` 提供对应文本计数：OpenAI 本地编码、DeepSeek V4 / V4.1 官方离线词表、Claude 旧词表参考估算及其他厂商通用参考估算。`scripts/build-tokenizer.cjs` 生成打包用的 `src/main/tokenizer-runtime.cjs`；运行所需 WASM、词表 gzip 与许可证随应用保留。图片、封装和不可读取的 reasoning 数据仍为预估，实际用量以 API 返回的 usage 为准，不根据没有依据的比例校准。
 
 ### 7.3 Electron IPC
 
@@ -338,10 +364,10 @@ V8.2.0 将可见思考文字与实际模型上下文分离：普通 `reasoning` 
 
 | 文件 | 作用 |
 |---|---|
-| `tokenizer-rules.js` | UMD 共享规则模型：默认规则、引擎目录、前缀/正则匹配、冲突检测、`512K`/`1M`/`64万` 解析与格式化、默认规则（`tokenizerDefault` / `contextDefault`） |
+| `src/shared/tokenizer-rules.js` | UMD 共享规则模型：默认规则、引擎目录、前缀/正则匹配、冲突检测、`512K`/`1M`/`64万` 解析与格式化、默认规则（`tokenizerDefault` / `contextDefault`） |
 | `tokenizer-config.js` | 主进程持久化：`userData/tokenizers/config.json` + `files/`；导入前调用运行时解析并实际编码，失败不落盘 |
-| `tokenizer-worker.cjs` | 按规则计数；内置引擎走 `tokenizer-runtime.cjs`，`file:` 引擎加载 HF tokenizer.json，失败回退通用估算；未命中规则时使用 `defaultEngine` |
-| `tokenizer-entry.js` | 打包入口：`countByEngine` / `describeEngine` / `validateJsonTokenizer` / `loadJsonTokenizer`；Claude 词表为内置纯 JS BPE，DeepSeek V4/V4.1、Qwen、GLM、Llama、Mistral、Yi、InternLM、Gemma 为 `tokenizer-assets/*.json.gz`（Hugging Face 官方 tokenizer.json，懒加载） |
+| `tokenizer-worker.cjs` | 按规则计数；内置引擎走 `src/main/tokenizer-runtime.cjs`，`file:` 引擎加载 HF tokenizer.json，失败回退通用估算；未命中规则时使用 `defaultEngine` |
+| `src/main/tokenizer-entry.js` | 打包入口：`countByEngine` / `describeEngine` / `validateJsonTokenizer` / `loadJsonTokenizer`；Claude 词表为内置纯 JS BPE，DeepSeek V4/V4.1、Qwen、GLM、Llama、Mistral、Yi、InternLM、Gemma 为 `src/assets/tokenizer/*.json.gz`（Hugging Face 官方 tokenizer.json，懒加载） |
 
 设置页 `section-tokenizer` 与 `section-context-capacity` 均为行内编辑：模型名输入框 + 正则开关 + 词表选择或容量输入 + 启用/排序/删除，`change` 即保存；列表末尾有一行「新增」草稿和一条固定的「默认（未匹配的模型）」规则。配置通过 `getTokenizerConfigSync` 同步读取，保存走 `tokenizer:save-config`，主进程广播 `tokenizer:config-changed`。`getContextWindowForModel()` 只从规则解析，未命中回退 `contextDefault.value`。
 

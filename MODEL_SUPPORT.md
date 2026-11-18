@@ -37,4 +37,4 @@ Claude Sonnet、Opus、Fable 的型号、日期快照及厂商前缀别名统一
 - xAI [Reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning)、[OpenAPI](https://docs.x.ai/openapi.json)
 - Gemini [Thinking](https://ai.google.dev/gemini-api/docs/thinking)、[OpenAI 兼容接口](https://ai.google.dev/gemini-api/docs/openai)、[Token counting](https://ai.google.dev/gemini-api/docs/tokens)、[废弃公告](https://ai.google.dev/gemini-api/docs/deprecations)
 
-验证：`npm test`；`node_modules/.bin/electron.cmd test/desktop-enhancements-smoke.js` 使用独立临时配置和本地模拟服务，覆盖设置窗口、参数映射、询问暂停、统计、计数降级、模型发现、后台进程终止和 ZIP 往返。
+验证：`npm test`；`node_modules/.bin/electron.cmd src/test/desktop-enhancements-smoke.js` 使用独立临时配置和本地模拟服务，覆盖设置窗口、参数映射、询问暂停、统计、计数降级、模型发现、后台进程终止和 ZIP 往返。

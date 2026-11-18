@@ -111,20 +111,9 @@ jobs:
         run: |
           mkdir -p www
           rsync -av \
-            --exclude='www' \
-            --exclude='android' \
-            --exclude='ios' \
-            --exclude='node_modules' \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.claude' \
+            --exclude='main' \
             --exclude='test' \
-            --exclude='dist' \
-            --exclude='build-tokenizer.cjs' \
-            --exclude='tokenizer-entry.js' \
-            --exclude='*.keystore' \
-            --exclude='release' \
-            ./ www/
+            src/ www/
 
       - name: Initialize Capacitor project
         run: |
@@ -154,7 +143,7 @@ jobs:
 
           for density in "${!sizes[@]}"; do
             size="${sizes[$density]}"
-            convert icon.png -resize "$size" android/app/src/main/res/mipmap-${density}/ic_launcher.png
+            convert src/assets/icons/icon.png -resize "$size" android/app/src/main/res/mipmap-${density}/ic_launcher.png
             echo "Generated ${density} icon (${size})"
           done
 
@@ -282,20 +271,9 @@ jobs:
         run: |
           mkdir -p www
           rsync -av \
-            --exclude='www' \
-            --exclude='android' \
-            --exclude='ios' \
-            --exclude='node_modules' \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.claude' \
+            --exclude='main' \
             --exclude='test' \
-            --exclude='dist' \
-            --exclude='build-tokenizer.cjs' \
-            --exclude='tokenizer-entry.js' \
-            --exclude='*.keystore' \
-            --exclude='release' \
-            ./ www/
+            src/ www/
 
       - name: Initialize Capacitor project (iOS)
         run: |
@@ -331,21 +309,21 @@ jobs:
           mkdir -p "$ICON_DIR"
 
           # sips 是 macOS 自带的图片处理工具，不会破坏 alpha 通道
-          sips -z 20 20 icon.png --out "$ICON_DIR/Icon-App-20x20@1x.png"
-          sips -z 40 40 icon.png --out "$ICON_DIR/Icon-App-20x20@2x.png"
-          sips -z 60 60 icon.png --out "$ICON_DIR/Icon-App-20x20@3x.png"
-          sips -z 29 29 icon.png --out "$ICON_DIR/Icon-App-29x29@1x.png"
-          sips -z 58 58 icon.png --out "$ICON_DIR/Icon-App-29x29@2x.png"
-          sips -z 87 87 icon.png --out "$ICON_DIR/Icon-App-29x29@3x.png"
-          sips -z 40 40 icon.png --out "$ICON_DIR/Icon-App-40x40@1x.png"
-          sips -z 80 80 icon.png --out "$ICON_DIR/Icon-App-40x40@2x.png"
-          sips -z 120 120 icon.png --out "$ICON_DIR/Icon-App-40x40@3x.png"
-          sips -z 120 120 icon.png --out "$ICON_DIR/Icon-App-60x60@2x.png"
-          sips -z 180 180 icon.png --out "$ICON_DIR/Icon-App-60x60@3x.png"
-          sips -z 76 76 icon.png --out "$ICON_DIR/Icon-App-76x76@1x.png"
-          sips -z 152 152 icon.png --out "$ICON_DIR/Icon-App-76x76@2x.png"
-          sips -z 167 167 icon.png --out "$ICON_DIR/Icon-App-83.5x83.5@2x.png"
-          sips -z 1024 1024 icon.png --out "$ICON_DIR/Icon-App-1024x1024@1x.png"
+          sips -z 20 20 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-20x20@1x.png"
+          sips -z 40 40 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-20x20@2x.png"
+          sips -z 60 60 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-20x20@3x.png"
+          sips -z 29 29 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-29x29@1x.png"
+          sips -z 58 58 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-29x29@2x.png"
+          sips -z 87 87 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-29x29@3x.png"
+          sips -z 40 40 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-40x40@1x.png"
+          sips -z 80 80 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-40x40@2x.png"
+          sips -z 120 120 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-40x40@3x.png"
+          sips -z 120 120 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-60x60@2x.png"
+          sips -z 180 180 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-60x60@3x.png"
+          sips -z 76 76 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-76x76@1x.png"
+          sips -z 152 152 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-76x76@2x.png"
+          sips -z 167 167 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-83.5x83.5@2x.png"
+          sips -z 1024 1024 src/assets/icons/icon.png --out "$ICON_DIR/Icon-App-1024x1024@1x.png"
 
           # 写入正确的 Contents.json
           cat > "$ICON_DIR/Contents.json" << 'EOF'

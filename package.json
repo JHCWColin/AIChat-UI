@@ -1,19 +1,19 @@
 {
   "name": "aiui",
-  "version": "9.6.0",
+  "version": "9.6.1",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
-  "main": "main.js",
+  "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "prebuild": "npm run build:tokenizer",
     "build": "electron-builder --win portable nsis",
-    "build:tokenizer": "node build-tokenizer.cjs",
-    "test": "node --test test/*.test.js",
-    "test:api-profiles": "electron test/api-profiles-smoke.js",
-    "test:gateway-ui": "electron test/gateway-electron-smoke.js",
-    "test:tokenizer-ui": "electron test/tokenizer-rules-smoke.js",
-    "test:agent-live": "electron test/agent-live-smoke.js"
+    "build:tokenizer": "node scripts/build-tokenizer.cjs",
+    "test": "node --test src/test/*.test.js",
+    "test:api-profiles": "electron src/test/api-profiles-smoke.js",
+    "test:gateway-ui": "electron src/test/gateway-electron-smoke.js",
+    "test:tokenizer-ui": "electron src/test/tokenizer-rules-smoke.js",
+    "test:agent-live": "electron src/test/agent-live-smoke.js"
   },
   "devDependencies": {
     "@anthropic-ai/tokenizer": "^0.0.4",
@@ -43,17 +43,17 @@
       "**/*",
       "!.claude/**",
       "!.github/**",
-      "!test/**",
+      "!.workbuddy-ai/**",
+      "!docs/**",
+      "!scripts/**",
+      "!src/test/**",
       "!参考.html",
       "!README.md",
       "!INDEX.md",
+      "!MODEL_SUPPORT.md",
       "!package-lock.json",
-      "!build-tokenizer.cjs",
-      "!tokenizer-entry.js",
-      "!screenshot/**",
-      "!1.keystore",
-      "!*.bat",
-      "!*.ps1",
+      "!src/main/tokenizer-entry.js",
+      "!*.keystore",
       "!*.zip",
       "!*.tar.*",
       "!*.tmp",
@@ -74,7 +74,7 @@
           ]
         }
       ],
-      "icon": "favicon.ico"
+      "icon": "src/assets/icons/favicon.ico"
     },
     "linux": {
       "target": [
@@ -86,7 +86,7 @@
         }
       ],
       "category": "Utility",
-      "icon": "icon.png",
+      "icon": "src/assets/icons/icon.png",
       "artifactName": "AIUI-${version}.${ext}"
     },
     "portable": {

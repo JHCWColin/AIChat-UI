@@ -1,0 +1,1897 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        if (new URLSearchParams(window.location.search).get('mode') === 'desktop') {
+            document.documentElement.classList.add('desktop-work');
+        }
+    </script>
+    <title>AIUI 语音聊天</title>
+    <script src="../node_modules/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="renderer/voicechat-api.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            color: #f5f5f5;
+            background: #171717;
+        }
+
+        body.theme-light {
+            color: #202124;
+            background: #f5f5f5;
+        }
+
+        .shell {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            padding: 18px;
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 0.72fr) auto;
+            gap: 12px;
+            background: linear-gradient(145deg, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.58));
+        }
+
+        body.theme-light .shell {
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.66));
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-width: 0;
+        }
+
+        .title {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+        }
+
+        .pulse-dot.listening,
+        .pulse-dot.recording {
+            background: #10b981;
+            animation: pulse 1.5s infinite;
+        }
+
+        .pulse-dot.responding,
+        .pulse-dot.speaking {
+            background: #38bdf8;
+            animation: pulse-blue 1.5s infinite;
+        }
+
+        .pulse-dot.error {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            70% {
+                box-shadow: 0 0 0 11px rgba(16, 185, 129, 0);
+            }
+        }
+
+        @keyframes pulse-blue {
+            70% {
+                box-shadow: 0 0 0 11px rgba(56, 189, 248, 0);
+            }
+        }
+
+        .status {
+            max-width: 58%;
+            padding: 7px 11px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #d1d5db;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            backdrop-filter: blur(16px);
+        }
+
+        body.theme-light .status {
+            border-color: rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.65);
+            color: #4b5563;
+        }
+
+        .card {
+            min-height: 0;
+            padding: 18px 20px;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            border-radius: 22px;
+            background: rgba(28, 28, 30, 0.72);
+            box-shadow: 0 14px 42px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(24px) saturate(135%);
+        }
+
+        body.theme-light .card {
+            border-color: rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 14px 42px rgba(0, 0, 0, 0.08);
+        }
+
+        .label {
+            margin-bottom: 10px;
+            color: #9ca3af;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+        }
+
+        body.theme-light .label {
+            color: #6b7280;
+        }
+
+        .transcript {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            align-items: center;
+            overflow-y: auto;
+            color: #f9fafb;
+            font-size: clamp(17px, 3.5vw, 25px);
+            font-weight: 600;
+            line-height: 1.48;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            scrollbar-width: none;
+        }
+
+        .transcript::-webkit-scrollbar {
+            display: none;
+        }
+
+        .transcript.placeholder {
+            color: #6b7280;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        body.theme-light .transcript {
+            color: #202124;
+        }
+
+        body.theme-light .transcript.placeholder {
+            color: #9ca3af;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #6b7280;
+            font-size: 10px;
+            letter-spacing: 0.12em;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            width: 54px;
+            height: 1px;
+            background: currentColor;
+            opacity: 0.4;
+        }
+
+        .end-button {
+            width: 100%;
+            min-height: 52px;
+            border: 1px solid rgba(239, 68, 68, 0.6);
+            border-radius: 18px;
+            background: rgba(220, 38, 38, 0.88);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+        }
+
+        .end-button:hover {
+            transform: translateY(-1px);
+            background: #ef4444;
+        }
+
+        .end-button:disabled {
+            cursor: default;
+            opacity: 0.6;
+            transform: none;
+        }
+
+        .toast {
+            position: fixed;
+            top: 62px;
+            left: 50%;
+            z-index: 20;
+            max-width: calc(100% - 36px);
+            padding: 9px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            color: #fff;
+            font-size: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, -12px);
+            transition: 0.25s ease;
+            backdrop-filter: blur(18px);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+
+        .toast.error {
+            border-color: rgba(248, 113, 113, 0.7);
+            color: #fecaca;
+        }
+
+        @media (max-width: 540px), (max-height: 540px) {
+            .shell {
+                padding: 12px;
+                gap: 8px;
+            }
+
+            .card {
+                padding: 14px 16px;
+                border-radius: 18px;
+            }
+
+            .transcript {
+                font-size: clamp(16px, 4vw, 22px);
+            }
+
+            .end-button {
+                min-height: 46px;
+            }
+        }
+
+        :root {
+            --call-bg: #000;
+            --call-fg: #fff;
+            --call-muted: rgba(255, 255, 255, 0.72);
+        }
+
+        body.theme-light {
+            --call-bg: #fff;
+            --call-fg: #000;
+            --call-muted: rgba(0, 0, 0, 0.72);
+        }
+
+        body,
+        body.theme-light {
+            color: var(--call-fg);
+            background: var(--call-bg);
+        }
+
+        .shell,
+        body.theme-light .shell {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            padding: 0 clamp(28px, 7vw, 56px);
+            display: grid;
+            grid-template-rows: minmax(0, 1fr) 1px minmax(0, 1fr);
+            gap: 0;
+            color: var(--call-fg);
+            background: var(--call-bg) !important;
+            background-image: none !important;
+        }
+
+        .speech-half {
+            min-width: 0;
+            min-height: 0;
+            padding: clamp(34px, 8vh, 64px) clamp(4px, 2vw, 18px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .speech-half .transcript,
+        body.theme-light .speech-half .transcript {
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow-y: auto;
+            color: var(--call-fg);
+            padding: clamp(18px, 3vh, 28px) 0;
+            font-size: clamp(20px, 4.1vw, 31px);
+            font-weight: 600;
+            line-height: 1.46;
+            text-align: center;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            scroll-behavior: smooth;
+        }
+
+        .speech-half .transcript::-webkit-scrollbar,
+        body.theme-light .speech-half .transcript::-webkit-scrollbar {
+            display: none;
+        }
+
+        .transcript-content {
+            width: 100%;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.16em;
+        }
+
+        .transcript-content.plain {
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        .transcript-content.is-fading,
+        .transcript-sentence.is-fading {
+            animation: transcript-fade 0.18s ease;
+        }
+
+        .transcript-sentence {
+            display: block;
+            padding: 0.04em 0;
+            opacity: 0.66;
+            transition: opacity 0.16s ease;
+        }
+
+        .transcript-sentence.is-active {
+            opacity: 1;
+        }
+
+        .transcript-sentence.is-pending {
+            opacity: 0.9;
+        }
+
+        @keyframes transcript-fade {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .speech-half .transcript.placeholder,
+        body.theme-light .speech-half .transcript.placeholder {
+            color: var(--call-muted);
+            font-size: clamp(18px, 3.5vw, 25px);
+            font-weight: 500;
+        }
+
+        .center-divider {
+            width: 100vw;
+            height: 1px;
+            margin-left: calc(50% - 50vw);
+            background: var(--call-fg);
+            opacity: 0.78;
+        }
+
+        .end-button {
+            position: fixed;
+            left: 50%;
+            bottom: clamp(18px, 4vh, 28px);
+            z-index: 10;
+            width: auto;
+            min-width: 168px;
+            min-height: 46px;
+            padding: 0 24px;
+            border: 1px solid var(--call-fg);
+            border-radius: 999px;
+            background: var(--call-fg);
+            color: var(--call-bg);
+            font-size: 14px;
+            font-weight: 700;
+            transform: translateX(-50%);
+            box-shadow: none;
+        }
+
+        .end-button:hover,
+        .end-button:disabled {
+            transform: translateX(-50%);
+        }
+
+        .end-button:hover {
+            background: var(--call-bg);
+            color: var(--call-fg);
+        }
+
+        .visual-status,
+        .toast {
+            display: none !important;
+        }
+
+        html.desktop-work,
+        html.desktop-work body {
+            color: #fff;
+            background: transparent !important;
+        }
+
+        html.desktop-work .shell {
+            padding: 10px 16px;
+            grid-template-columns: minmax(0, 1fr) 150px;
+            grid-template-rows: minmax(0, 1fr) 1px minmax(0, 1fr);
+            column-gap: 18px;
+            background: transparent !important;
+        }
+
+        html.desktop-work .speech-half {
+            grid-column: 1;
+            min-height: 0;
+            padding: 0 18px;
+            justify-content: flex-start;
+        }
+
+        html.desktop-work .speech-half:first-of-type {
+            grid-row: 1;
+        }
+
+        html.desktop-work .speech-half:last-of-type {
+            grid-row: 3;
+        }
+
+        html.desktop-work .speech-half .transcript,
+        html.desktop-work .speech-half .transcript.placeholder {
+            padding: 0;
+            display: flex;
+            align-items: center;
+            color: #fff;
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1.25;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: clip;
+            text-shadow: 0 1px 2px #000, 0 0 4px #000, 0 0 8px rgba(0, 0, 0, 0.95);
+        }
+
+        html.desktop-work .transcript-content,
+        html.desktop-work .transcript-content.plain {
+            width: max-content;
+            min-width: 100%;
+            min-height: 0;
+            display: block;
+            overflow: visible;
+            white-space: nowrap;
+            text-overflow: clip;
+        }
+
+        html.desktop-work .transcript-sentence {
+            display: inline;
+            padding: 0;
+        }
+
+        html.desktop-work .center-divider {
+            grid-column: 1;
+            grid-row: 2;
+            width: 100%;
+            margin: 0;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 1px 3px #000;
+        }
+
+        html.desktop-work .end-button {
+            position: static;
+            grid-column: 2;
+            grid-row: 1 / 4;
+            align-self: center;
+            justify-self: stretch;
+            width: 150px;
+            min-width: 0;
+            min-height: 46px;
+            padding: 0 18px;
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            background: rgba(185, 28, 28, 0.94);
+            color: #fff;
+            transform: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+            text-shadow: 0 1px 2px #000, 0 0 4px #000;
+        }
+
+        html.desktop-work .end-button:hover,
+        html.desktop-work .end-button:disabled {
+            color: #fff;
+            background: rgba(220, 38, 38, 0.98);
+            transform: none;
+        }
+    </style>
+</head>
+
+<body>
+    <main class="shell" id="shell">
+        <section class="speech-half">
+            <div id="ai-transcript" class="transcript">
+                <div id="ai-transcript-content" class="transcript-content plain"></div>
+            </div>
+        </section>
+        <div class="center-divider" aria-hidden="true"></div>
+        <section class="speech-half">
+            <div id="user-transcript" class="transcript">
+                <div id="user-transcript-content" class="transcript-content plain"></div>
+            </div>
+        </section>
+        <button class="end-button" id="end-call" type="button">结束语音通话</button>
+        <div class="visual-status" aria-live="polite">
+            <span id="status-dot"></span>
+            <span id="status-text"></span>
+        </div>
+    </main>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const bridge = window.electronAPI;
+        const desktopMode = document.documentElement.classList.contains('desktop-work');
+        const ortRuntime = window.ort;
+        const VAD_MODEL_URL = './assets/models/silero_vad.onnx';
+        const ORT_WASM_PATH = new URL('../node_modules/onnxruntime-web/dist/', window.location.href).href;
+
+        function mergeFloat32(chunks) {
+            let length = 0;
+            for (const chunk of chunks) length += chunk.length;
+            const output = new Float32Array(length);
+            let offset = 0;
+            for (const chunk of chunks) {
+                output.set(chunk, offset);
+                offset += chunk.length;
+            }
+            return output;
+        }
+
+        function computeRMS(frame) {
+            if (!frame || !frame.length) return 0;
+            let sum = 0;
+            for (let index = 0; index < frame.length; index += 1) sum += frame[index] * frame[index];
+            return Math.sqrt(sum / frame.length);
+        }
+
+        function cleanVoiceText(text) {
+            return String(text || '')
+                .replace(/\[[^\]]*\]/g, '')
+                .replace(/```[\s\S]*?```/g, '')
+                .replace(/[*_`#>]/g, '')
+                .replace(/\s+([，。！？；：,.!?;:])/g, '$1')
+                .replace(/[ \t]+/g, ' ')
+                .trim();
+        }
+
+        // Speech-only cleanup: drop stage directions such as （笑） or (sigh)
+        // without touching what is shown on screen. Brackets are matched
+        // non-greedily and re-run so nested pairs collapse from the inside out.
+        function stripParentheticalForSpeech(text) {
+            let output = String(text || '');
+            for (let round = 0; round < 4; round += 1) {
+                const next = output
+                    .replace(/（[^（）]*）/g, '')
+                    .replace(/\([^()]*\)/g, '');
+                if (next === output) break;
+                output = next;
+            }
+            // An unmatched opener means the closing bracket was cut off by the
+            // streaming sentence splitter; never speak the dangling fragment.
+            output = output.replace(/[（(][^）)]*$/, '');
+            return output.replace(/[ \t]{2,}/g, ' ').replace(/\s+([，。！？；：,.!?;:])/g, '$1').trim();
+        }
+
+        function shouldIgnoreParentheses(settings) {
+            return settings?.ttsIgnoreParentheses !== false;
+        }
+
+        function audioBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+            }
+            return btoa(binary);
+        }
+
+        async function requestFishSpeechDirect(text, settings) {
+            const base = String(settings?.fishApiBase || 'https://fishaudio.org').trim().replace(/\/$/, '');
+            const apiKey = String(settings?.fishApiKey || '').trim();
+            const voiceId = String(settings?.fishVoiceId || '').trim();
+            if (!apiKey || !voiceId) throw new Error('请先填写 Fish Audio API Key 和音色 ID');
+
+            const url = `${base}/api/open/v1/speech/tts`;
+            const body = JSON.stringify({ text, voiceId, format: 'mp3', speed: 1 });
+            let lastError = null;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 90000);
+                console.info(`[AudioChat][TTS][Network] request attempt=${attempt + 1} url=${url} voiceId=${voiceId} chars=${String(text || '').length}`);
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body,
+                        signal: controller.signal
+                    });
+                    console.info(`[AudioChat][TTS][Network] response status=${response.status} attempt=${attempt + 1}`);
+                    if (response.ok) {
+                        const audio = await response.arrayBuffer();
+                        if (!audio.byteLength) throw new Error('Fish Audio 返回了空音频');
+                        console.info(`[AudioChat][TTS][Network] success bytes=${audio.byteLength} attempt=${attempt + 1}`);
+                        return audioBufferToBase64(audio);
+                    }
+
+                    const detail = await response.text();
+                    lastError = new Error(`Fish Audio 请求失败 (${response.status}): ${detail.slice(0, 500)}`);
+                    if (attempt === 0 && (response.status === 401 || response.status >= 500)) continue;
+                    lastError.retryable = false;
+                    throw lastError;
+                } catch (error) {
+                    lastError = error?.name === 'AbortError' ? new Error('Fish Audio 请求超时') : error;
+                    if (lastError?.retryable === false) throw lastError;
+                    if (attempt === 0) continue;
+                    throw lastError;
+                } finally {
+                    clearTimeout(timeout);
+                }
+            }
+            throw lastError || new Error('Fish Audio 请求失败');
+        }
+
+        function normalizeSentenceKey(text) {
+            return cleanVoiceText(text).replace(/\s+/g, ' ').trim();
+        }
+
+        function splitTranscriptSentences(text) {
+            const normalized = String(text || '').replace(/\r\n/g, '\n').trim();
+            if (!normalized) return [];
+            const sentences = [];
+            const terminalChars = '。！？!?；;\n';
+            const strongTerminalChars = '。！？!?';
+            let start = 0;
+
+            for (let index = 0; index < normalized.length; index += 1) {
+                const char = normalized[index];
+                if (!terminalChars.includes(char)) continue;
+                let end = index + 1;
+                if (char === '\n') {
+                    while (normalized[end] === '\n') end += 1;
+                } else if (strongTerminalChars.includes(char)) {
+                    while (strongTerminalChars.includes(normalized[end])) end += 1;
+                }
+                const chunk = normalized.slice(start, end).trim();
+                if (chunk) sentences.push(chunk);
+                start = end;
+            }
+
+            const tail = normalized.slice(start).trim();
+            if (tail) sentences.push(tail);
+            return sentences;
+        }
+
+        function countCompletedTranscriptSentences(text, sentences = null) {
+            const normalized = String(text || '').replace(/\r\n/g, '\n').trimEnd();
+            if (!normalized) return 0;
+            const parts = Array.isArray(sentences) ? sentences : splitTranscriptSentences(normalized);
+            if (!parts.length) return 0;
+            return /[。！？!?；;\n]$/.test(normalized) ? parts.length : Math.max(0, parts.length - 1);
+        }
+
+        const VoiceRecordStore = (() => {
+            const DB_NAME = 'AIChatVoiceRecords';
+            const DB_VERSION = 1;
+            const STORE_NAME = 'records';
+            let dbPromise = null;
+
+            function openDB() {
+                if (dbPromise) return dbPromise;
+                dbPromise = new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(STORE_NAME)) {
+                            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = (event) => resolve(event.target.result);
+                    request.onerror = () => reject(request.error);
+                });
+                return dbPromise;
+            }
+
+            async function storeRecord(record) {
+                const db = await openDB();
+                const payload = {
+                    ...record,
+                    id: String(record?.id || (crypto.randomUUID ? crypto.randomUUID() : `voice_${Date.now()}_${Math.random().toString(16).slice(2)}`)),
+                    createdAt: Number(record?.createdAt) || Date.now(),
+                    segments: Array.isArray(record?.segments) ? record.segments : []
+                };
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.put(payload);
+                    req.onsuccess = () => resolve(payload);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            return {
+                storeRecord
+            };
+        })();
+
+        class AudioResampler {
+            constructor(inputRate, outputRate) {
+                this.ratio = inputRate / outputRate;
+                this.previous = 0;
+                this.inputPosition = 0;
+            }
+
+            process(input) {
+                if (!input.length) return new Float32Array(0);
+                if (Math.abs(this.ratio - 1) < 1e-9) return input.slice();
+                const output = [];
+                let position = this.inputPosition;
+                while (position < input.length - 1) {
+                    const index = Math.floor(position);
+                    const fraction = position - index;
+                    const first = index < 0 ? this.previous : input[index];
+                    const second = input[index + 1];
+                    output.push(first + (second - first) * fraction);
+                    position += this.ratio;
+                }
+                this.previous = input[input.length - 1];
+                this.inputPosition = position - input.length;
+                return Float32Array.from(output);
+            }
+        }
+
+        const WORKLET_CODE = `
+            class CaptureProcessor extends AudioWorkletProcessor {
+                process(inputs) {
+                    const input = inputs[0];
+                    if (input && input[0] && input[0].length) this.port.postMessage(input[0].slice(0));
+                    return true;
+                }
+            }
+            registerProcessor('capture-processor', CaptureProcessor);
+        `;
+
+        class AudioWorkletRecorder {
+            constructor() {
+                this.context = null;
+                this.stream = null;
+                this.node = null;
+                this.source = null;
+                this.mute = null;
+                this.resampler = null;
+                this.buffer = new Float32Array(0);
+                this.running = false;
+                this.onFrame = null;
+            }
+
+            async start(onFrame) {
+                this.onFrame = onFrame;
+                this.context = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.context.state === 'suspended') await this.context.resume();
+                this.stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                const workletBlob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+                const workletUrl = URL.createObjectURL(workletBlob);
+                await this.context.audioWorklet.addModule(workletUrl);
+                URL.revokeObjectURL(workletUrl);
+                this.source = this.context.createMediaStreamSource(this.stream);
+                this.node = new AudioWorkletNode(this.context, 'capture-processor');
+                this.mute = this.context.createGain();
+                this.mute.gain.value = 0;
+                this.source.connect(this.node);
+                this.node.connect(this.mute);
+                this.mute.connect(this.context.destination);
+                this.resampler = new AudioResampler(this.context.sampleRate, 16000);
+                this.node.port.onmessage = event => this.handleChunk(event.data);
+                this.running = true;
+            }
+
+            handleChunk(chunk) {
+                if (!this.running) return;
+                const resampled = this.resampler.process(chunk);
+                if (!resampled.length) return;
+                const merged = new Float32Array(this.buffer.length + resampled.length);
+                merged.set(this.buffer);
+                merged.set(resampled, this.buffer.length);
+                let offset = 0;
+                while (merged.length - offset >= 512) {
+                    if (this.onFrame) this.onFrame(merged.slice(offset, offset + 512));
+                    offset += 512;
+                }
+                this.buffer = offset < merged.length ? merged.slice(offset) : new Float32Array(0);
+            }
+
+            async stop() {
+                this.running = false;
+                try { if (this.node) this.node.port.onmessage = null; } catch {}
+                try { if (this.source) this.source.disconnect(); } catch {}
+                try { if (this.node) this.node.disconnect(); } catch {}
+                try { if (this.mute) this.mute.disconnect(); } catch {}
+                try { if (this.stream) this.stream.getTracks().forEach(track => track.stop()); } catch {}
+                try { if (this.context && this.context.state !== 'closed') await this.context.close(); } catch {}
+                this.context = null;
+                this.stream = null;
+                this.node = null;
+                this.buffer = new Float32Array(0);
+            }
+        }
+
+        class SileroVADController {
+            constructor() {
+                this.session = null;
+                this.ready = false;
+                this.audioInputName = null;
+                this.sampleRateInputName = null;
+                this.stateInputName = null;
+                this.hiddenInputName = null;
+                this.cellInputName = null;
+                this.probabilityOutputName = null;
+                this.stateOutputName = null;
+                this.hiddenOutputName = null;
+                this.cellOutputName = null;
+                this.stateMode = 'state';
+                this.stateShape = [2, 1, 128];
+                this.hiddenShape = [2, 1, 64];
+                this.cellShape = [2, 1, 64];
+                this.sampleRateShape = [1];
+                this.state = null;
+                this.hidden = null;
+                this.cell = null;
+            }
+
+            async init(url) {
+                this.session = await ortRuntime.InferenceSession.create(url, {
+                    executionProviders: ['wasm'],
+                    graphOptimizationLevel: 'all'
+                });
+                this.detectIO();
+                this.detectStateShapes();
+                this.reset();
+                await this.warmup();
+                this.ready = true;
+            }
+
+            pick(names, patterns, exclusions = []) {
+                for (const pattern of patterns) {
+                    const match = names.find(name => pattern.test(name) && !exclusions.some(exclusion => exclusion.test(name)));
+                    if (match) return match;
+                }
+                return null;
+            }
+
+            detectIO() {
+                const inputs = this.session.inputNames || [];
+                const outputs = this.session.outputNames || [];
+                this.audioInputName = this.pick(inputs, [/^input$/i, /^x$/i, /audio/i, /speech/i, /input/i],
+                    [/sr/i, /sample/i, /state/i, /^h$/i, /^c$/i, /^hn$/i, /^cn$/i]) || inputs[0];
+                this.sampleRateInputName = this.pick(inputs, [/^sr$/i, /sample_?rate/i, /sr/i]);
+                this.stateInputName = this.pick(inputs, [/^state$/i, /state/i]);
+                this.hiddenInputName = this.pick(inputs, [/^h$/i, /^hn$/i, /hidden/i]);
+                this.cellInputName = this.pick(inputs, [/^c$/i, /^cn$/i, /cell/i]);
+                this.stateMode = !this.stateInputName && this.hiddenInputName && this.cellInputName ? 'hc' : 'state';
+                this.probabilityOutputName = this.pick(outputs, [/^output$/i, /prob/i, /speech/i, /output/i]) || outputs[0];
+                this.stateOutputName = this.pick(outputs, [/^stateN$/i, /state/i]);
+                this.hiddenOutputName = this.pick(outputs, [/^hn$/i, /^h$/i, /hidden/i]);
+                this.cellOutputName = this.pick(outputs, [/^cn$/i, /^c$/i, /cell/i]);
+                if (this.probabilityOutputName === this.stateOutputName) {
+                    this.probabilityOutputName = outputs.find(name => name !== this.stateOutputName) || outputs[0];
+                }
+            }
+
+            metadataShape(name) {
+                if (!name) return null;
+                const metadata = this.session.inputMetadata;
+                const item = metadata && (metadata[name] || (Array.isArray(metadata) && metadata.find(entry => entry.name === name)));
+                const dimensions = item && (item.dimensions || item.shape || item.dims);
+                if (!dimensions || !dimensions.length) return null;
+                return dimensions.map(value => {
+                    const number = typeof value === 'bigint'
+                        ? Number(value)
+                        : (typeof value === 'number' ? value : parseInt(value, 10));
+                    // ONNX Runtime Web 1.27 reports dynamic dimensions as uint32 max.
+                    return Number.isSafeInteger(number) && number > 0 && number < 0x7fffffff ? number : null;
+                });
+            }
+
+            fillShape(shape, fallback) {
+                return shape ? shape.map((value, index) => value || fallback[index] || 1) : fallback.slice();
+            }
+
+            detectStateShapes() {
+                if (this.stateMode === 'hc') {
+                    this.hiddenShape = this.fillShape(this.metadataShape(this.hiddenInputName), [2, 1, 64]);
+                    this.cellShape = this.fillShape(this.metadataShape(this.cellInputName), [2, 1, 64]);
+                } else {
+                    this.stateShape = this.fillShape(this.metadataShape(this.stateInputName), [2, 1, 128]);
+                }
+            }
+
+            tensorSize(shape) {
+                return shape.reduce((total, value) => total * value, 1);
+            }
+
+            reset() {
+                if (this.stateMode === 'hc') {
+                    this.hidden = new ortRuntime.Tensor('float32', new Float32Array(this.tensorSize(this.hiddenShape)), this.hiddenShape.slice());
+                    this.cell = new ortRuntime.Tensor('float32', new Float32Array(this.tensorSize(this.cellShape)), this.cellShape.slice());
+                } else if (this.stateInputName) {
+                    this.state = new ortRuntime.Tensor('float32', new Float32Array(this.tensorSize(this.stateShape)), this.stateShape.slice());
+                }
+            }
+
+            sampleRateTensor() {
+                const data = BigInt64Array.from([16000n]);
+                return new ortRuntime.Tensor('int64', data, this.sampleRateShape.length ? this.sampleRateShape.slice() : []);
+            }
+
+            feeds(frame) {
+                const feeds = {};
+                feeds[this.audioInputName] = new ortRuntime.Tensor('float32', frame, [1, frame.length]);
+                if (this.sampleRateInputName) feeds[this.sampleRateInputName] = this.sampleRateTensor();
+                if (this.stateMode === 'hc') {
+                    feeds[this.hiddenInputName] = this.hidden;
+                    feeds[this.cellInputName] = this.cell;
+                } else if (this.stateInputName) {
+                    feeds[this.stateInputName] = this.state;
+                }
+                return feeds;
+            }
+
+            updateState(results) {
+                if (this.stateMode === 'hc') {
+                    if (results[this.hiddenOutputName]) this.hidden = results[this.hiddenOutputName];
+                    if (results[this.cellOutputName]) this.cell = results[this.cellOutputName];
+                } else {
+                    const stateResult = results[this.stateOutputName] || results[this.session.outputNames.find(name => name !== this.probabilityOutputName)];
+                    if (stateResult) this.state = stateResult;
+                }
+            }
+
+            extractProbability(results) {
+                const tensor = results[this.probabilityOutputName] || results[this.session.outputNames[0]];
+                return tensor.data[tensor.data.length - 1];
+            }
+
+            async run(frame) {
+                const results = await this.session.run(this.feeds(frame));
+                const probability = this.extractProbability(results);
+                this.updateState(results);
+                return probability;
+            }
+
+            async warmup() {
+                const silence = new Float32Array(512);
+                try {
+                    this.sampleRateShape = [1];
+                    await this.run(silence);
+                } catch {
+                    this.sampleRateShape = [];
+                    this.reset();
+                    await this.run(silence);
+                }
+                this.reset();
+            }
+
+            process(frame) {
+                return this.run(frame);
+            }
+        }
+
+        class PlaybackQueue {
+            constructor() {
+                this.items = [];
+                this.currentAudio = null;
+                this.playing = false;
+                this.generation = 0;
+                this.onItemStart = null;
+                this.onAllComplete = null;
+            }
+
+            enqueue(item) {
+                this.items.push(item);
+                if (!this.playing) this.playNext();
+            }
+
+            async playNext() {
+                const generation = this.generation;
+                if (!this.items.length) {
+                    this.playing = false;
+                    if (this.onAllComplete) this.onAllComplete();
+                    return;
+                }
+                this.playing = true;
+                const item = this.items.shift();
+                try {
+                    const base64 = await item.audioPromise;
+                    if (generation !== this.generation || !base64) return;
+                    if (this.onItemStart) this.onItemStart(item);
+                    const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
+                    this.currentAudio = audio;
+                    await audio.play();
+                    await new Promise(resolve => {
+                        audio.onended = resolve;
+                        audio.onerror = resolve;
+                        audio.onpause = resolve;
+                    });
+                } catch (error) {
+                    console.warn('TTS 播放失败', error);
+                }
+                if (generation !== this.generation) return;
+                this.currentAudio = null;
+                setTimeout(() => this.playNext(), 120);
+            }
+
+            stop() {
+                this.generation += 1;
+                this.items = [];
+                if (this.currentAudio) {
+                    try { this.currentAudio.pause(); } catch {}
+                }
+                this.currentAudio = null;
+                this.playing = false;
+            }
+
+            isActive() {
+                return this.playing || this.items.length > 0;
+            }
+        }
+
+        class AudioChatController {
+            constructor() {
+                this.session = null;
+                this.settings = null;
+                this.context = [];
+                this.turns = [];
+                this.recorder = new AudioWorkletRecorder();
+                this.vad = new SileroVADController();
+                this.playback = new PlaybackQueue();
+                this.preset = null;
+                this.presetAudio = null;
+                this.presetTimer = null;
+                this.presetSequencePromise = null;
+                this.frameQueue = [];
+                this.draining = false;
+                this.mode = 'initializing';
+                this.ending = false;
+                this.preRoll = [];
+                this.speech = [];
+                this.startCount = 0;
+                this.silenceCount = 0;
+                this.speechFrames = 0;
+                this.idleFrames = 0;
+                this.responseAbortController = null;
+                this.responseSerial = 0;
+                this.responseFinished = false;
+                this.currentAssistantText = '';
+                this.currentAssistantCommitted = true;
+                this.recognitionPromise = null;
+                this.lastRecognizedText = '';
+
+                this.startThreshold = 0.35;
+                this.startThresholdDuringTTS = 0.68;
+                this.endThreshold = 0.15;
+                this.energyStartThreshold = 0.012;
+                this.energyEndThreshold = 0.008;
+                this.startFrames = 2;
+                this.startFramesDuringTTS = 6;
+                this.endpointFrames = 40;
+                this.preRollFrames = 12;
+                this.maxSpeechFrames = Math.floor(30000 / 32);
+
+                this.aiElement = document.getElementById('ai-transcript');
+                this.aiContentElement = document.getElementById('ai-transcript-content');
+                this.userElement = document.getElementById('user-transcript');
+                this.userContentElement = document.getElementById('user-transcript-content');
+                this.statusElement = document.getElementById('status-text');
+                this.statusDot = document.getElementById('status-dot');
+                this.endButton = document.getElementById('end-call');
+                this.aiSentenceElements = [];
+                this.aiActiveSentenceText = '';
+                this.aiLastMatchedSentenceIndex = -1;
+                this.aiCompletedSentenceCount = 0;
+                this.aiAutoScrollEnabled = true;
+                this.aiAutoScrollTimer = null;
+                this.aiProgrammaticScroll = false;
+                this.aiProgrammaticScrollTimer = null;
+                this.aiScrollFrame = 0;
+                this.aiQueuedScrollBehavior = 'auto';
+                this.aiQueuedScrollForce = false;
+                this.currentVoiceRecordId = '';
+                this.currentVoiceSegments = [];
+                this.currentVoiceSegmentPromises = [];
+                this.currentVoiceRecordStored = false;
+                this.pendingScreenshot = null;
+                this.desktopInteractive = false;
+                this.desktopPlaybackCooldownUntil = 0;
+                this.desktopAIActiveTextEnd = 0;
+                this.desktopAIQueuedTextEnd = 0;
+                this.desktopAIScrollFrame = 0;
+                this.desktopAIQueuedScrollBehavior = 'auto';
+                this.desktopUserScrollFrame = 0;
+
+                this.playback.onItemStart = item => {
+                    this.stopPresetAudio();
+                    this.setAIActiveSentence(item?.text || '', item?.displayEnd || 0);
+                    this.setStatus('speaking', 'AI 正在说话…');
+                };
+                this.playback.onAllComplete = () => {
+                    if (desktopMode) this.desktopPlaybackCooldownUntil = Date.now() + 900;
+                    if (this.responseFinished && !this.ending) this.returnToListening();
+                };
+            }
+
+            async init() {
+                if (!bridge?.isElectron || !ortRuntime) throw new Error('语音聊天运行环境不完整');
+                this.session = desktopMode
+                    ? await bridge.getDesktopWorkSession()
+                    : await bridge.getAudioChatSession();
+                this.settings = this.session.settings || {};
+                this.context = Array.isArray(this.session.context) ? this.session.context : [];
+                if (desktopMode) {
+                    document.title = 'AIUI 桌面协作';
+                    this.endButton.textContent = '结束对话';
+                }
+                this.applyAppearance();
+                this.bindEvents();
+                this.setStatus('initializing', '正在加载 VAD…');
+
+                ortRuntime.env.wasm.wasmPaths = ORT_WASM_PATH;
+                ortRuntime.env.wasm.numThreads = 1;
+                ortRuntime.env.wasm.proxy = false;
+                await this.vad.init(VAD_MODEL_URL);
+
+                this.preset = await (desktopMode ? bridge.getDesktopVoicePreset : bridge.getVoicePreset)({
+                    apiBase: this.settings.fishApiBase,
+                    voiceId: this.settings.fishVoiceId
+                });
+                this.setStatus('initializing', '正在启动麦克风…');
+                await this.recorder.start(frame => this.enqueueFrame(frame));
+                this.setUserText('');
+                this.returnToListening();
+            }
+
+            applyAppearance() {
+                document.body.classList.toggle('theme-light', !desktopMode && this.settings.theme === 'light');
+            }
+
+            bindEvents() {
+                this.endButton.addEventListener('click', () => this.endCall());
+                const deferAutoScroll = () => this.deferAIAutoScroll();
+                for (const eventName of ['wheel', 'touchstart', 'pointerdown']) {
+                    this.aiElement.addEventListener(eventName, deferAutoScroll, { passive: true });
+                }
+                this.aiElement.addEventListener('scroll', () => {
+                    if (!this.aiProgrammaticScroll) this.deferAIAutoScroll();
+                }, { passive: true });
+                bridge.onXunfeiPartial(text => {
+                    if (this.mode === 'recording') this.setUserText(text || '');
+                });
+                bridge.onXunfeiFinal(text => {
+                    if (this.mode === 'recording' && text) this.setUserText(text, false);
+                    this.lastRecognizedText = text || this.lastRecognizedText;
+                });
+                bridge.onXunfeiError(message => this.showToast(message, true));
+                if (desktopMode) {
+                    bridge.onDesktopScreenshotCaptured(payload => {
+                        if (payload?.dataUrl) this.pendingScreenshot = payload.dataUrl;
+                    });
+                    bridge.onDesktopScreenshotError(message => this.showToast(message || '截图失败', true));
+                    const updateInteractive = event => {
+                        const rect = this.endButton.getBoundingClientRect();
+                        const margin = 14;
+                        const inside = event.clientX >= rect.left - margin
+                            && event.clientX <= rect.right + margin
+                            && event.clientY >= rect.top - margin
+                            && event.clientY <= rect.bottom + margin;
+                        if (inside === this.desktopInteractive) return;
+                        this.desktopInteractive = inside;
+                        bridge.setDesktopWorkInteractive(inside).catch(() => {});
+                    };
+                    document.addEventListener('mousemove', updateInteractive, { passive: true });
+                    document.addEventListener('mouseleave', () => {
+                        this.desktopInteractive = false;
+                        bridge.setDesktopWorkInteractive(false).catch(() => {});
+                    }, { passive: true });
+                }
+                window.addEventListener('beforeunload', () => {
+                    bridge.checkpointAudioChat(this.turns).catch(() => {});
+                });
+            }
+
+            setStatus(kind, text) {
+                this.statusDot.className = `pulse-dot ${kind}`;
+                this.statusElement.textContent = text;
+            }
+
+            setAIText(text, placeholder = false) {
+                this.aiElement.classList.toggle('placeholder', placeholder);
+                const value = String(text || '');
+                if (desktopMode) {
+                    this.aiContentElement.className = 'transcript-content plain';
+                    this.aiContentElement.textContent = value.replace(/\s+/g, ' ');
+                    if (!value) this.aiElement.scrollLeft = 0;
+                    this.queueDesktopAISubtitleScroll('auto');
+                    return;
+                }
+                if (placeholder || !value) {
+                    this.aiContentElement.className = 'transcript-content plain';
+                    this.aiContentElement.textContent = value;
+                    this.aiSentenceElements = [];
+                    this.aiCompletedSentenceCount = 0;
+                    this.aiLastMatchedSentenceIndex = placeholder ? -1 : this.aiLastMatchedSentenceIndex;
+                    this.queueAITranscriptScroll('auto');
+                    return;
+                }
+
+                const sentences = splitTranscriptSentences(value);
+                if (!sentences.length) {
+                    this.aiContentElement.className = 'transcript-content plain';
+                    this.aiContentElement.textContent = value;
+                    this.aiSentenceElements = [];
+                    this.aiCompletedSentenceCount = 0;
+                    this.queueAITranscriptScroll('auto');
+                    return;
+                }
+
+                const previousActiveIndex = this.aiLastMatchedSentenceIndex;
+                const activeIndex = this.resolveAIActiveSentenceIndex(sentences);
+                const completedSentenceCount = countCompletedTranscriptSentences(value, sentences);
+                const fadeStartIndex = this.aiCompletedSentenceCount;
+                const fragment = document.createDocumentFragment();
+                this.aiSentenceElements = [];
+                this.aiContentElement.className = 'transcript-content';
+
+                sentences.forEach((sentence, index) => {
+                    const line = document.createElement('span');
+                    line.className = 'transcript-sentence';
+                    if (index === activeIndex) line.classList.add('is-active');
+                    if (index === sentences.length - 1 && index > activeIndex) line.classList.add('is-pending');
+                    if (index >= fadeStartIndex && index < completedSentenceCount) line.classList.add('is-fading');
+                    line.textContent = sentence;
+                    this.aiSentenceElements.push(line);
+                    fragment.appendChild(line);
+                });
+
+                this.aiContentElement.replaceChildren(fragment);
+                this.aiCompletedSentenceCount = completedSentenceCount;
+                this.queueAITranscriptScroll(activeIndex === previousActiveIndex ? 'auto' : 'smooth');
+            }
+
+            setUserText(text, placeholder = false) {
+                this.userContentElement.textContent = desktopMode ? String(text || '').replace(/\s+/g, ' ') : text;
+                this.userContentElement.className = 'transcript-content plain';
+                this.userElement.classList.toggle('placeholder', placeholder);
+                if (desktopMode) this.queueDesktopUserSubtitleScroll();
+                this.userElement.scrollTop = this.userElement.scrollHeight;
+            }
+
+            queueDesktopUserSubtitleScroll() {
+                if (!desktopMode || this.desktopUserScrollFrame) return;
+                this.desktopUserScrollFrame = requestAnimationFrame(() => {
+                    this.desktopUserScrollFrame = 0;
+                    this.userElement.scrollLeft = Math.max(0, this.userElement.scrollWidth - this.userElement.clientWidth);
+                });
+            }
+
+            queueDesktopAISubtitleScroll(behavior = 'auto') {
+                if (!desktopMode || !this.desktopAIActiveTextEnd) return;
+                if (behavior === 'smooth') this.desktopAIQueuedScrollBehavior = 'smooth';
+                if (this.desktopAIScrollFrame) return;
+                this.desktopAIScrollFrame = requestAnimationFrame(() => {
+                    this.desktopAIScrollFrame = 0;
+                    const queuedBehavior = this.desktopAIQueuedScrollBehavior;
+                    this.desktopAIQueuedScrollBehavior = 'auto';
+                    this.scrollDesktopAISubtitleToActiveSentence(queuedBehavior);
+                });
+            }
+
+            scrollDesktopAISubtitleToActiveSentence(behavior = 'auto') {
+                const textNode = this.aiContentElement.firstChild;
+                if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
+                const endOffset = Math.min(this.desktopAIActiveTextEnd, textNode.textContent.length);
+                if (endOffset <= 0) return;
+
+                const range = document.createRange();
+                range.setStart(textNode, 0);
+                range.setEnd(textNode, endOffset);
+                const targetRight = range.getBoundingClientRect().right;
+                const containerRight = this.aiElement.getBoundingClientRect().right;
+                const overflow = targetRight - containerRight;
+                range.detach();
+                if (overflow <= 0.5) return;
+
+                const maxScrollLeft = Math.max(0, this.aiElement.scrollWidth - this.aiElement.clientWidth);
+                const nextScrollLeft = Math.min(maxScrollLeft, this.aiElement.scrollLeft + overflow + 2);
+                this.aiElement.scrollTo({ left: nextScrollLeft, behavior });
+            }
+
+            deferAIAutoScroll() {
+                this.aiAutoScrollEnabled = false;
+                clearTimeout(this.aiAutoScrollTimer);
+                this.aiAutoScrollTimer = setTimeout(() => {
+                    this.aiAutoScrollEnabled = true;
+                    this.queueAITranscriptScroll('smooth', true);
+                }, 5000);
+            }
+
+            setAIActiveSentence(text, displayEnd = 0) {
+                if (desktopMode) {
+                    const value = String(this.currentAssistantText || '').replace(/\s+/g, ' ');
+                    const clean = String(text || '').replace(/\s+/g, ' ');
+                    let activeEnd = Number(displayEnd) || 0;
+                    if (!activeEnd && clean) {
+                        const start = value.indexOf(clean, Math.max(0, this.desktopAIActiveTextEnd - clean.length));
+                        if (start >= 0) activeEnd = start + clean.length;
+                    }
+                    this.desktopAIActiveTextEnd = Math.min(value.length, activeEnd);
+                    this.queueDesktopAISubtitleScroll('smooth');
+                    return;
+                }
+                this.aiActiveSentenceText = normalizeSentenceKey(text);
+                if (this.currentAssistantText) this.setAIText(this.currentAssistantText, false);
+                this.queueAITranscriptScroll('smooth');
+            }
+
+            resolveAIActiveSentenceIndex(sentences) {
+                const key = this.aiActiveSentenceText;
+                if (!key) return 0;
+                const startIndex = Math.max(0, this.aiLastMatchedSentenceIndex + 1);
+                let matchIndex = this.findAISentenceIndex(sentences, key, startIndex);
+                if (matchIndex < 0 && this.aiLastMatchedSentenceIndex >= 0) {
+                    matchIndex = this.findAISentenceIndex(sentences, key, 0);
+                }
+                if (matchIndex >= 0) {
+                    this.aiLastMatchedSentenceIndex = matchIndex;
+                    return matchIndex;
+                }
+                return sentences.length - 1;
+            }
+
+            findAISentenceIndex(sentences, key, startIndex) {
+                for (let index = startIndex; index < sentences.length; index += 1) {
+                    if (normalizeSentenceKey(sentences[index]) === key) return index;
+                }
+                return -1;
+            }
+
+            queueAITranscriptScroll(behavior = 'auto', force = false) {
+                if (!force && !this.aiAutoScrollEnabled) return;
+                if (behavior === 'smooth') this.aiQueuedScrollBehavior = 'smooth';
+                this.aiQueuedScrollForce = this.aiQueuedScrollForce || force;
+                if (this.aiScrollFrame) return;
+                this.aiScrollFrame = requestAnimationFrame(() => {
+                    this.aiScrollFrame = 0;
+                    const queuedBehavior = this.aiQueuedScrollBehavior;
+                    const queuedForce = this.aiQueuedScrollForce;
+                    this.aiQueuedScrollBehavior = 'auto';
+                    this.aiQueuedScrollForce = false;
+                    this.scrollAITranscriptToActiveSentence(queuedBehavior, queuedForce);
+                });
+            }
+
+            scrollAITranscriptToActiveSentence(behavior = 'auto', force = false) {
+                if (!force && !this.aiAutoScrollEnabled) return;
+                const target = this.aiSentenceElements[this.aiLastMatchedSentenceIndex] || this.aiSentenceElements.at(-1) || this.aiContentElement;
+                if (!target) return;
+                const containerRect = this.aiElement.getBoundingClientRect();
+                const targetRect = target.getBoundingClientRect();
+                const top = this.aiElement.scrollTop
+                    + (targetRect.top - containerRect.top)
+                    - ((containerRect.height - targetRect.height) / 2);
+
+                this.aiProgrammaticScroll = true;
+                clearTimeout(this.aiProgrammaticScrollTimer);
+                this.aiElement.scrollTo({
+                    top: Math.max(0, top),
+                    behavior
+                });
+                this.aiProgrammaticScrollTimer = setTimeout(() => {
+                    this.aiProgrammaticScroll = false;
+                }, behavior === 'smooth' ? 350 : 120);
+            }
+
+            showToast(message, error = false) {
+                const toast = document.getElementById('toast');
+                toast.textContent = String(message || '');
+                toast.classList.toggle('error', error);
+                toast.classList.add('show');
+                clearTimeout(toast.timer);
+                toast.timer = setTimeout(() => toast.classList.remove('show'), error ? 5000 : 2500);
+            }
+
+            returnToListening() {
+                if (this.ending) return;
+                this.mode = 'listening';
+                this.responseFinished = false;
+                this.idleFrames = 0;
+                this.startCount = 0;
+                this.setStatus('listening', '正在聆听…');
+            }
+
+            enqueueFrame(frame) {
+                if (this.ending) return;
+                this.frameQueue.push(frame);
+                if (!this.draining) this.drainFrames();
+            }
+
+            async drainFrames() {
+                this.draining = true;
+                while (this.frameQueue.length && !this.ending) {
+                    const frame = this.frameQueue.shift();
+                    try { await this.handleFrame(frame); } catch (error) { console.warn('VAD frame error', error); }
+                }
+                this.draining = false;
+            }
+
+            async handleFrame(frame) {
+                const probability = await this.vad.process(frame.slice());
+                const rms = computeRMS(frame);
+                if (this.mode === 'recording') {
+                    bridge.sendXunfeiAudio(frame);
+                    this.speech.push(frame);
+                    this.speechFrames += 1;
+                    const keepSpeaking = probability >= this.endThreshold || rms >= this.energyEndThreshold;
+                    this.silenceCount = keepSpeaking ? 0 : this.silenceCount + 1;
+                    if (this.silenceCount >= this.endpointFrames || this.speechFrames >= this.maxSpeechFrames) {
+                        this.recognitionPromise = this.finishSpeech(true);
+                        await this.recognitionPromise;
+                        this.recognitionPromise = null;
+                    }
+                    return;
+                }
+
+                if (this.mode === 'recognizing' || this.mode === 'initializing' || this.mode === 'ending') return;
+                if (desktopMode && (
+                    this.mode === 'responding'
+                    || this.playback.isActive()
+                    || Boolean(this.presetAudio)
+                    || Date.now() < this.desktopPlaybackCooldownUntil
+                )) {
+                    this.preRoll = [];
+                    this.startCount = 0;
+                    this.idleFrames = 0;
+                    return;
+                }
+                this.preRoll.push(frame);
+                if (this.preRoll.length > this.preRollFrames) this.preRoll.shift();
+
+                const aiActive = this.mode === 'responding' || this.playback.isActive() || Boolean(this.presetAudio);
+                const threshold = aiActive ? this.startThresholdDuringTTS : this.startThreshold;
+                const requiredFrames = aiActive ? this.startFramesDuringTTS : this.startFrames;
+                const energyThreshold = aiActive ? this.energyStartThreshold * 1.6 : this.energyStartThreshold;
+                const voiceStarted = probability >= threshold || rms >= energyThreshold;
+                if (voiceStarted) this.startCount += 1;
+                else {
+                    this.startCount = 0;
+                    this.idleFrames += 1;
+                    if (this.idleFrames >= Math.floor(10000 / 32)) this.idleFrames = 0;
+                }
+                if (this.startCount >= requiredFrames) await this.beginSpeech();
+            }
+
+            async beginSpeech() {
+                if (this.ending || this.mode === 'recording' || this.mode === 'recognizing') return;
+                if (this.mode === 'responding' || this.playback.isActive() || this.presetAudio) {
+                    await this.cancelResponse(true);
+                }
+                this.mode = 'recording';
+                this.vad.reset();
+                this.speech = this.preRoll.slice();
+                this.preRoll = [];
+                this.startCount = 0;
+                this.silenceCount = 0;
+                this.speechFrames = this.speech.length;
+                this.idleFrames = 0;
+                this.lastRecognizedText = '';
+                this.setUserText('');
+                this.setStatus('recording', '正在听你说话…');
+                try {
+                    await bridge.startXunfei({
+                        appId: this.settings.xfAppId,
+                        apiKey: this.settings.xfApiKey,
+                        apiSecret: this.settings.xfApiSecret
+                    });
+                    for (const frame of this.speech) bridge.sendXunfeiAudio(frame);
+                } catch (error) {
+                    this.showToast(error.message || '讯飞语音识别启动失败', true);
+                    this.returnToListening();
+                }
+            }
+
+            async finishSpeech(shouldRespond) {
+                if (this.mode !== 'recording') return;
+                this.mode = 'recognizing';
+                this.setStatus('responding', '正在整理你的话…');
+                this.speech = [];
+                this.preRoll = [];
+                this.silenceCount = 0;
+                this.speechFrames = 0;
+                let text = '';
+                try {
+                    text = cleanVoiceText(await bridge.finishXunfei());
+                } catch (error) {
+                    this.showToast(error.message || '语音识别失败', true);
+                }
+                text = text || cleanVoiceText(this.lastRecognizedText);
+                if (!text) {
+                    if (!this.ending) this.returnToListening();
+                    return;
+                }
+                this.setUserText(text, false);
+                if (desktopMode && this.settings.desktopAutoScreenshot && !this.pendingScreenshot) {
+                    try {
+                        const captured = await bridge.captureDesktopScreenshot();
+                        if (captured?.dataUrl) this.pendingScreenshot = captured.dataUrl;
+                    } catch (error) {
+                        this.showToast(`自动截图失败：${error.message || '未知错误'}，将继续发送纯文字请求`, true);
+                    }
+                }
+                const screenshot = desktopMode ? this.pendingScreenshot : null;
+                const userTurn = { role: 'user', content: text };
+                if (screenshot) {
+                    const estimatedSize = Math.max(0, Math.round((screenshot.length - screenshot.indexOf(',') - 1) * 0.75));
+                    userTurn.attachments = [{
+                        name: `desktop-screenshot-${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        size: estimatedSize,
+                        originalSize: estimatedSize,
+                        isImage: true,
+                        isText: false,
+                        fullDataUrl: screenshot
+                    }];
+                    this.pendingScreenshot = null;
+                }
+                this.turns.push(userTurn);
+                await this.checkpoint();
+                if (shouldRespond && !this.ending) await this.respond(text, Boolean(screenshot));
+            }
+
+            voiceSystemPrompt() {
+                const base = String(this.settings.systemPrompt || '').trim();
+                const collaborationPrompt = this.settings.desktopAutoScreenshot
+                    ? `用户正在请求你的协作。每轮请求可能自动附带用户当前电脑图片，用户也可以按下${this.settings.desktopShortcut || 'Control+A'}手动更新图片。`
+                    : `用户正在请求你的协作。当用户按下${this.settings.desktopShortcut || 'Control+A'}后你可以查看用户当前的电脑图片。`;
+                const voiceRules = desktopMode ? `你正在进行实时桌面协作语音对话。
+回复要自然、口语化、简洁。
+每句单独一行。
+第一句尽量不超过14个汉字。
+每一句少于60个汉字。
+不要输出任何方括号标签、Markdown、LaTeX、代码块或列表符号。` : `你正在进行实时语音对话。
+回复要自然、口语化、简洁。
+每句单独一行。
+第一句尽量不超过7个汉字。
+每一句少于30个汉字。
+不要输出任何方括号标签、Markdown、LaTeX、代码块或列表符号。`;
+                if (desktopMode) return [collaborationPrompt, base, voiceRules].filter(Boolean).join('\n\n');
+                return base ? `${base}\n\n${voiceRules}` : voiceRules;
+            }
+
+            apiMessages() {
+                return [
+                    { role: 'system', content: this.voiceSystemPrompt() },
+                    ...this.context,
+                    ...this.turns.map(turn => ({
+                        role: turn.role,
+                        content: turn.role === 'user' && Array.isArray(turn.attachments) && turn.attachments.length
+                            ? [
+                                ...(String(turn.content || '').trim() ? [{ type: 'text', text: turn.content }] : []),
+                                ...turn.attachments.filter(item => item?.isImage && item?.fullDataUrl).map(item => ({
+                                    type: 'image_url',
+                                    image_url: { url: item.fullDataUrl }
+                                }))
+                            ]
+                            : turn.content
+                    }))
+                ];
+            }
+
+            findSentenceBoundary(buffer) {
+                const newline = buffer.search(/[\r\n]/);
+                const punctuation = buffer.search(/[。！？!?；;]/);
+                if (newline >= 0 && punctuation >= 0) return Math.min(newline, punctuation) + 1;
+                if (newline >= 0) return newline + 1;
+                if (punctuation >= 0) return punctuation + 1;
+                if (buffer.length >= (desktopMode ? 84 : 42)) return desktopMode ? 60 : 30;
+                return -1;
+            }
+
+            resetCurrentVoiceRecord() {
+                this.currentVoiceRecordId = crypto.randomUUID ? crypto.randomUUID() : `voice_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+                this.currentVoiceSegments = [];
+                this.currentVoiceSegmentPromises = [];
+                this.currentVoiceRecordStored = false;
+            }
+
+            async storeCurrentVoiceRecord(text) {
+                if (this.currentVoiceRecordStored) return this.currentVoiceRecordId || '';
+                if (!this.currentVoiceRecordId || !text || !this.currentVoiceSegmentPromises.length) return '';
+                const resolved = await Promise.all(this.currentVoiceSegmentPromises).catch(() => []);
+                const segments = resolved.filter(segment => segment && segment.audioBase64);
+                if (!segments.length) return '';
+                await VoiceRecordStore.storeRecord({
+                    id: this.currentVoiceRecordId,
+                    chatId: this.session?.targetChatId || '',
+                    sessionId: this.session?.sessionId || '',
+                    text,
+                    segments
+                });
+                this.currentVoiceRecordStored = true;
+                return this.currentVoiceRecordId;
+            }
+
+            enqueueSpeech(text) {
+                const clean = cleanVoiceText(text);
+                if (!clean) return;
+                // Display and history keep the original wording; only the text
+                // handed to the TTS backend is stripped.
+                const spoken = shouldIgnoreParentheses(this.settings) ? stripParentheticalForSpeech(clean) : clean;
+                if (!spoken) return;
+                const index = this.currentVoiceSegmentPromises.length;
+                let displayEnd = 0;
+                if (desktopMode) {
+                    const display = String(this.currentAssistantText || '').replace(/\s+/g, ' ');
+                    const segment = clean.replace(/\s+/g, ' ');
+                    const searchStart = Math.min(this.desktopAIQueuedTextEnd, display.length);
+                    const displayStart = display.indexOf(segment, searchStart);
+                    displayEnd = displayStart >= 0
+                        ? displayStart + segment.length
+                        : Math.min(display.length, searchStart + segment.length);
+                    this.desktopAIQueuedTextEnd = Math.max(searchStart, displayEnd);
+                }
+                console.info(`[AudioChat][TTS] enqueue sentence=${index + 1} chars=${spoken.length} voiceId=${this.settings.fishVoiceId || '(empty)'}`);
+                const audioPromise = requestFishSpeechDirect(spoken, this.settings);
+                audioPromise
+                    .then(audioBase64 => console.info(`[AudioChat][TTS] received sentence=${index + 1} bytes=${String(audioBase64 || '').length}`))
+                    .catch(error => console.error(`[AudioChat][TTS] failed sentence=${index + 1}`, error));
+                const segmentPromise = audioPromise
+                    .then(audioBase64 => ({
+                        index,
+                        text: clean,
+                        audioBase64
+                    }))
+                    .catch(() => null);
+                this.currentVoiceSegmentPromises.push(segmentPromise);
+                const playbackAudioPromise = this.presetSequencePromise
+                    ? this.presetSequencePromise.then(() => audioPromise)
+                    : audioPromise;
+                this.playback.enqueue({ text: clean, displayEnd, audioPromise: playbackAudioPromise });
+            }
+
+            async respond(_text, hasScreenshot = false) {
+                this.mode = 'responding';
+                this.responseFinished = false;
+                this.currentAssistantText = '';
+                this.currentAssistantCommitted = false;
+                this.aiActiveSentenceText = '';
+                this.aiLastMatchedSentenceIndex = -1;
+                this.aiCompletedSentenceCount = 0;
+                this.desktopAIActiveTextEnd = 0;
+                this.desktopAIQueuedTextEnd = 0;
+                this.desktopAIQueuedScrollBehavior = 'auto';
+                this.aiElement.scrollLeft = 0;
+                this.resetCurrentVoiceRecord();
+                this.setAIText('');
+                this.setStatus('responding', 'AI 正在思考…');
+                this.responseAbortController = new AbortController();
+                const serial = ++this.responseSerial;
+                this.presetSequencePromise = this.playPresetVoice(hasScreenshot)
+                    .catch(() => {})
+                    .finally(() => {
+                        this.presetSequencePromise = null;
+                    });
+                let rawText = '';
+                let speechBuffer = '';
+
+                try {
+                    await window.VoiceChatAPI.streamText({
+                        baseUrl: this.settings.baseUrl,
+                        apiKey: this.settings.apiKey,
+                        endpoint: this.settings.requestEndpoint,
+                        payload: {
+                            model: this.settings.model,
+                            messages: this.apiMessages(),
+                            stream: true,
+                            max_tokens: 300,
+                            temperature: 0.8
+                        },
+                        signal: this.responseAbortController.signal,
+                        onFallback: () => this.showToast('Responses 不受支持，已回退 Chat Completions'),
+                        onText: nextText => {
+                            if (serial !== this.responseSerial) return;
+                            const next = String(nextText || '');
+                            const delta = next.startsWith(rawText) ? next.slice(rawText.length) : next;
+                            rawText = next;
+                            speechBuffer += delta;
+                            const display = cleanVoiceText(rawText);
+                            this.currentAssistantText = display;
+                            this.setAIText(display || '正在思考…', !display);
+                            let boundary = this.findSentenceBoundary(speechBuffer);
+                            while (boundary > 0) {
+                                this.enqueueSpeech(speechBuffer.slice(0, boundary));
+                                speechBuffer = speechBuffer.slice(boundary);
+                                boundary = this.findSentenceBoundary(speechBuffer);
+                            }
+                        }
+                    });
+                    if (speechBuffer.trim()) this.enqueueSpeech(speechBuffer);
+                } catch (error) {
+                    if (error.name !== 'AbortError') {
+                        this.showToast(error.message || 'AI 回复失败', true);
+                        if (!this.currentAssistantText) this.setAIText('回复失败，请检查语音聊天设置。', true);
+                    }
+                } finally {
+                    if (serial !== this.responseSerial) return;
+                    this.responseAbortController = null;
+                    this.responseFinished = true;
+                    await this.commitAssistant();
+                    if (!this.playback.isActive() && !this.ending) this.returnToListening();
+                }
+            }
+
+            async commitAssistant() {
+                if (this.currentAssistantCommitted) return;
+                this.currentAssistantCommitted = true;
+                const text = cleanVoiceText(this.currentAssistantText);
+                if (text) {
+                    const voiceRecordId = await this.storeCurrentVoiceRecord(text);
+                    this.turns.push({
+                        role: 'assistant',
+                        content: text,
+                        completedAt: Date.now(),
+                        ...(voiceRecordId ? { voiceRecordId } : {})
+                    });
+                    await this.checkpoint();
+                }
+            }
+
+            async cancelResponse(commitPartial) {
+                this.responseSerial += 1;
+                if (this.responseAbortController) this.responseAbortController.abort();
+                this.responseAbortController = null;
+                this.playback.stop();
+                this.stopPresetAudio();
+                if (commitPartial) await this.commitAssistant();
+                this.responseFinished = true;
+            }
+
+            async playPresetVoice(hasScreenshot = false) {
+                if (!this.preset || !Array.isArray(this.preset.groupA) || !this.preset.groupA.length) return;
+                const play = base64 => new Promise(resolve => {
+                    const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
+                    this.presetAudio = audio;
+                    audio.onended = resolve;
+                    audio.onerror = resolve;
+                    audio.onpause = resolve;
+                    audio.play().catch(resolve);
+                });
+                const first = this.preset.groupA[Math.floor(Math.random() * this.preset.groupA.length)];
+                await play(first);
+                if (!this.presetAudio) return;
+                await new Promise(resolve => {
+                    this.presetTimer = setTimeout(resolve, 700);
+                });
+                if (!this.presetAudio) return;
+                if (hasScreenshot) {
+                    const groupCTexts = ['让我看一下啊……', '稍等，我看看……', '欸？我看到了……'];
+                    const cAudio = Array.isArray(this.preset.groupC) && this.preset.groupC.length
+                        ? this.preset.groupC[Math.floor(Math.random() * this.preset.groupC.length)]
+                        : await requestFishSpeechDirect(groupCTexts[Math.floor(Math.random() * groupCTexts.length)], this.settings);
+                    await play(cAudio);
+                    if (!this.presetAudio) return;
+                    await new Promise(resolve => {
+                        this.presetTimer = setTimeout(resolve, 450);
+                    });
+                    if (!this.presetAudio) return;
+                }
+                const probability = Math.max(0, Math.min(100, Number(this.settings.presetBProbability) || 0)) / 100;
+                if ((!desktopMode || !this.settings.desktopSkipB)
+                    && Math.random() < probability
+                    && Array.isArray(this.preset.groupB)
+                    && this.preset.groupB.length) {
+                    await play(this.preset.groupB[Math.floor(Math.random() * this.preset.groupB.length)]);
+                }
+                this.presetAudio = null;
+            }
+
+            stopPresetAudio() {
+                if (this.presetTimer) clearTimeout(this.presetTimer);
+                this.presetTimer = null;
+                if (this.presetAudio) {
+                    try { this.presetAudio.pause(); } catch {}
+                }
+                this.presetAudio = null;
+            }
+
+            checkpoint() {
+                return bridge.checkpointAudioChat(this.turns).catch(error => {
+                    console.warn('语音记录检查点保存失败', error);
+                });
+            }
+
+            async endCall() {
+                if (this.ending) return;
+                const previousMode = this.mode;
+                this.ending = true;
+                this.endButton.disabled = true;
+                this.endButton.textContent = '保存通话记录…';
+                this.setStatus('responding', '结束通话…');
+                try {
+                    if (this.recognitionPromise) await this.recognitionPromise;
+                    if (previousMode === 'recording') {
+                        this.mode = 'recording';
+                        await this.finishSpeech(false);
+                    }
+                    this.mode = 'ending';
+                    await this.cancelResponse(true);
+                    await bridge.abortXunfei();
+                    await this.recorder.stop();
+                    await this.checkpoint();
+                    if (desktopMode) await bridge.completeDesktopWork(this.turns);
+                    else await bridge.completeAudioChat(this.turns);
+                } catch (error) {
+                    this.ending = false;
+                    this.endButton.disabled = false;
+                    this.endButton.textContent = desktopMode ? '结束对话' : '结束语音通话';
+                    this.showToast(error.message || '通话记录保存失败', true);
+                    this.returnToListening();
+                }
+            }
+        }
+
+        const controller = new AudioChatController();
+        controller.init().catch(error => {
+            controller.setStatus('error', '语音聊天启动失败');
+            controller.setUserText(error.message || '无法启动麦克风', true);
+            controller.showToast(error.message || '语音聊天初始化失败', true);
+        });
+    </script>
+</body>
+
+</html>

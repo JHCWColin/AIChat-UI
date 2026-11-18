@@ -1,5 +1,15 @@
 # AIUI 更新日志
 
+## V9.6.1 Release · 2026-11-18
+
+**本次为纯目录结构整理，不包含任何功能改动，界面与行为与 V9.6.0 完全一致。**
+
+- 仓库根目录收敛为「配置 + 文档 + 脚本 + src」四类，原先散落在根目录的 60 余个文件按职责迁入 `src/`：`main/`（Electron 主进程、preload、Agent 网关、tokenizer 运行时与命令白名单）、`renderer/`（渲染层脚本与样式、网关控制台页面）、`shared/`（主进程与渲染层共用模块）、`vendor/`（第三方浏览器库）、`assets/`（背景图、引导 GIF、KaTeX 字体、图标、语音模型与内置词表）、`remote-control/`（局域网控制界面）、`test/`（单元测试与 Electron 冒烟测试）。
+- 入口页 `index.html`、`audiochat.html`、`desktopwork.html` 保留在 `src/` 根，使 `src/` 直接等同于 Web 根：本地调试、Electron 打包与 Capacitor 移动端构建共用同一套相对路径，移动端不再需要复制整仓库。
+- README 配图与项目 logo 迁入 `docs/`；构建脚本（tokenizer 打包、发版脚本）迁入 `scripts/`；`.workbuddy-ai/` 已排除出安装包与版本库。
+- 同步修正全部引用路径：`package.json`（main / scripts / build.files / 应用图标）、`scripts/build-tokenizer.cjs`、`scripts/build-release.ps1`、GitHub Actions 工作流、27 个测试文件的模块与夹具路径、KaTeX 字体 URL，以及各页面中的脚本、样式、背景图与引导图引用。
+- 应用、引导页与构建版本统一升级为 V9.6.1。
+
 ## V9.6.0 Release · 2026-11-15
 
 - 修复内置工具「浏览网页 / 搜索网页」只能访问 HTTPS、无法访问 HTTP 的问题，现在两种协议都能正常抓取。
