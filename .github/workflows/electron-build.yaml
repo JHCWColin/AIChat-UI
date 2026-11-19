@@ -203,6 +203,17 @@ jobs:
           NEW_NAME="AIChatUI-${APP_VERSION}-android.apk"
           mv "$APK_FILE" "$NEW_NAME"
 
+      # 断言产物确实已签名，避免签名参数失效时静默发布未签名包。
+      - name: Verify APK signature
+        run: |
+          APK="android/app/build/outputs/apk/release/AIChatUI-${APP_VERSION}-android.apk"
+          APKSIGNER=$(ls -1 "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found under $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          "$APKSIGNER" verify --print-certs "$APK"
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
