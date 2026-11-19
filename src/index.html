@@ -3992,20 +3992,18 @@
                                     class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
                                     <input type="radio" name="request-endpoint" value="/gemini"
                                         class="mt-1 accent-emerald-500">
-                                    <span><strong class="block text-sm text-gray-200">Gemini 原生（generateContent）</strong><small
+                                    <span><strong class="block text-sm text-gray-200">/v1beta/models/{model}:generateContent（Gemini原生）</strong><small
                                             class="block mt-1 text-xs text-gray-500">Google Gemini 官方
-                                            <code>models/{model}:generateContent</code> 协议。Base URL 填
-                                            <code>https://generativelanguage.googleapis.com/v1beta</code>，密钥以
+                                            <code>models/{model}:generateContent</code> 协议。密钥以
                                             x-goog-api-key 发送。</small></span>
                                 </label>
                                 <label
                                     class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
                                     <input type="radio" name="request-endpoint" value="/ollama"
                                         class="mt-1 accent-emerald-500">
-                                    <span><strong class="block text-sm text-gray-200">Ollama 原生（/api/chat）</strong><small
+                                    <span><strong class="block text-sm text-gray-200">/api/chat （Ollama原生）</strong><small
                                             class="block mt-1 text-xs text-gray-500">本地或远程 Ollama 的
-                                            <code>/api/chat</code> 协议，支持流式输出、图片输入与 thinking 字段。Base URL 填
-                                            <code>http://127.0.0.1:11434</code>，API Key 可留空。</small></span>
+                                            支持流式输出、图片输入与 thinking 字段，API Key 可留空。</small></span>
                                 </label>
                             </div>
                             <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。前三种端点返回 501 时会自动依次尝试其余端点，Gemini 原生与 Ollama 原生不参与自动转接。</p>
