@@ -103,7 +103,126 @@
             .join('');
     }
 
+    // ---- Gemini 原生（generateContent） ----
+    function toGeminiParts(content) {
+        const parts = [];
+        const pushText = text => {
+            const value = String(text == null ? '' : text);
+            if (value.trim()) parts.push({ text: value });
+        };
+        if (typeof content === 'string') { pushText(content); return parts; }
+        if (!Array.isArray(content)) { pushText(content); return parts; }
+        for (const part of content) {
+            if (!part || typeof part !== 'object') continue;
+            if (part.type === 'image_url' || part.type === 'input_image') {
+                const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+                const value = String(url || '').trim();
+                const dataUrl = value.match(/^data:([^;,]+);base64,(.+)$/s);
+                if (dataUrl) parts.push({ inline_data: { mime_type: dataUrl[1], data: dataUrl[2] } });
+                else if (value) parts.push({ file_data: { file_uri: value } });
+                continue;
+            }
+            if (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text') pushText(part.text ?? '');
+        }
+        return parts;
+    }
+
+    function buildGeminiPayload(basePayload) {
+        const messages = Array.isArray(basePayload?.messages) ? basePayload.messages : [];
+        const contents = [];
+        const systemTexts = [];
+        for (const message of messages) {
+            const role = String(message?.role || 'user');
+            if (role === 'system' || role === 'developer') {
+                const text = toGeminiParts(message.content).map(part => part.text || '').filter(Boolean).join('\n');
+                if (text.trim()) systemTexts.push(text);
+                continue;
+            }
+            const parts = toGeminiParts(message.content);
+            if (!parts.length) continue;
+            const geminiRole = role === 'assistant' || role === 'model' ? 'model' : 'user';
+            const previous = contents[contents.length - 1];
+            if (previous && previous.role === geminiRole) previous.parts.push(...parts);
+            else contents.push({ role: geminiRole, parts });
+        }
+        const generationConfig = {};
+        const maxTokens = Number(basePayload?.max_tokens);
+        if (Number.isFinite(maxTokens) && maxTokens > 0) generationConfig.maxOutputTokens = Math.round(maxTokens);
+        const temperature = Number(basePayload?.temperature);
+        if (Number.isFinite(temperature)) generationConfig.temperature = temperature;
+        const topP = Number(basePayload?.top_p);
+        if (Number.isFinite(topP)) generationConfig.topP = topP;
+        const payload = { contents };
+        if (systemTexts.length) payload.systemInstruction = { parts: [{ text: systemTexts.join('\n\n') }] };
+        if (Object.keys(generationConfig).length) payload.generationConfig = generationConfig;
+        return payload;
+    }
+
+    function geminiParts(payload) {
+        const candidate = Array.isArray(payload?.candidates) ? payload.candidates[0] : null;
+        return Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    }
+
+    function extractGeminiUpdate(payload) {
+        let delta = '';
+        for (const part of geminiParts(payload)) {
+            if (typeof part?.text === 'string' && part.thought !== true) delta += part.text;
+        }
+        return { delta };
+    }
+
+    function extractGeminiOutput(payload) {
+        return geminiParts(payload)
+            .filter(part => typeof part?.text === 'string' && part.thought !== true)
+            .map(part => part.text).join('');
+    }
+
+    // ---- Ollama 原生（/api/chat） ----
+    function buildOllamaPayload(basePayload) {
+        const messages = (Array.isArray(basePayload?.messages) ? basePayload.messages : []).map(message => {
+            const role = String(message?.role || 'user');
+            const entry = { role: role === 'developer' ? 'system' : role, content: '' };
+            const images = [];
+            if (typeof message?.content === 'string') {
+                entry.content = message.content;
+            } else if (Array.isArray(message?.content)) {
+                const texts = [];
+                for (const part of message.content) {
+                    if (!part || typeof part !== 'object') continue;
+                    if (part.type === 'image_url' || part.type === 'input_image') {
+                        const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+                        const dataUrl = String(url || '').trim().match(/^data:([^;,]+);base64,(.+)$/s);
+                        if (dataUrl) images.push(dataUrl[2]);
+                    } else if (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text') {
+                        const text = String(part.text ?? '');
+                        if (text) texts.push(text);
+                    }
+                }
+                entry.content = texts.join('\n');
+            }
+            if (images.length) entry.images = images;
+            return entry;
+        }).filter(message => String(message.content || '').trim() || message.images);
+        const payload = { model: String(basePayload?.model || ''), messages, stream: true };
+        const options = {};
+        const temperature = Number(basePayload?.temperature);
+        if (Number.isFinite(temperature)) options.temperature = temperature;
+        const topP = Number(basePayload?.top_p);
+        if (Number.isFinite(topP)) options.top_p = topP;
+        const maxTokens = Number(basePayload?.max_tokens);
+        if (Number.isFinite(maxTokens) && maxTokens > 0) options.num_predict = Math.round(maxTokens);
+        if (Object.keys(options).length) payload.options = options;
+        return payload;
+    }
+
+    function extractOllamaUpdate(payload) {
+        const content = payload?.message?.content;
+        return { delta: typeof content === 'string' ? content : '' };
+    }
+
     function buildPayload(basePayload, endpoint) {
+        if (endpoint === '/gemini') return buildGeminiPayload(basePayload);
+        if (endpoint === '/ollama') return buildOllamaPayload(basePayload);
         if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayload(basePayload);
         if (endpoint !== '/responses') return basePayload;
         const messages = Array.isArray(basePayload?.messages) ? basePayload.messages : [];
@@ -135,6 +254,8 @@
 
     function extractUpdate(payload, endpoint) {
         if (!payload || typeof payload !== 'object') return {};
+        if (endpoint === '/gemini') return extractGeminiUpdate(payload);
+        if (endpoint === '/ollama') return extractOllamaUpdate(payload);
         if (endpoint === '/v1/messages' || endpoint === '/messages') {
             const type = String(payload.type || '');
             const delta = payload.delta && typeof payload.delta === 'object' ? payload.delta : {};
@@ -189,7 +310,8 @@
     }
 
     async function streamText(options) {
-        const SUPPORTED_ENDPOINTS = ['/responses', '/chat/completions', '/v1/messages'];
+        const SUPPORTED_ENDPOINTS = ['/responses', '/chat/completions', '/v1/messages', '/gemini', '/ollama'];
+        const nativeEndpoint = endpoint => endpoint === '/gemini' || endpoint === '/ollama';
         const preferredEndpoint = SUPPORTED_ENDPOINTS.includes(options.endpoint) ? options.endpoint : '/responses';
         const send = endpoint => {
             const headers = {
@@ -197,7 +319,13 @@
                 Authorization: `Bearer ${options.apiKey || ''}`
             };
             if (endpoint === '/v1/messages') headers['anthropic-version'] = '2023-06-01';
-            return fetch(`${String(options.baseUrl || '').replace(/\/$/, '')}${endpoint}`, {
+            if (endpoint === '/gemini' && options.apiKey) headers['x-goog-api-key'] = options.apiKey;
+            if (endpoint === '/ollama' && !options.apiKey) delete headers.Authorization;
+            const baseUrl = String(options.baseUrl || '').replace(/\/+$/, '');
+            const requestUrl = endpoint === '/gemini'
+                ? `${baseUrl}/models/${encodeURIComponent(String(options.payload?.model || '').replace(/^models\//, ''))}:streamGenerateContent?alt=sse`
+                : endpoint === '/ollama' ? `${baseUrl}/api/chat` : `${baseUrl}${endpoint}`;
+            return fetch(requestUrl, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(buildPayload(options.payload, endpoint)),
@@ -207,7 +335,7 @@
 
         let endpoint = preferredEndpoint;
         let response = await send(endpoint);
-        if (response.status === 501) {
+        if (response.status === 501 && !nativeEndpoint(preferredEndpoint)) {
             // A 501 means the relay does not implement that path at all, so walk the
             // remaining protocols in turn before giving up.
             await response.text().catch(() => '');
@@ -229,7 +357,9 @@
             const payload = await response.json();
             const text = endpoint === '/chat/completions'
                 ? extractText(payload?.choices?.[0]?.message?.content)
-                : (endpoint === '/v1/messages' ? extractMessagesOutput(payload) : extractResponsesOutput(payload));
+                : endpoint === '/gemini' ? extractGeminiOutput(payload)
+                    : endpoint === '/ollama' ? extractText(payload?.message?.content)
+                        : (endpoint === '/v1/messages' ? extractMessagesOutput(payload) : extractResponsesOutput(payload));
             if (typeof options.onText === 'function') options.onText(text);
             return { text, endpoint };
         }
@@ -250,6 +380,13 @@
                 if (typeof options.onText === 'function') options.onText(fullText);
             }
         };
+        const ndjsonStream = endpoint === '/ollama';
+        const consumeLine = line => {
+            const text = String(line || '').trim();
+            if (!text || text === '[DONE]') return;
+            sawEvent = true;
+            applyPayload(JSON.parse(text));
+        };
         const consumeEvent = block => {
             const event = parseEvent(block);
             if (!event.data || event.data === '[DONE]') return;
@@ -263,13 +400,16 @@
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
-            const blocks = buffer.split(/\r?\n\r?\n/);
+            const blocks = ndjsonStream ? buffer.split(/\r?\n/) : buffer.split(/\r?\n\r?\n/);
             buffer = blocks.pop() || '';
-            blocks.forEach(consumeEvent);
+            if (ndjsonStream) blocks.forEach(consumeLine);
+            else blocks.forEach(consumeEvent);
         }
         buffer += decoder.decode();
         if (buffer.trim()) {
-            if (/^(?:event:|data:)/m.test(buffer)) consumeEvent(buffer);
+            if (ndjsonStream) {
+                try { consumeLine(buffer); } catch (error) { if (!(error instanceof SyntaxError)) throw error; }
+            } else if (/^(?:event:|data:)/m.test(buffer)) consumeEvent(buffer);
             else if (!sawEvent) {
                 try {
                     applyPayload(JSON.parse(buffer));

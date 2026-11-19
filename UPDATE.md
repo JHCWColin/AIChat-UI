@@ -1,5 +1,30 @@
 # AIUI 更新日志
 
+## V9.6.2 Release · 2026-11-19
+
+**默认模型全面刷新，并新增两种原生 API 协议。**
+
+**模型列表更新到各厂商最新**
+
+- OpenAI：新增 GPT-6.2 Astra 与 GPT-6.2 Sol（2026-11-17 发布），默认模型改为 `gpt-6.2-sol`。
+- Anthropic：新增 Claude Fable 5.2 与 Claude Mythos 5.2（2026-11-09 发布）。
+- Google：新增 Gemini 4 Neon（2026-11-19）与 Gemini 4 Hydrogen（2026-11-12），与既有的 Gemini 4 Argon 并列。
+- xAI：新增 Grok 4.7。
+- DeepSeek：命名收敛为 `deepseek-v4-pro` 与 `deepseek-flash` 两条线。
+- 阿里通义：新增 Qwen4-Max 与 Qwen4-Max-Preview（2026-11-16 发布，2.4T MoE、1M 上下文）。
+- 月之暗面：新增 Kimi K3.1 Pro。
+- 腾讯混元：新增 Hy4 与 Hy4 flash（2026-11-16 发布，1M 上下文）。
+- 字节豆包：新增豆包 2.1 Pro 与 2.1 Lite。
+- 生图模型：新增 GPT-Image-2.6 Sunburst / Flare、Nano Banana 2 与 Nano Banana 2 Lite、Seedream 5.5、MiniMax H3-Image。
+- 上下文容量规则同步：GPT-6 系列 400K，Qwen4 / Kimi K3 / Hy4 系列 1M，Grok 4.7 为 500K，其余按原有厂商默认值。
+
+**偏好设置新增两种请求端点**
+
+- **Gemini 原生（generateContent）**：直接对接 Google 官方 `models/{model}:generateContent` 与 `streamGenerateContent`，Base URL 填 `https://generativelanguage.googleapis.com/v1beta`；密钥以 `x-goog-api-key` 发送，同时兼容中转站的 Bearer 鉴权。支持 systemInstruction、图片 inline_data、thinkingConfig 与 SSE 流式解析，思考内容按 `thought` 标记分离显示。
+- **Ollama 原生（/api/chat）**：对接本地或远程 Ollama，Base URL 填 `http://127.0.0.1:11434`，API Key 可留空。支持 NDJSON 逐行流式、`images` 图片输入、`options`（temperature / top_p / num_predict）与 `thinking` 字段。
+- 两种原生协议不参与 501 自动转接，避免被错误地转成 OpenAI 格式重试；语音聊天与桌面协作窗口同步支持。
+- 应用、引导页与构建版本统一升级为 V9.6.2。
+
 ## V9.6.1 Release · 2026-11-18
 
 **本次为纯目录结构整理，不包含任何功能改动，界面与行为与 V9.6.0 完全一致。**

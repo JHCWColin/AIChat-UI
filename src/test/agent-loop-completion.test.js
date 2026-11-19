@@ -13,7 +13,9 @@ const adapterNames = ["extractResponsesTextContent", "extractResponsesOutputText
     "extractChatCompletionUpdate", "extractStreamingUpdate", "extractMessagesStreamUpdate", "extractMessagesOutputText",
     "extractMessagesReasoningText", "mergeStreamingText", "parseSSEEventBlock", "getStreamingErrorMessage", "extractNonStreamingResponseText",
     "buildRequestPayloadForEndpoint", "buildResponsesInputFromMessages", "buildMessagesPayloadFromBase",
-    "buildMessagesContentBlocks", "toAnthropicImageBlock", "cacheControlEnabled"];
+    "buildMessagesContentBlocks", "toAnthropicImageBlock", "cacheControlEnabled",
+    "isGeminiEndpoint", "isOllamaEndpoint", "toGeminiParts", "buildGeminiPayloadFromBase", "buildOllamaPayloadFromBase",
+    "extractGeminiStreamUpdate", "extractGeminiOutputText", "extractOllamaStreamUpdate", "extractOllamaOutputText"];
 const adapterSource = adapterNames.map(name => {
     const match = html.match(new RegExp(`^        function ${name}\\b[\\s\\S]*?\\n        \\}`, "m"));
     if (!match) throw new Error(`Cannot extract shipped adapter ${name}`);

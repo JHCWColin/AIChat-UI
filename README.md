@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V9.6.1_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V9.6.2_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -38,6 +38,13 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V9.6.2 Release
+
+- 默认模型列表刷新到各厂商最新：GPT-6.2 Astra / Sol、Claude Fable 5.2 / Mythos 5.2、Gemini 4 Neon / Hydrogen、Grok 4.7、Qwen4-Max、Kimi K3.1 Pro、Hy4 / Hy4 flash、豆包 2.1；默认模型改为 `gpt-6.2-sol`。
+- 生图模型更新：GPT-Image-2.6 Sunburst / Flare、Nano Banana 2 系列、Seedream 5.5、MiniMax H3-Image。
+- 偏好设置新增 **Gemini 原生（generateContent）** 与 **Ollama 原生（/api/chat）** 两种请求端点，支持各自的流式格式、图片输入与思考内容解析；语音与桌面协作窗口同步支持。
+- 上下文容量规则同步新模型：GPT-6 400K，Qwen4 / Kimi K3 / Hy4 1M，Grok 4.7 500K。
 
 ### V9.6.1 Release
 
@@ -211,8 +218,10 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 
 - 支持自定义 Base URL、API Key、模型列表和默认模型。
 - 模型配置保存在本地，适合长期个人环境使用。
-- 主界面、语音聊天和桌面协作均支持 `/responses` 与 `/chat/completions`。
-- `/responses` 返回 501 时会自动使用 `/chat/completions` 重试。
+- 主界面、语音聊天和桌面协作均支持 `/responses`、`/chat/completions`、`/v1/messages`、Gemini 原生与 Ollama 原生五种请求端点。
+- `/responses` 返回 501 时会自动使用 `/chat/completions` 重试；Gemini 与 Ollama 原生协议不参与自动转接。
+- Gemini 原生：Base URL 填 `https://generativelanguage.googleapis.com/v1beta`，密钥以 `x-goog-api-key` 发送。
+- Ollama 原生：Base URL 填 `http://127.0.0.1:11434`，API Key 可留空，支持流式与图片输入。
 
 ### 7. 图像与附件工作流
 
@@ -249,8 +258,8 @@ Android APK 使用仓库内的 `android-release.p12` 签名（alias `aiui`，口
 
 ## 版本信息
 
-- 当前版本：`V9.6.1 Release`
-- 当前构建标识：`build20261118`
+- 当前版本：`V9.6.2 Release`
+- 当前构建标识：`build20261119`
 
 ---
 

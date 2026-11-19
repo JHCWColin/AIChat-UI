@@ -29,7 +29,16 @@ function loadInlineAdapter() {
         "extractStreamingUpdate",
         "getStreamingErrorMessage",
         "extractNonStreamingResponseText",
-        "buildRequestPayloadForEndpoint"
+        "buildRequestPayloadForEndpoint",
+        "isGeminiEndpoint",
+        "isOllamaEndpoint",
+        "toGeminiParts",
+        "buildGeminiPayloadFromBase",
+        "buildOllamaPayloadFromBase",
+        "extractGeminiStreamUpdate",
+        "extractGeminiOutputText",
+        "extractOllamaStreamUpdate",
+        "extractOllamaOutputText"
     ];
     const context = {
         localStorage: { getItem: () => null },

@@ -280,7 +280,7 @@
 
 | 想改什么 | 位置 |
 |---|---|
-| AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`（约 4882–5300） |
+| AI 请求方式 / 端点 / 回退 | `index.html` `fetchEndpointWithFallback` + `buildRequestPayloadForEndpoint`；五种端点：`/responses`、`/chat/completions`、`/v1/messages`、`/gemini`（generateContent 原生）、`/ollama`（/api/chat 原生）。原生协议走 `buildGeminiPayloadFromBase` / `buildOllamaPayloadFromBase` 与对应 extract 函数，且不参与 501 转接 |
 | Claude `/v1/messages` 协议转换 | `index.html` `buildMessagesPayloadFromBase` / `extractMessagesStreamUpdate`；语音窗口对应 `voicechat-api.js` 的 `buildMessagesPayload` / `extractUpdate` |
 | API 配置档案（多组 Key 切换） | `index.html` `readApiProfiles` / `switchApiProfile` / `createApiProfile` / `saveApiProfileEdits` / `cancelApiProfileEdits`（约 7433 起）+ HTML `#api-profile-select`；`npm run test:api-profiles` 验证独立偏好窗口中的配置切换与保存 |
 | 上下文 token 统计与悬停分解 | `context-estimator.js` / `src/main/tokenizer-entry.js` / `scripts/build-tokenizer.cjs`；`index.html` `updateContextMeter` / `getContextWindowForModel` + `#context-meter` |

@@ -44,7 +44,9 @@ function fixture(response) {
         "getStreamingErrorMessage", "extractNonStreamingResponseText", "buildSingleApiMessage",
         "buildAPIMessagesWithTemp", "buildAPIMessagesWithContext", "buildResponsesInputFromMessages",
         "buildMessagesPayloadFromBase", "buildMessagesContentBlocks", "toAnthropicImageBlock", "cacheControlEnabled",
-        "buildRequestPayloadForEndpoint", "requestAI"].map(extract).join("\n"), context);
+        "buildRequestPayloadForEndpoint", "requestAI",
+        "isGeminiEndpoint", "isOllamaEndpoint", "toGeminiParts", "buildGeminiPayloadFromBase", "buildOllamaPayloadFromBase",
+        "extractGeminiStreamUpdate", "extractGeminiOutputText", "extractOllamaStreamUpdate", "extractOllamaOutputText"].map(extract).join("\n"), context);
     return { context, chat, requests };
 }
 

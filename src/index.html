@@ -3437,19 +3437,21 @@
                         <div class="input-selector-row">
                             <div class="model-selector-container flex items-center gap-2">
                                 <select id="model-select" onchange="onModelSelectionChange()">
+                                    <option value="gpt-6.2-astra">gpt-6.2-astra</option>
+                                    <option value="gpt-6.2-sol" selected>gpt-6.2-sol（默认）</option>
                                     <option value="gpt-6.1-sol">gpt-6.1-sol</option>
                                     <option value="gpt-6.1-terra">gpt-6.1-terra</option>
                                     <option value="gpt-6-luna">gpt-6-luna</option>
-                                    <option value="gemini-4-argon">gemini-4-argon</option>
-                                    <option value="deepseek-flash">deepseek-flash</option>
                                     <option value="gpt-6-astra">gpt-6-astra</option>
                                     <option value="gpt-5.6-sol">gpt-5.6-sol</option>
-                                    <option value="gpt-5.6-terra" selected>gpt-5.6-terra（默认）</option>
+                                    <option value="gpt-5.6-terra">gpt-5.6-terra</option>
                                     <option value="gpt-5.6-luna">gpt-5.6-luna（建议直接去官网使用）</option>
 
                                     <option value="gpt-5.5-2026-04-24">gpt-5.5-2026-04-24</option>
                                     <option value="gpt-5.5">gpt-5.5</option>
 
+                                    <option value="claude-fable-5-2">claude-fable-5-2</option>
+                                    <option value="claude-mythos-5-2">claude-mythos-5-2</option>
                                     <option value="claude-fable-5-1">claude-fable-5-1</option>
                                     <option value="claude-opus-5">claude-opus-5</option>
                                     <option value="claude-sonnet-5">claude-sonnet-5</option>
@@ -3463,28 +3465,42 @@
                                     <option value="claude-opus-4-8-max">claude-opus-4-8-max</option>
                                     <option value="claude-opus-4-8-xhigh">claude-opus-4-8-xhigh</option>
 
+                                    <option value="gemini-4-neon">gemini-4-neon</option>
+                                    <option value="gemini-4-hydrogen">gemini-4-hydrogen</option>
+                                    <option value="gemini-4-argon">gemini-4-argon</option>
                                     <option value="gemini-3.8-flash">gemini-3.8-flash</option>
                                     <option value="gemini-3.8-flash-search">gemini-3.8-flash-search</option>
                                     <option value="gemini-3.7-flash-search">gemini-3.7-flash-search</option>
                                     <option value="gemini-3.6-flash">gemini-3.6-flash</option>
 
+                                    <option value="grok-4.7">grok-4.7</option>
                                     <option value="grok-4.6">grok-4.6</option>
                                     <option value="grok-4.5">grok-4.5</option>
 
+                                    <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                                    <option value="deepseek-flash">deepseek-flash</option>
                                     <option value="deepseek-v4.1-flash">deepseek-v4.1-flash</option>
-                                    <option value="deepseek-v4-pro-0813">deepseek-v4-pro-0813</option>
 
-                                    <option value="qwen3.8-flash">qwen3.8-flash</option>
+                                    <option value="qwen4-max">qwen4-max</option>
+                                    <option value="qwen4-max-preview">qwen4-max-preview</option>
                                     <option value="qwen3.8-max">qwen3.8-max</option>
-                                    <option value="qwen3.7-flash">qwen3.7-flash</option>
-                                    <option value="qwen3.7-plus">qwen3.7-plus</option>
+                                    <option value="qwen3.8-flash">qwen3.8-flash</option>
                                     <option value="qwen3.7-max">qwen3.7-max</option>
+                                    <option value="qwen3.7-plus">qwen3.7-plus</option>
+                                    <option value="qwen3.7-flash">qwen3.7-flash</option>
 
-                                    <option value="glm-5.3-flash">glm-5.3-flash</option>
                                     <option value="glm-5.3">glm-5.3</option>
+                                    <option value="glm-5.3-flash">glm-5.3-flash</option>
                                     <option value="glm-5.2">glm-5.2</option>
 
+                                    <option value="kimi-k3.1-pro">kimi-k3.1-pro</option>
                                     <option value="kimi-k3">kimi-k3</option>
+
+                                    <option value="hy4">hy4</option>
+                                    <option value="hy4-flash">hy4-flash</option>
+
+                                    <option value="doubao-2.1-pro">doubao-2.1-pro</option>
+                                    <option value="doubao-2.1-lite">doubao-2.1-lite</option>
 
                                     <option value="qwen-vl-ocr">qwen-vl-ocr</option>
                                     <option value="pic-ocr">pic-ocr</option>
@@ -3972,8 +3988,27 @@
                                             class="block mt-1 text-xs text-gray-500">Anthropic Messages API
                                             格式，适用于 Claude 官方与 Claude 原生中转。使用独立密钥时请选择此端点。</small></span>
                                 </label>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/gemini"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">Gemini 原生（generateContent）</strong><small
+                                            class="block mt-1 text-xs text-gray-500">Google Gemini 官方
+                                            <code>models/{model}:generateContent</code> 协议。Base URL 填
+                                            <code>https://generativelanguage.googleapis.com/v1beta</code>，密钥以
+                                            x-goog-api-key 发送。</small></span>
+                                </label>
+                                <label
+                                    class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
+                                    <input type="radio" name="request-endpoint" value="/ollama"
+                                        class="mt-1 accent-emerald-500">
+                                    <span><strong class="block text-sm text-gray-200">Ollama 原生（/api/chat）</strong><small
+                                            class="block mt-1 text-xs text-gray-500">本地或远程 Ollama 的
+                                            <code>/api/chat</code> 协议，支持流式输出、图片输入与 thinking 字段。Base URL 填
+                                            <code>http://127.0.0.1:11434</code>，API Key 可留空。</small></span>
+                                </label>
                             </div>
-                            <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。任一端点返回 501 时会自动依次尝试其余端点。</p>
+                            <p class="text-[11px] text-gray-500 mt-2">选择要使用的兼容接口路径；修改后会在后续请求中生效。前三种端点返回 501 时会自动依次尝试其余端点，Gemini 原生与 Ollama 原生不参与自动转接。</p>
                         </div>
                         <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                             <div class="flex items-center justify-between gap-3 mb-2">
@@ -4471,7 +4506,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V9.6.1 Release</span>
+                            <span id="app-version">V9.6.2 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -5607,7 +5642,19 @@
             const stored = String(localStorage.getItem('request_endpoint') || '').trim();
             if (stored === '/chat/completions') return '/chat/completions';
             if (stored === '/v1/messages' || stored === '/messages') return '/v1/messages';
+            if (stored === '/gemini') return '/gemini';
+            if (stored === '/ollama') return '/ollama';
             return '/responses';
+        }
+
+        // Gemini native (generateContent) and Ollama native (/api/chat) speak
+        // their own wire formats, so they are excluded from OpenAI-style
+        // endpoint fallback and from request-shape conversions.
+        function isGeminiEndpoint(endpoint) {
+            return endpoint === '/gemini';
+        }
+        function isOllamaEndpoint(endpoint) {
+            return endpoint === '/ollama';
         }
 
         // Anthropic's Messages API needs a version header; relays mirror the first-party
@@ -5840,6 +5887,158 @@
             });
         }
 
+        // ==================== Gemini 原生协议（generateContent） ====================
+        // Google 的 wire format 与 OpenAI/Anthropic 都不同：消息放在 contents，
+        // system 放在 systemInstruction，参数放在 generationConfig，流式走 SSE。
+        function toGeminiParts(content) {
+            const parts = [];
+            const pushText = text => {
+                const value = String(text == null ? '' : text);
+                if (value.trim()) parts.push({ text: value });
+            };
+            if (typeof content === 'string') { pushText(content); return parts; }
+            if (!Array.isArray(content)) { pushText(content); return parts; }
+            for (const part of content) {
+                if (!part || typeof part !== 'object') continue;
+                if (part.type === 'image_url' || part.type === 'input_image') {
+                    const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+                    const value = String(url || '').trim();
+                    const dataUrl = value.match(/^data:([^;,]+);base64,(.+)$/s);
+                    if (dataUrl) parts.push({ inline_data: { mime_type: dataUrl[1], data: dataUrl[2] } });
+                    else if (value) parts.push({ file_data: { file_uri: value } });
+                    continue;
+                }
+                if (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text') {
+                    pushText(part.text ?? '');
+                }
+            }
+            return parts;
+        }
+
+        function buildGeminiPayloadFromBase(basePayload) {
+            const messages = Array.isArray(basePayload?.messages) ? basePayload.messages : [];
+            const contents = [];
+            const systemTexts = [];
+            for (const message of messages) {
+                const role = String(message?.role || 'user');
+                if (role === 'system' || role === 'developer') {
+                    const text = toGeminiParts(message.content).map(part => part.text || '').filter(Boolean).join('\n');
+                    if (text.trim()) systemTexts.push(text);
+                    continue;
+                }
+                const parts = toGeminiParts(message.content);
+                if (!parts.length) continue;
+                const geminiRole = role === 'assistant' || role === 'model' ? 'model' : 'user';
+                // Gemini 要求 user/model 交替，连续同角色需要合并成一个 content。
+                const previous = contents[contents.length - 1];
+                if (previous && previous.role === geminiRole) previous.parts.push(...parts);
+                else contents.push({ role: geminiRole, parts });
+            }
+            const generationConfig = {};
+            const maxTokens = Number(basePayload?.max_tokens);
+            if (Number.isFinite(maxTokens) && maxTokens > 0) generationConfig.maxOutputTokens = Math.round(maxTokens);
+            const temperature = Number(basePayload?.temperature);
+            if (Number.isFinite(temperature)) generationConfig.temperature = temperature;
+            const topP = Number(basePayload?.top_p);
+            if (Number.isFinite(topP)) generationConfig.topP = topP;
+            const payload = { contents };
+            if (systemTexts.length) payload.systemInstruction = { parts: [{ text: systemTexts.join('\n\n') }] };
+            if (Object.keys(generationConfig).length) payload.generationConfig = generationConfig;
+            return payload;
+        }
+
+        function extractGeminiCandidateParts(payload) {
+            const candidate = Array.isArray(payload?.candidates) ? payload.candidates[0] : null;
+            return Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+        }
+
+        function extractGeminiStreamUpdate(payload) {
+            const update = {};
+            for (const part of extractGeminiCandidateParts(payload)) {
+                if (typeof part?.text !== 'string' || !part.text) continue;
+                // Gemini 3 的思考内容以 thought: true 的 part 返回。
+                if (part.thought === true) update.reasoningDelta = (update.reasoningDelta || '') + part.text;
+                else update.contentDelta = (update.contentDelta || '') + part.text;
+            }
+            return update;
+        }
+
+        function extractGeminiOutputText(payload) {
+            return extractGeminiCandidateParts(payload)
+                .filter(part => typeof part?.text === 'string' && part.thought !== true)
+                .map(part => part.text).join('');
+        }
+
+        function extractGeminiReasoningText(payload) {
+            return extractGeminiCandidateParts(payload)
+                .filter(part => typeof part?.text === 'string' && part.thought === true)
+                .map(part => part.text).join('');
+        }
+
+        function buildGeminiRequestUrl(model, stream) {
+            const base = String(getBaseURL() || '').replace(/\/+$/, '');
+            const name = String(model || '').trim().replace(/^models\//, '');
+            const action = stream ? 'streamGenerateContent' : 'generateContent';
+            return `${base}/models/${encodeURIComponent(name)}:${action}${stream ? '?alt=sse' : ''}`;
+        }
+
+        // ==================== Ollama 原生协议（/api/chat） ====================
+        // Ollama 使用 NDJSON 逐行流式返回，参数放在 options，图片放在 message.images。
+        function buildOllamaPayloadFromBase(basePayload) {
+            const messages = (Array.isArray(basePayload?.messages) ? basePayload.messages : []).map(message => {
+                const role = String(message?.role || 'user');
+                const entry = { role: role === 'developer' ? 'system' : role, content: '' };
+                const images = [];
+                if (typeof message?.content === 'string') {
+                    entry.content = message.content;
+                } else if (Array.isArray(message?.content)) {
+                    const texts = [];
+                    for (const part of message.content) {
+                        if (!part || typeof part !== 'object') continue;
+                        if (part.type === 'image_url' || part.type === 'input_image') {
+                            const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+                            const dataUrl = String(url || '').trim().match(/^data:([^;,]+);base64,(.+)$/s);
+                            if (dataUrl) images.push(dataUrl[2]);
+                        } else if (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text') {
+                            const text = String(part.text ?? '');
+                            if (text) texts.push(text);
+                        }
+                    }
+                    entry.content = texts.join('\n');
+                }
+                if (images.length) entry.images = images;
+                return entry;
+            }).filter(message => String(message.content || '').trim() || message.images);
+            const payload = { model: String(basePayload?.model || ''), messages, stream: basePayload?.stream !== false };
+            const options = {};
+            const temperature = Number(basePayload?.temperature);
+            if (Number.isFinite(temperature)) options.temperature = temperature;
+            const topP = Number(basePayload?.top_p);
+            if (Number.isFinite(topP)) options.top_p = topP;
+            const maxTokens = Number(basePayload?.max_tokens);
+            if (Number.isFinite(maxTokens) && maxTokens > 0) options.num_predict = Math.round(maxTokens);
+            if (Object.keys(options).length) payload.options = options;
+            return payload;
+        }
+
+        function extractOllamaStreamUpdate(payload) {
+            const message = payload?.message && typeof payload.message === 'object' ? payload.message : null;
+            if (!message) return {};
+            const update = {};
+            if (typeof message.content === 'string' && message.content) update.contentDelta = message.content;
+            if (typeof message.thinking === 'string' && message.thinking) update.reasoningDelta = message.thinking;
+            return update;
+        }
+
+        function extractOllamaOutputText(payload) {
+            const message = payload?.message && typeof payload.message === 'object' ? payload.message : null;
+            return typeof message?.content === 'string' ? message.content : '';
+        }
+
+        function buildOllamaRequestUrl() {
+            return `${String(getBaseURL() || '').replace(/\/+$/, '')}/api/chat`;
+        }
+
         function buildRequestPayloadForEndpoint(basePayload, endpoint) {
             const {
                 __aiuiStructuredResponsesInput,
@@ -5857,6 +6056,8 @@
                 return clean;
             }).filter(message => message.role !== 'assistant' || (Array.isArray(message.content)
                 ? message.content.length > 0 : Boolean(String(message.content || '').trim())));
+            if (isGeminiEndpoint(endpoint)) return buildGeminiPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
+            if (isOllamaEndpoint(endpoint)) return buildOllamaPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
             if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
             if (endpoint !== '/responses') return { ...publicBasePayload, messages: cleanMessages };
             const messages = Array.isArray(publicBasePayload?.messages) ? publicBasePayload.messages : [];
@@ -5935,6 +6136,8 @@
 
         function extractStreamingUpdate(payload, endpoint) {
             if (!payload || typeof payload !== 'object') return {};
+            if (isGeminiEndpoint(endpoint)) return extractGeminiStreamUpdate(payload);
+            if (isOllamaEndpoint(endpoint)) return extractOllamaStreamUpdate(payload);
             if (endpoint === '/v1/messages' || endpoint === '/messages') return extractMessagesStreamUpdate(payload);
             if (endpoint === '/chat/completions' || Array.isArray(payload.choices)) {
                 return extractChatCompletionUpdate(payload);
@@ -6010,6 +6213,8 @@
         }
 
         function extractNonStreamingResponseText(payload, endpoint) {
+            if (isGeminiEndpoint(endpoint)) return extractGeminiOutputText(payload);
+            if (isOllamaEndpoint(endpoint)) return extractOllamaOutputText(payload);
             if (endpoint === '/v1/messages' || endpoint === '/messages') return extractMessagesOutputText(payload);
             if (endpoint === '/chat/completions' || Array.isArray(payload?.choices)) {
                 const update = extractChatCompletionUpdate(payload);
@@ -6035,7 +6240,17 @@
                     headers['x-api-key'] = getAPIKey();
                     if (!requestBody.max_tokens) requestBody.max_tokens = 8192;
                 }
-                const response = await fetch(`${getBaseURL()}${endpoint}`, {
+                // Gemini 官方以 x-goog-api-key 鉴权；中转站多数同时接受 Bearer，两者都带上。
+                if (isGeminiEndpoint(endpoint) && getAPIKey()) headers['x-goog-api-key'] = getAPIKey();
+                // 本地 Ollama 不需要鉴权；未填密钥时去掉空的 Bearer 头。
+                if (isOllamaEndpoint(endpoint) && !getAPIKey()) delete headers.Authorization;
+                const streaming = basePayload.stream !== false;
+                const requestUrl = isGeminiEndpoint(endpoint)
+                    ? buildGeminiRequestUrl(basePayload.model, streaming)
+                    : isOllamaEndpoint(endpoint)
+                        ? buildOllamaRequestUrl()
+                        : `${getBaseURL()}${endpoint}`;
+                const response = await fetch(requestUrl, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(requestBody),
@@ -6045,7 +6260,8 @@
             };
 
             let result = await send(preferredEndpoint);
-            if (result.response.status === 501) {
+            // 原生协议没有对应的等价端点，不参与 501 自动转接。
+            if (result.response.status === 501 && !isGeminiEndpoint(preferredEndpoint) && !isOllamaEndpoint(preferredEndpoint)) {
                 // Fall back through both remaining protocols so a relay that only
                 // implements one of them still works.
                 const fallbackOrder = ['/responses', '/chat/completions', '/v1/messages']
@@ -6327,20 +6543,28 @@
 
         const IMAGE_MODELS = [
             {
-                value: 'gpt-image-2.5-sunburst',
-                text: 'gpt-image-2.5-sunburst (最强)'
+                value: 'gpt-image-2.6-sunburst',
+                text: 'gpt-image-2.6-sunburst (最强)'
             },
             {
-                value: 'gpt-image-2.5-flare',
-                text: 'gpt-image-2.5-flare (快速)'
+                value: 'gpt-image-2.6-flare',
+                text: 'gpt-image-2.6-flare (快速)'
             },
             {
-                value: 'gemini-3.1-flash-lite-image',
-                text: 'gemini-3.1-flash-lite-image'
+                value: 'nano-banana-2',
+                text: 'nano-banana-2 (Gemini 3.1 Flash Image)'
             },
             {
-                value: 'nano-banana-lite',
-                text: 'nano-banana-lite'
+                value: 'nano-banana-2-lite',
+                text: 'nano-banana-2-lite (最快 / 最低成本)'
+            },
+            {
+                value: 'seedream-5.5',
+                text: 'seedream-5.5 (Seedream 5.5)'
+            },
+            {
+                value: 'minimax-h3-image',
+                text: 'minimax-h3-image (H3 Image)'
             },
             {
                 value: 'gemini-3.1-flash-image-0.5k',
@@ -6353,6 +6577,10 @@
             {
                 value: 'gemini-3.1-flash-image-4k',
                 text: 'gemini-3.1-flash-image-4k'
+            },
+            {
+                value: 'gemini-3.1-flash-lite-image',
+                text: 'gemini-3.1-flash-lite-image'
             }
         ];
         function getImageDetailConfig() {
@@ -8947,7 +9175,7 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.6.1 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.6.2 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[[7, 'Duo Light'], [8, 'Duo Dark'], [9, 'Golden Gate'], [1, '花谱1'], [2, '花谱2'], [3, '洛天依1'], [4, '洛天依2'], [5, '初音未来1'], [6, '初音未来2']].map(([x, name]) => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="assets/backgrounds/${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${name}"><span class="block text-[11px] text-gray-400 mt-1">${name}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
@@ -10593,6 +10821,15 @@
                     }
                     return true;
                 };
+                // Ollama 以 NDJSON 逐行返回，没有 SSE 的 data: 前缀与空行分隔。
+                const processOllamaLine = line => {
+                    const text = String(line || '').trim();
+                    if (!text) return false;
+                    sawSSEEvent = true;
+                    if (text === '[DONE]') return true;
+                    applyStreamPayload(JSON.parse(text));
+                    return true;
+                };
                 if (debugStream) {
                     appendLog('debug', '流式输出接收开始');
                     showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
@@ -10612,11 +10849,13 @@
                     if (traceStream) {
                         appendLog('trace', `原始流内容: ${sseBuffer.replace(/\n/g, '\\n')}`);
                     }
-                    const parts = sseBuffer.split(/\r?\n\r?\n/);
+                    const ndjsonStream = isOllamaEndpoint(endpoint);
+                    const parts = ndjsonStream ? sseBuffer.split(/\r?\n/) : sseBuffer.split(/\r?\n\r?\n/);
                     sseBuffer = parts.pop() || '';
                     for (const part of parts) {
                         try {
-                            processSSEBlock(part);
+                            if (ndjsonStream) processOllamaLine(part);
+                            else processSSEBlock(part);
                         } catch (e) {
                             appendLog('debug', `解析流数据失败: ${e.message}`);
                             throw e;
@@ -10628,9 +10867,11 @@
                     sseBuffer += finalBuffer;
                 }
                 if (sseBuffer.trim()) {
-                    if (/^(?:event:|data:|id:)/m.test(sseBuffer)) {
+                    const tailIsNdjson = isOllamaEndpoint(endpoint);
+                    if (tailIsNdjson || /^(?:event:|data:|id:)/m.test(sseBuffer)) {
                         try {
-                            processSSEBlock(sseBuffer);
+                            if (tailIsNdjson) processOllamaLine(sseBuffer);
+                            else processSSEBlock(sseBuffer);
                         } catch (e) {
                             appendLog('debug', `解析尾部流数据失败: ${e.message}`);
                             throw e;
