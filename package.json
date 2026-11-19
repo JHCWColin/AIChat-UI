@@ -54,6 +54,7 @@
       "!package-lock.json",
       "!src/main/tokenizer-entry.js",
       "!*.keystore",
+      "!*.p12",
       "!*.zip",
       "!*.tar.*",
       "!*.tmp",
