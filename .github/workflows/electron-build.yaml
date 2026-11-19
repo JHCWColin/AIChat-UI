@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'V*'
+  # 手动触发用于验证构建流程：不解析标签、不上传 Release，仅产出构建结果。
+  workflow_dispatch:
 
 jobs:
   # ==================== Electron 桌面端构建 ====================
@@ -24,6 +26,7 @@ jobs:
           node-version: 20
 
       - name: Sync package version with release tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#V}"
@@ -59,6 +62,7 @@ jobs:
           fi
 
       - name: Upload artifacts to Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -93,15 +97,19 @@ jobs:
         with:
           node-version: 20
 
-      - name: Set version from tag
+      - name: Resolve app version
         shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#V}"
-          if [[ "$TAG_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
-            TAG_VERSION="${BASH_REMATCH[1]}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#V}"
+            if [[ "$APP_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
+              APP_VERSION="${BASH_REMATCH[1]}"
+            fi
+          else
+            APP_VERSION=$(node -p "require('./package.json').version")
           fi
-          echo "APP_VERSION=$TAG_VERSION" >> $GITHUB_ENV
-          echo "Version set to $TAG_VERSION"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "App version: $APP_VERSION"
 
       - name: Setup Capacitor (web-to-mobile)
         run: |
@@ -171,62 +179,24 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Locate keystore file
-        id: keystore
-        env:
-          ANDROID_STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      # 签名证书随仓库公开（android-release.p12，alias=aiui，口令 12345678）。
+      # 仅用于分发本应用的正式构建，不含任何第三方敏感信息。
+      - name: Configure release signing
         run: |
-          KEYSTORE=./1.keystore
-          if [ ! -f "$KEYSTORE" ] || [ -z "$ANDROID_STORE_PASS" ] || [ -z "$ANDROID_KEY_PASS" ]; then
-            echo "::warning::Android signing file or secrets are not configured; skipping signed APK publication."
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "keystore-file=$KEYSTORE" >> $GITHUB_OUTPUT
-          echo "available=true" >> "$GITHUB_OUTPUT"
-
-      - name: Extract key alias
-        id: alias
-        if: steps.keystore.outputs.available == 'true'
-        env:
-          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: |
-          ALIAS=$(keytool -list -keystore ./1.keystore \
-                  -storepass "$STORE_PASS" 2>/dev/null | \
-                  grep -E 'PrivateKeyEntry|keyEntry' | head -n 1 | awk -F, '{print $1}')
-          if [ -z "$ALIAS" ]; then
-            ALIAS=$(keytool -list -v -keystore ./1.keystore \
-                    -storepass "$STORE_PASS" 2>/dev/null | \
-                    grep "Alias name:" | head -n 1 | sed 's/Alias name: //')
-          fi
-          if [ -z "$ALIAS" ]; then
-            echo "Error: Could not determine key alias"
-            exit 1
-          fi
-          echo "alias=$ALIAS" >> $GITHUB_OUTPUT
-
-      - name: Copy keystore
-        if: steps.keystore.outputs.available == 'true'
-        run: cp ./1.keystore android/app/1.keystore
+          cp android-release.p12 android/app/release.p12
+          echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/android/app/release.p12" >> "$GITHUB_ENV"
 
       - name: Build Release APK (signed)
-        if: steps.keystore.outputs.available == 'true'
-        env:
-          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ steps.alias.outputs.alias }}
-          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          KEYSTORE_FILE: ${{ github.workspace }}/android/app/1.keystore
         run: |
           cd android
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file="$KEYSTORE_FILE" \
-            -Pandroid.injected.signing.store.password="$STORE_PASS" \
-            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$KEY_PASS"
+            -Pandroid.injected.signing.store.type=PKCS12 \
+            -Pandroid.injected.signing.store.password="12345678" \
+            -Pandroid.injected.signing.key.alias="aiui" \
+            -Pandroid.injected.signing.key.password="12345678"
 
       - name: Rename APK
-        if: steps.keystore.outputs.available == 'true'
         run: |
           cd android/app/build/outputs/apk/release
           APK_FILE=$(ls *.apk | head -n1)
@@ -235,7 +205,7 @@ jobs:
 
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v2
-        if: steps.keystore.outputs.available == 'true'
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: android/app/build/outputs/apk/release/AIChatUI-*.apk
         env:
@@ -253,15 +223,19 @@ jobs:
         with:
           node-version: 20
 
-      - name: Set version from tag
+      - name: Resolve app version
         shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#V}"
-          if [[ "$TAG_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
-            TAG_VERSION="${BASH_REMATCH[1]}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            APP_VERSION="${GITHUB_REF_NAME#V}"
+            if [[ "$APP_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-release$ ]]; then
+              APP_VERSION="${BASH_REMATCH[1]}"
+            fi
+          else
+            APP_VERSION=$(node -p "require('./package.json').version")
           fi
-          echo "APP_VERSION=$TAG_VERSION" >> $GITHUB_ENV
-          echo "Version set to $TAG_VERSION"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "App version: $APP_VERSION"
 
       - name: Setup Capacitor (web-to-mobile) for iOS
         run: |
@@ -375,6 +349,7 @@ jobs:
 
       - name: Upload iOS Simulator zip to Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: AIChatUI-*-ios-simulator.zip
         env:

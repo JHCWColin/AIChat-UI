@@ -27,7 +27,7 @@
 │  ├─ remote-control/                  # 局域网浏览器控制界面（由网关静态托管）
 │  └─ test/                            # 单元测试与 Electron 冒烟测试
 ├─ README.md / INDEX.md / MODEL_SUPPORT.md / UPDATE.md
-└─ 1.keystore / eula.txt / LICENSE
+└─ android-release.p12 / eula.txt / LICENSE
 ```
 
 ### 1.2 关键文件
