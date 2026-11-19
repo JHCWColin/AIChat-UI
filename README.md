@@ -239,6 +239,12 @@ npm run build  //构建
 
 真实模型回归需显式设置环境变量 `AIUI_AGENT_LIVE_TEST=1`，再执行 `npm run test:agent-live`。此测试使用当前 Windows 用户 AIUI 的 API 连接配置和 `deepseek-flash`，会消耗 API 用量；仅在新建的临时工作区执行文件与进程操作，退出后清理临时配置与工作区，保留不含连接凭据的测试报告。
 
+### Android / iOS 构建
+
+推送 `V*` 标签触发 `.github/workflows/electron-build.yaml`，同时产出桌面端与移动端安装包；也可在 Actions 页面手动触发（`workflow_dispatch`），该模式只构建、不发布 Release。
+
+Android APK 使用仓库内的 `android-release.p12` 签名（alias `aiui`，口令 `12345678`，有效期至 2056）。该证书为公开分发用途，不含任何第三方敏感信息；构建结束后由 `apksigner verify` 断言签名有效，再上传 Release。
+
 ---
 
 ## 版本信息
