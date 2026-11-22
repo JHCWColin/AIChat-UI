@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "10.1.0",
+  "version": "10.2.0",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "src/main/main.js",

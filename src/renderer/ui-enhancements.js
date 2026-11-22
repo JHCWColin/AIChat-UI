@@ -482,8 +482,9 @@
                 for (const node of removedNodes) if (node.nodeType === Node.ELEMENT_NODE) sizes.unobserve(node);
                 for (const node of addedNodes) if (node.nodeType === Node.ELEMENT_NODE) sizes.observe(node);
             }
-            // Updating the button also changes the transcript's class.
-            if (records.some(({ target,type }) => target !== transcript || type !== 'attributes')) scheduleUpdate(true);
+            // Transcript scroll state and playback indicators update independently of message content.
+            if (records.some(({ target,type }) => type !== 'attributes' ||
+                (target !== transcript && !target.matches('.message-icon-btn[data-voice-source]')))) scheduleUpdate(true);
         }).observe(transcript,{ childList:true,subtree:true,characterData:true,attributes:true });
         transcript.addEventListener('scroll',() => scheduleUpdate(),{ passive:true });
         button.addEventListener('click',() => {
