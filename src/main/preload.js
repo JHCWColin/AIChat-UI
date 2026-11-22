@@ -18,6 +18,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     openPreferences: () => ipcRenderer.invoke('preferences:open'),
     closePreferences: () => ipcRenderer.invoke('preferences:close'),
     getPreferencesState: () => ipcRenderer.invoke('preferences:state'),
+    ...(process.argv.includes('--aiui-memory-store') ? {
+        requestMemory: (operation, payload) => ipcRenderer.sendSync('memory:request', operation, payload)
+    } : {}),
+    onMemoryChanged: callback => {
+        const listener = () => callback();
+        ipcRenderer.on('memory:changed', listener);
+        return () => ipcRenderer.removeListener('memory:changed', listener);
+    },
     preferencesChanged: () => ipcRenderer.send('preferences:changed'),
     updateAppearance: value => ipcRenderer.send('appearance:update', value),
     notifyAgent: value => ipcRenderer.invoke('agent:notify', value),

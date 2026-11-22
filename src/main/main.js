@@ -16,9 +16,13 @@ const { autoUpdater } = require("electron-updater");
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const { pathToFileURL } = require("node:url");
 const https = require("https");
 const http = require("http");
 const WebSocket = require("ws");
+const FishAudio = require("../shared/fish-audio");
+const { createDiskMemoryStore } = require("./user-memory-store");
+const { normalizeActivity: normalizeMemoryActivity } = require("../renderer/user-memory");
 const {
     AgentWorkspaceStore,
     AgentShellRunner,
@@ -69,6 +73,7 @@ const pendingAgentWorkspaceSelections = new Map();
 const agentShellRunner = new AgentShellRunner();
 const agentBackgroundShells = new AgentBackgroundShellManager();
 let rendererRuntimeState = {};
+let userMemoryStore;
 const desktopEnhancements = require('./desktop-enhancements').registerDesktopEnhancements({
     app, BrowserWindow, ipcMain, Notification, getMainWindow: () => mainWindow, isMainSender,
     getRuntimeState: () => ({ ...rendererRuntimeState, audio: Boolean(audioSession), desktop: Boolean(audioSession?.mode === 'desktop') })
@@ -369,6 +374,7 @@ function createWindow(htmlFile = "index.html", options = {}) {
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
+            additionalArguments: ["--aiui-memory-store"],
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: false,
@@ -410,6 +416,10 @@ function sanitizeTurns(turns) {
             if (item.role === "assistant" && typeof item.voiceRecordId === "string" && item.voiceRecordId.trim()) {
                 clean.voiceRecordId = item.voiceRecordId.trim();
             }
+            if (item.role === "assistant") {
+                const counts = normalizeMemoryActivity(item.memoryActivity);
+                if (counts) clean.memoryActivity = counts;
+            }
             if (item.role === "user" && Array.isArray(item.attachments)) {
                 clean.attachments = item.attachments
                     .filter((attachment) => attachment && attachment.isImage && typeof attachment.fullDataUrl === "string")
@@ -426,7 +436,7 @@ function sanitizeTurns(turns) {
             }
             return clean;
         })
-        .filter((item) => item.content.trim().length > 0)
+        .filter((item) => item.content.trim().length > 0 || item.memoryActivity)
         .slice(-500);
 }
 
@@ -451,6 +461,50 @@ function isAudioSender(event) {
 function hasConversationWindow() {
     return Boolean(audioWindow && !audioWindow.isDestroyed());
 }
+
+function handleMemoryRequest(event, operation, payload) {
+    if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) return null;
+    const page = event.senderFrame.url.split(/[?#]/, 1)[0];
+    const isPage = name => page === pathToFileURL(path.join(__dirname, "..", name)).href;
+    const chat = isMainSender(event) && isPage("index.html");
+    const preferences = desktopEnhancements.isPreferences(event) && isPage("index.html");
+    const collaboration = audioSession && isAudioSender(event) && isPage("audiochat.html");
+    if (!chat && !preferences && !collaboration) return null;
+    const changed = () => BrowserWindow.getAllWindows().forEach(win => {
+        if (!win.isDestroyed()) win.webContents.send("memory:changed");
+    });
+    try {
+        const store = userMemoryStore ??= createDiskMemoryStore(app.getPath("userData"));
+        if (operation === "isEnabled") return store.isEnabled();
+        if (operation === "getContext" && (chat || collaboration)) {
+            const id = collaboration ? audioSession.targetChatId : payload?.chatId;
+            return store.getContext({ id }, { estimateOnly: payload?.estimateOnly === true });
+        }
+        if (operation === "applyCalls" && (chat || collaboration) && Array.isArray(payload)) {
+            const results = store.applyCalls(payload);
+            if (results.some(({ result }) => result.ok && !result.unchanged)) changed();
+            return results;
+        }
+        if (operation === "list" && (preferences || chat)) return store.list();
+        if (operation === "setEnabled" && (preferences || chat)) {
+            store.setEnabled(payload);
+            changed();
+            return true;
+        }
+        if (operation === "deleteRecord" && (preferences || chat)) {
+            const result = store.deleteRecord(payload);
+            if (result.ok) changed();
+            return result;
+        }
+        if (operation === "removeSnapshot" && chat) store.removeSnapshot(payload);
+    } catch {
+        // The reply remains usable if the local store cannot be read or saved.
+    }
+    return null;
+}
+ipcMain.on("memory:request", (event, operation, payload) => {
+    event.returnValue = handleMemoryRequest(event, operation, payload);
+});
 
 function sendMainCommand(action, payload = {}) {
     const command = { action, ...payload };
@@ -516,32 +570,23 @@ function closeAudioResources() {
     }
 }
 
-function presetDirectoryKey(apiBase, voiceId) {
-    return crypto.createHash("sha256").update(`${apiBase}|${voiceId}`).digest("hex").slice(0, 24);
+function presetDirectoryKey({ apiBase, voiceId, endpoint, model }) {
+    return crypto.createHash("sha256").update(`${apiBase}|${voiceId}|${endpoint}|${model}`).digest("hex").slice(0, 24);
 }
 
 async function requestFishAudio(text, config) {
-    const base = String(config.apiBase || "https://fishaudio.org").replace(/\/$/, "");
-    const apiKey = String(config.apiKey || "").trim();
-    const voiceId = String(config.voiceId || "").trim();
-    if (!apiKey || !voiceId) throw new Error("请先填写 Fish Audio API Key 和音色 ID");
-
-    const url = `${base}/api/open/v1/speech/tts`;
-    const body = JSON.stringify({ text, voiceId, format: "mp3", speed: 1 });
+    const { url, headers, body } = FishAudio.buildRequest(text, config);
     let lastError = null;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
-        console.info(`[FishAudio][TTS] request attempt=${attempt + 1} url=${url} voiceId=${voiceId} chars=${String(text || '').length}`);
+        console.info(`[FishAudio][TTS] request attempt=${attempt + 1} url=${url} chars=${String(text || '').length}`);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 90000);
         try {
             // Electron's session network stack follows Chromium/system proxy rules (for example Clash).
             const response = await session.defaultSession.fetch(url, {
                 method: "POST",
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
-                },
+                headers,
                 body,
                 signal: controller.signal
             });
@@ -573,28 +618,27 @@ async function requestFishAudio(text, config) {
 }
 
 async function generateVoicePreset(config) {
-    const apiBase = String(config.apiBase || "https://fishaudio.org").trim();
-    const apiKey = String(config.apiKey || "").trim();
-    const voiceId = String(config.voiceId || "").trim();
+    const settings = FishAudio.normalizeConfig(config);
+    const { apiBase, apiKey, voiceId, model, endpoint } = settings;
     if (!apiKey || !voiceId) throw new Error("请先填写 Fish Audio API Key 和音色 ID");
 
-    const dir = path.join(app.getPath("userData"), "voice-presets", presetDirectoryKey(apiBase, voiceId));
+    const dir = path.join(app.getPath("userData"), "voice-presets", presetDirectoryKey(settings));
     await fs.mkdir(dir, { recursive: true });
-    const manifest = { apiBase, voiceId, groupA: [], groupB: [], groupC: [], updatedAt: Date.now() };
+    const manifest = { apiBase, voiceId, model, endpoint, groupA: [], groupB: [], groupC: [], updatedAt: Date.now() };
 
     for (let index = 0; index < PRESET_TEXTS_A.length; index += 1) {
         const filename = `a-${index}.mp3`;
-        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_A[index], { apiBase, apiKey, voiceId }));
+        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_A[index], settings));
         manifest.groupA.push(filename);
     }
     for (let index = 0; index < PRESET_TEXTS_B.length; index += 1) {
         const filename = `b-${index}.mp3`;
-        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_B[index], { apiBase, apiKey, voiceId }));
+        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_B[index], settings));
         manifest.groupB.push(filename);
     }
     for (let index = 0; index < PRESET_TEXTS_C.length; index += 1) {
         const filename = `c-${index}.mp3`;
-        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_C[index], { apiBase, apiKey, voiceId }));
+        await fs.writeFile(path.join(dir, filename), await requestFishAudio(PRESET_TEXTS_C[index], settings));
         manifest.groupC.push(filename);
     }
     await fs.writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
@@ -602,10 +646,9 @@ async function generateVoicePreset(config) {
 }
 
 async function readVoicePreset(config) {
-    const apiBase = String(config.apiBase || "https://fishaudio.org").trim();
-    const voiceId = String(config.voiceId || "").trim();
-    if (!voiceId) return null;
-    const dir = path.join(app.getPath("userData"), "voice-presets", presetDirectoryKey(apiBase, voiceId));
+    const settings = FishAudio.normalizeConfig(config);
+    if (!settings.voiceId) return null;
+    const dir = path.join(app.getPath("userData"), "voice-presets", presetDirectoryKey(settings));
     try {
         const manifest = JSON.parse(await fs.readFile(path.join(dir, "manifest.json"), "utf8"));
         const loadGroup = async (files) => Promise.all((files || []).map(async (filename) =>
@@ -1234,21 +1277,13 @@ ipcMain.handle("audio-chat:tts", async (event, request) => {
     if (!isAudioSender(event)) throw new Error("非法的 Fish Audio 请求");
     const source = request && typeof request === "object" ? request : {};
     console.info(`[AudioChat][IPC] audio-chat:tts received chars=${String(source.text || '').length} voiceId=${String(source.voiceId || '').trim() || '(empty)'}`);
-    const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), {
-        apiBase: source.apiBase,
-        apiKey: source.apiKey,
-        voiceId: source.voiceId
-    });
+    const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), source);
     return audio.toString("base64");
 });
 ipcMain.handle("desktop-work:tts", async (event, request) => {
     if (!isAudioSender(event)) throw new Error("非法的 Fish Audio 请求");
     const source = request && typeof request === "object" ? request : {};
-    const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), {
-        apiBase: source.apiBase,
-        apiKey: source.apiKey,
-        voiceId: source.voiceId
-    });
+    const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), source);
     return audio.toString("base64");
 });
 

@@ -22,7 +22,10 @@
     <script src="vendor/javascript.min.js"></script>
     <script src="renderer/agent-protocol.js"></script>
     <script src="renderer/tool-call-normalizer.js"></script>
+    <script src="renderer/user-memory.js"></script>
+    <script src="renderer/memory-transport.js"></script>
     <script src="shared/tokenizer-rules.js"></script>
+    <script src="shared/fish-audio.js"></script>
     <style>
         :root {
             --accent-primary: #10b981;
@@ -156,7 +159,6 @@
         }
 
         body.theme-light #model-select,
-        body.theme-light #retry-model-select,
         body.theme-light #image-detail-select {
             background: rgba(240, 240, 245, 0.9) !important;
             backdrop-filter: blur(8px);
@@ -165,7 +167,6 @@
         }
 
         body.theme-light #model-select:focus,
-        body.theme-light #retry-model-select:focus,
         body.theme-light #image-detail-select:focus {
             border-color: var(--accent-primary) !important;
         }
@@ -199,22 +200,6 @@
             background: rgba(20, 20, 30, 0.8) !important;
             backdrop-filter: blur(2px);
             border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        body.theme-light .code-copy-btn {
-            background: rgba(255, 255, 255, 0.4);
-            color: #1f1f1f;
-        }
-
-        body.theme-light #retry-popover {
-            background: rgba(255, 255, 255, 0.95) !important;
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(0, 0, 0, 0.15);
-            color: #1f1f1f;
-        }
-
-        body.theme-light #retry-popover>span {
-            color: #4a4a4a !important;
         }
 
         body.theme-light .temp-btn,
@@ -400,7 +385,6 @@
         }
 
         body.theme-dark #model-select,
-        body.theme-dark #retry-model-select,
         body.theme-dark #image-detail-select {
             background: rgba(30, 30, 35, 0.8) !important;
             backdrop-filter: blur(8px);
@@ -439,23 +423,11 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        body.theme-dark .code-copy-btn {
-            background: rgba(50, 50, 60, 0.9);
-            color: #ccc;
-        }
-
         body.theme-dark #settings-modal>div {
             background: rgba(30, 30, 35, 0.8) !important;
             backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 0.75rem;
-        }
-
-        body.theme-dark #retry-popover {
-            background: rgba(30, 30, 35, 0.8) !important;
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: #f0f0f0;
         }
 
         body.theme-dark .temp-btn,
@@ -611,6 +583,33 @@
             height: 0;
         }
 
+        #settings-modal #memory-list {
+            max-height: 12rem;
+            overflow-y: auto;
+            scrollbar-width: auto;
+            overscroll-behavior: contain;
+        }
+
+        #settings-modal #memory-list::-webkit-scrollbar {
+            display: block;
+            width: 8px;
+        }
+
+        #settings-modal #memory-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #settings-modal #memory-list::-webkit-scrollbar-thumb {
+            border: 2px solid transparent;
+            border-radius: 999px;
+            background-color: color-mix(in srgb, currentColor 32%, transparent);
+            background-clip: padding-box;
+        }
+
+        #settings-modal #memory-list::-webkit-scrollbar-thumb:hover {
+            background-color: color-mix(in srgb, currentColor 55%, transparent);
+        }
+
         .action-btn {
             display: flex;
             align-items: center;
@@ -660,22 +659,6 @@
             border-color: var(--accent-primary) !important;
         }
 
-        .code-copy-btn {
-            position: absolute;
-            top: 0.5rem;
-            right: 0.5rem;
-            padding: 0.25rem 0.5rem;
-            border-radius: 0.75rem;
-            font-size: 0.7rem;
-            cursor: pointer;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        pre:hover .code-copy-btn {
-            opacity: 1;
-        }
-
         @keyframes pulse-ring {
             0% {
                 transform: scale(0.33);
@@ -686,14 +669,6 @@
             100% {
                 opacity: 0;
             }
-        }
-
-        #retry-popover {
-            position: fixed;
-            border-radius: 0.75rem;
-            padding: 0.75rem;
-            min-width: 220px;
-            z-index: 100;
         }
 
         .temp-btn,
@@ -982,24 +957,14 @@
             }
         }
 
-        .font-size-small .msg-bubble {
-            font-size: 0.875rem;
-        }
+        .font-size-small { --chat-font-size: 0.875rem; }
+        .font-size-medium { --chat-font-size: 1rem; }
+        .font-size-large { --chat-font-size: 1.125rem; }
+        .font-size-extra-large { --chat-font-size: 1.25rem; }
+        .font-size-huge { --chat-font-size: 1.375rem; }
 
-        .font-size-medium .msg-bubble {
-            font-size: 1rem;
-        }
-
-        .font-size-large .msg-bubble {
-            font-size: 1.125rem;
-        }
-
-        .font-size-extra-large .msg-bubble {
-            font-size: 1.25rem;
-        }
-
-        .font-size-huge .msg-bubble {
-            font-size: 1.375rem;
+        .msg-bubble, .agent-tool-row {
+            font-size: var(--chat-font-size, 1rem);
         }
 
         .search-box {
@@ -1058,35 +1023,9 @@
 
         .thinking-text {
             white-space: pre-wrap;
-            font-size: 0.82rem;
+            font-size: 0.82em;
             line-height: 1.45;
             color: #9ca3af;
-        }
-
-        .ai-thinking-status {
-            display: none;
-            margin-bottom: 0.35rem;
-        }
-
-        .ai-thinking-detail {
-            display: grid;
-            grid-template-rows: 1fr;
-            margin-top: 4px;
-            transition: grid-template-rows 0.18s ease, margin-top 0.18s ease;
-        }
-
-        .ai-thinking-detail-inner {
-            min-height: 0;
-            overflow: hidden;
-        }
-
-        .ai-thinking-status.collapsed .ai-thinking-detail {
-            grid-template-rows: 0fr;
-            margin-top: 0;
-        }
-
-        .ai-thinking-status.collapsed .agent-tool-toggle {
-            transform: rotate(-90deg);
         }
 
         .ai-content-area table {
@@ -1623,60 +1562,6 @@
         body.theme-light .context-breakdown-count,
         body.theme-light .context-breakdown-note,
         body.theme-light #context-breakdown-window {
-            color: #64748b;
-        }
-
-        /* Context window meter: shows how full the window is, turning amber then red
-           as it approaches the compaction threshold. */
-        #context-meter {
-            display: none;
-            align-items: center;
-            gap: 6px;
-            margin-left: 8px;
-            white-space: nowrap;
-        }
-
-        #context-meter.visible {
-            display: inline-flex;
-        }
-
-        .context-meter-track {
-            position: relative;
-            width: 96px;
-            height: 6px;
-            border-radius: 999px;
-            background: rgba(148, 163, 184, 0.25);
-            overflow: hidden;
-            cursor: help;
-        }
-
-        .context-meter-fill {
-            height: 100%;
-            width: 0%;
-            border-radius: 999px;
-            background: #10b981;
-            transition: width 0.35s ease, background-color 0.35s ease;
-        }
-
-        #context-meter.level-warn .context-meter-fill {
-            background: #f59e0b;
-        }
-
-        #context-meter.level-critical .context-meter-fill {
-            background: #ef4444;
-        }
-
-        .context-meter-label {
-            font-size: 10px;
-            color: var(--text-secondary, #9ca3af);
-            font-variant-numeric: tabular-nums;
-        }
-
-        body.theme-light .context-meter-track {
-            background: rgba(100, 116, 139, 0.22);
-        }
-
-        body.theme-light .context-meter-label {
             color: #64748b;
         }
 
@@ -2422,56 +2307,6 @@
             background-color: var(--accent-primary);
         }
 
-        #attach-menu {
-            position: absolute;
-            bottom: 100%;
-            left: 0;
-            margin-bottom: 4px;
-            background: rgba(30, 30, 35, 0.95);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 0.75rem;
-            padding: 0.25rem;
-            min-width: 150px;
-            z-index: 110;
-            display: none;
-        }
-
-        body.theme-light #attach-menu {
-            background: rgba(255, 255, 255, 0.95);
-            border-color: rgba(0, 0, 0, 0.2);
-        }
-
-        #attach-menu.visible {
-            display: block;
-        }
-
-        #attach-menu button {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            width: 100%;
-            padding: 0.5rem 0.75rem;
-            border: none;
-            background: transparent;
-            color: #ccc;
-            font-size: 0.8rem;
-            border-radius: 0.5rem;
-            cursor: pointer;
-        }
-
-        body.theme-light #attach-menu button {
-            color: #333;
-        }
-
-        #attach-menu button:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        body.theme-light #attach-menu button:hover {
-            background: rgba(0, 0, 0, 0.08);
-        }
-
         #voice-status {
             display: none;
         }
@@ -2757,50 +2592,6 @@
             color: #374151;
         }
 
-        .agent-command-code {
-            max-height: 120px;
-            overflow: auto;
-            margin-top: 6px;
-            color: #d1d5db;
-            font-family: Consolas, monospace;
-            font-size: 0.75em;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        body.theme-light .agent-command-code {
-            color: #374151;
-        }
-
-        .agent-command-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .agent-command-actions button {
-            min-height: 30px;
-            border-radius: 6px;
-            padding: 0 11px;
-            font-size: 12px;
-        }
-
-        .agent-command-approval-row {
-            transition: opacity 0.16s ease, transform 0.16s ease;
-        }
-
-        .agent-command-approval-row.leaving {
-            opacity: 0;
-            transform: translateY(-4px);
-        }
-
-        .agent-command-approval-tool {
-            background: rgba(var(--accent-rgb), 0.06);
-            padding: 10px 12px 11px 14px;
-        }
-
         .agent-tool-row {
             width: 100%;
             border-left: 3px solid var(--accent-primary);
@@ -2904,13 +2695,6 @@
             transition: transform 0.18s ease;
         }
 
-        .agent-working-time {
-            flex: 0 0 auto;
-            color: #6b7280;
-            font-size: 0.82em;
-            white-space: nowrap;
-        }
-
         .agent-tool-row.collapsed .agent-tool-toggle {
             transform: rotate(-90deg);
         }
@@ -2992,31 +2776,11 @@
             flex: 1 1 auto;
         }
 
-        .font-size-small .agent-tool-row {
-            font-size: 0.875rem;
-        }
-
-        .font-size-medium .agent-tool-row {
-            font-size: 1rem;
-        }
-
-        .font-size-large .agent-tool-row {
-            font-size: 1.125rem;
-        }
-
-        .font-size-extra-large .agent-tool-row {
-            font-size: 1.25rem;
-        }
-
-        .font-size-huge .agent-tool-row {
-            font-size: 1.375rem;
-        }
-
         .agent-tool-row.failed {
             border-left-color: #ef4444;
         }
 
-        .agent-tool-row.failed .agent-tool-summary svg {
+        .agent-tool-row.failed .agent-tool-summary svg:not(.agent-tool-toggle) {
             color: #ef4444;
         }
 
@@ -3027,61 +2791,6 @@
         .agent-tool-row.warning .agent-tool-summary,
         .agent-tool-row.warning .agent-tool-summary svg {
             color: #fbbf24;
-        }
-
-        @keyframes agent-text-scan {
-            from {
-                background-position: 180% 50%;
-            }
-
-            to {
-                background-position: -80% 50%;
-            }
-        }
-
-        .agent-tool-row.running .agent-tool-summary-text,
-        .agent-tool-row.running .ai-thinking-label,
-        .ai-pending-text {
-            --scan-text-base: #d1d5db;
-            --scan-text-highlight: #ffffff;
-            color: transparent !important;
-            background-image: linear-gradient(105deg,
-                    var(--scan-text-base) 0%,
-                    var(--scan-text-base) 38%,
-                    var(--scan-text-highlight) 48%,
-                    var(--scan-text-base) 58%,
-                    var(--scan-text-base) 100%);
-            background-size: 260% 100%;
-            background-clip: text;
-            -webkit-background-clip: text;
-            animation: agent-text-scan 1.7s linear infinite;
-        }
-
-        body.theme-light .agent-tool-row.running .agent-tool-summary-text,
-        body.theme-light .agent-tool-row.running .ai-thinking-label,
-        body.theme-light .ai-pending-text {
-            --scan-text-base: #4b5563;
-            --scan-text-highlight: #111827;
-        }
-
-        .agent-tool-row.warning.running .agent-tool-summary-text {
-            --scan-text-base: #f59e0b;
-            --scan-text-highlight: #fef3c7;
-        }
-
-        .ai-pending-text {
-            display: inline-block;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-
-            .agent-tool-row.running .agent-tool-summary-text,
-            .agent-tool-row.running .ai-thinking-label,
-            .ai-pending-text {
-                animation: none;
-                color: var(--scan-text-base) !important;
-                background: none;
-            }
         }
 
         #agent-yolo-warning-modal,
@@ -3379,22 +3088,18 @@
     <script src="renderer/request-metrics.js"></script>
 </head>
 
-<body class="h-screen flex overflow-hidden theme-light font-size-medium" onclick="closeRetryMenu(event)">
+<body class="h-screen flex overflow-hidden theme-light font-size-medium">
     <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar(false)"></div>
     <aside id="sidebar" class="sidebar h-full flex flex-col p-3 flex-shrink-0">
         <button onclick="createNewChat()"
             class="flex items-center gap-3 px-3 py-3 border border-gray-600 rounded-xl hover:bg-gray-800 transition-colors mb-4">
             <i data-lucide="plus" class="w-4 h-4"></i><span class="text-sm font-medium">新建对话</span>
         </button>
-        <div id="chat-history" class="flex-grow overflow-y-auto space-y-1 no-scrollbar"></div>
+        <div id="chat-history" class="flex-grow overflow-y-auto no-scrollbar" aria-label="历史对话"></div>
         <div class="mt-auto border-t border-gray-700 pt-4 flex flex-col gap-2">
             <button id="agent-gateway-btn" hidden style="display:none"
                 class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
                 <i data-lucide="radio-tower" class="w-5 h-5"></i><span class="text-sm">Agent网关</span>
-            </button>
-            <button onclick="openSetupGuide()"
-                class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
-                <i data-lucide="book-open" class="w-5 h-5"></i><span class="text-sm">配置指引</span>
             </button>
             <button onclick="toggleSettings()"
                 class="flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors">
@@ -3416,11 +3121,16 @@
         </header>
         <div id="main-content">
             <div id="chat-column">
-                <div id="messages-wrapper"
-                    class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar scroll-smooth"
-                    style="flex:1 1 auto; min-width:0;">
+                <div id="message-viewport">
+                    <div id="messages-wrapper"
+                        class="flex-grow overflow-y-auto p-4 md:p-8 space-y-10 no-scrollbar"
+                        style="flex:1 1 auto; min-width:0;" tabindex="0" role="region" aria-label="对话消息">
+                    </div>
+                    <button id="scroll-to-bottom" type="button" aria-label="回到底部" title="回到底部" inert>
+                        <i data-lucide="arrow-down" aria-hidden="true"></i>
+                    </button>
                 </div>
-                <footer id="input-footer" class="p-4 md:pb-8 w-full">
+                <footer id="input-footer" class="w-full">
                     <div class="max-w-[1000px] mx-auto relative flex flex-col items-start">
                         <div id="queued-agent-messages" class="w-full hidden mb-2 text-xs text-gray-400"></div>
                         <div id="attachments-preview" class="w-full"></div>
@@ -3434,7 +3144,79 @@
                                 <option value="original">原图质量 (无损)</option>
                             </select>
                         </div>
+                        <div class="input-area flex items-end w-full relative">
+                            <button id="attach-plus-btn" onclick="toggleAttachMenu(event)" title="添加附件"
+                                aria-label="附件和命令" aria-haspopup="dialog" aria-controls="attach-menu" aria-expanded="false"
+                                class="transition-colors flex-shrink-0">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                            </button>
+                            <div id="attach-menu" class="choice-popover detail-surface" inert role="dialog" aria-label="附件和命令" onclick="event.stopPropagation()">
+                                <button onclick="triggerFileInput(); toggleAttachMenu();">
+                                    <i data-lucide="paperclip" class="w-4 h-4"></i> 添加附件
+                                </button>
+                                <button id="image-generation-btn"
+                                    onclick="switchToImageGeneration(); toggleAttachMenu();">
+                                    <i data-lucide="image-plus" class="w-4 h-4"></i> 图像生成
+                                </button>
+                                <button id="image-edit-btn" onclick="switchToImageEdit(); toggleAttachMenu();">
+                                    <i data-lucide="image-up" class="w-4 h-4"></i> 图像编辑
+                                </button>
+                                <button id="canvas-entry-btn" onclick="insertCanvasCommand(); toggleAttachMenu();">
+                                    <i data-lucide="code-2" class="w-4 h-4"></i> Canvas
+                                </button>
+                                <button id="exit-image-mode-btn" style="display:none;"
+                                    onclick="exitImageMode(); toggleAttachMenu();">
+                                    <i data-lucide="x" class="w-4 h-4"></i> 退出图像生成
+                                </button>
+                                <button onclick="requestManualCompaction(); toggleAttachMenu();">
+                                    <i data-lucide="file-scan" class="w-4 h-4"></i> 压缩上下文
+                                </button>
+                                <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
+                                    <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
+                                </button>
+                                <button id="desktop-work-entry-btn" onclick="startDesktopWork(); toggleAttachMenu();">
+                                    <i data-lucide="monitor-up" class="w-4 h-4"></i> 桌面协作
+                                </button>
+                                <button id="agent-entry-btn" onclick="enterAgentMode(); toggleAttachMenu();">
+                                    <i data-lucide="bot" class="w-4 h-4"></i> 进入Agent模式
+                                </button>
+                            </div>
+                            <textarea id="user-input" rows="1"
+                                placeholder="发送消息，或输入 / 使用命令" aria-label="消息"
+                                class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none"
+                                oninput="autoResize(this)"></textarea>
+                            <input type="file" id="hidden-file-input"
+                                accept="image/*,.txt,.md,.json,.csv,.py,.js,.html,.css,.xml,.yaml,.yml,.log,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+                                multiple hidden onchange="handleFileSelect(event)">
+                            <button id="send-btn" onclick="sendMessage()" title="发送" aria-label="发送"
+                                class="transition-colors disabled:opacity-50 flex-shrink-0">
+                                <i data-lucide="corner-down-left" class="w-5 h-5"></i>
+                            </button>
+                            <button id="stop-btn" onclick="stopGeneration()" title="停止" aria-label="停止"
+                                class="transition-colors disabled:opacity-50 hidden flex-shrink-0">
+                                <i data-lucide="square" class="w-5 h-5"></i>
+                            </button>
+                        </div>
                         <div class="input-selector-row">
+                            <div id="context-estimate-shell" class="context-estimate-shell">
+                                <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"
+                                    tabindex="0" aria-describedby="context-breakdown" aria-controls="context-breakdown" aria-expanded="false"></span>
+                                <button id="context-meter" type="button" aria-label="上下文用量详情"
+                                    aria-controls="context-breakdown" aria-expanded="false">
+                                    <span class="context-meter-track" aria-hidden="true"></span>
+                                </button>
+                                <div id="context-breakdown" class="context-breakdown" role="tooltip">
+                                    <div class="context-breakdown-heading"><span>Context</span><span id="context-breakdown-model" class="context-breakdown-model"></span></div>
+                                    <div class="context-breakdown-usage">
+                                        <span id="context-breakdown-used">0% used</span>
+                                        <span id="context-breakdown-window">0 / 0</span>
+                                    </div>
+                                    <div id="context-breakdown-track" class="context-breakdown-track" aria-hidden="true"></div>
+                                    <div id="context-breakdown-rows" class="context-breakdown-rows"></div>
+                                    <p id="context-breakdown-metrics" class="context-breakdown-metrics"></p>
+                                    <p id="context-breakdown-note" class="context-breakdown-note"></p>
+                                </div>
+                            </div>
                             <div class="model-selector-container flex items-center gap-2">
                                 <select id="model-select" onchange="onModelSelectionChange()">
                                     <option value="gpt-6.2-astra">gpt-6.2-astra</option>
@@ -3505,87 +3287,15 @@
                                     <option value="qwen-vl-ocr">qwen-vl-ocr</option>
                                     <option value="pic-ocr">pic-ocr</option>
                                 </select>
-                                <div id="context-estimate-shell" class="context-estimate-shell">
-                                    <span id="token-estimate" class="text-xs text-gray-400 ml-2 whitespace-nowrap"
-                                        tabindex="0" aria-describedby="context-breakdown" aria-controls="context-breakdown" aria-expanded="false"></span>
-                                    <div id="context-meter" class="context-meter" role="progressbar" aria-label="上下文窗口使用情况"
-                                        aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-                                        <div class="context-meter-track" title="上下文窗口使用情况">
-                                            <div id="context-meter-fill" class="context-meter-fill"></div>
-                                        </div>
-                                        <span id="context-meter-label" class="context-meter-label"></span>
-                                    </div>
-                                    <div id="context-breakdown" class="context-breakdown" role="tooltip">
-                                        <div class="context-breakdown-heading"><span>Context</span><span id="context-breakdown-model" class="context-breakdown-model"></span></div>
-                                        <div class="context-breakdown-usage">
-                                            <span id="context-breakdown-used">0% used</span>
-                                            <span id="context-breakdown-window">0 / 0</span>
-                                        </div>
-                                        <div id="context-breakdown-track" class="context-breakdown-track" aria-hidden="true"></div>
-                                        <div id="context-breakdown-rows" class="context-breakdown-rows"></div>
-                                        <p id="context-breakdown-note" class="context-breakdown-note"></p>
-                                    </div>
-                                </div>
                             </div>
                             <div id="agent-command-mode-bar">
                                 <label for="agent-command-mode-select">Command Mode</label>
                                 <select id="agent-command-mode-select" onchange="onAgentCommandModeChange(this.value)">
                                     <option value="safe" selected>Safe Commands Only</option>
+                                    <option value="ask">Always Ask</option>
                                     <option value="yolo">YOLO Mode</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="input-area p-3 flex items-end gap-2 w-full shadow-lg relative">
-                            <button id="attach-plus-btn" onclick="toggleAttachMenu(event)" title="添加附件"
-                                class="p-2 rounded-xl transition-colors flex-shrink-0 relative">
-                                <i data-lucide="plus" class="w-5 h-5"></i>
-                            </button>
-                            <div id="attach-menu" onclick="event.stopPropagation()">
-                                <button onclick="triggerFileInput(); toggleAttachMenu();">
-                                    <i data-lucide="paperclip" class="w-4 h-4"></i> 添加附件
-                                </button>
-                                <button id="image-generation-btn"
-                                    onclick="switchToImageGeneration(); toggleAttachMenu();">
-                                    <i data-lucide="image-plus" class="w-4 h-4"></i> 图像生成
-                                </button>
-                                <button id="image-edit-btn" onclick="switchToImageEdit(); toggleAttachMenu();">
-                                    <i data-lucide="image-up" class="w-4 h-4"></i> 图像编辑
-                                </button>
-                                <button id="canvas-entry-btn" onclick="insertCanvasCommand(); toggleAttachMenu();">
-                                    <i data-lucide="code-2" class="w-4 h-4"></i> Canvas
-                                </button>
-                                <button id="exit-image-mode-btn" style="display:none;"
-                                    onclick="exitImageMode(); toggleAttachMenu();">
-                                    <i data-lucide="x" class="w-4 h-4"></i> 退出图像生成
-                                </button>
-                                <button onclick="requestManualCompaction(); toggleAttachMenu();">
-                                    <i data-lucide="file-scan" class="w-4 h-4"></i> 压缩上下文
-                                </button>
-                                <button id="audio-chat-entry-btn" onclick="startAudioChat(); toggleAttachMenu();">
-                                    <i data-lucide="audio-lines" class="w-4 h-4"></i> 语音聊天
-                                </button>
-                                <button id="desktop-work-entry-btn" onclick="startDesktopWork(); toggleAttachMenu();">
-                                    <i data-lucide="monitor-up" class="w-4 h-4"></i> 桌面协作
-                                </button>
-                                <button id="agent-entry-btn" onclick="enterAgentMode(); toggleAttachMenu();">
-                                    <i data-lucide="bot" class="w-4 h-4"></i> 进入Agent模式
-                                </button>
-                            </div>
-                            <textarea id="user-input" rows="1"
-                                placeholder="给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文"
-                                class="bg-transparent flex-grow resize-none overflow-y-hidden focus:outline-none py-1 px-2 text-sm md:text-base"
-                                oninput="autoResize(this)"></textarea>
-                            <input type="file" id="hidden-file-input"
-                                accept="image/*,.txt,.md,.json,.csv,.py,.js,.html,.css,.xml,.yaml,.yml,.log,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
-                                multiple hidden onchange="handleFileSelect(event)">
-                            <button id="send-btn" onclick="sendMessage()"
-                                class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 flex-shrink-0">
-                                <i data-lucide="arrow-up" class="w-5 h-5"></i>
-                            </button>
-                            <button id="stop-btn" onclick="stopGeneration()"
-                                class="bg-white text-black p-2 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 hidden flex-shrink-0">
-                                <i data-lucide="square" class="w-5 h-5"></i>
-                            </button>
                         </div>
                     </div>
                 </footer>
@@ -3604,17 +3314,6 @@
                 </div>
                 <div id="canvas-codemirror"></div>
                 <div id="canvas-status">行数: 1 | 编码模式</div>
-            </div>
-        </div>
-        <div id="retry-popover" class="hidden" onclick="event.stopPropagation()">
-            <span class="text-[10px] text-gray-400 px-2 pt-1 font-bold uppercase tracking-wider">选择模型并重试</span>
-            <div class="flex gap-1 mt-1">
-                <select id="retry-model-select"
-                    class="bg-[#171717] border border-gray-700 rounded-xl p-1.5 text-xs flex-grow outline-none text-white"></select>
-                <button onclick="confirmRetry()"
-                    class="bg-white text-black px-2 rounded-xl hover:bg-gray-200 transition-colors">
-                    <i data-lucide="check" class="w-4 h-4"></i>
-                </button>
             </div>
         </div>
         <div id="image-lightbox" class="image-lightbox hidden" onclick="closeLightbox()">
@@ -3679,6 +3378,23 @@
                     <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
                         <i data-lucide="messages-square" class="w-[18px] h-[18px]" aria-hidden="true"></i>AI对话设置
                     </h3>
+                    <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="min-w-0">
+                                <label class="block text-sm font-medium text-gray-200" for="memory-enabled-toggle">记忆</label>
+                                <p class="text-xs text-gray-500 mt-1 leading-relaxed">在文字对话、Agent、语音聊天和桌面协作中使用并更新本机保存的记忆。新会话会读取最新记忆。</p>
+                            </div>
+                            <label class="cloud-toggle shrink-0">
+                                <input type="checkbox" id="memory-enabled-toggle" aria-label="记忆" checked onchange="setMemoryEnabled(this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="border-t border-gray-700 pt-3">
+                            <h4 id="memory-list-heading" class="text-xs font-medium text-gray-300 mb-2">已保存的记忆</h4>
+                            <p id="memory-list-empty" class="text-xs text-gray-500">暂无记忆</p>
+                            <ul id="memory-list" tabindex="0" aria-labelledby="memory-list-heading" class="text-gray-300 text-sm hidden"></ul>
+                        </div>
+                    </div>
                     <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                     <div>
                         <label class="block text-sm font-medium mb-2 text-gray-300">全局提示词 (System Prompt)</label>
@@ -4044,28 +3760,56 @@
                             <span class="slider"></span>
                         </label>
                     </div>
-                    
+                    <div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <label for="voice-fish-profile-select" class="block text-sm font-medium text-gray-200">Fish Audio 配置档案</label>
+                            <button id="voice-fish-profile-create" type="button" onclick="createVoiceFishProfile()"
+                                class="px-3 py-1.5 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-emerald-500 hover:text-emerald-400 transition-colors">新建配置</button>
+                        </div>
+                        <select id="voice-fish-profile-select" onchange="switchVoiceFishProfile(this.value)"
+                            class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"></select>
+                        <p class="text-[11px] text-gray-500 mt-2">切换立即生效，编辑自动保存。每个档案的国内和国际端点分别保存。</p>
+                        <div class="flex items-center gap-2 mt-3">
+                            <label for="voice-fish-profile-name" class="text-xs text-gray-300 shrink-0">配置名称</label>
+                            <input id="voice-fish-profile-name" type="text" maxlength="48" placeholder="例如 Fish Audio 国际"
+                                class="flex-1 min-w-0 bg-[#171717] border border-gray-700 rounded-lg p-2 text-xs outline-none focus:border-emerald-500 transition-colors">
+                            <button id="voice-fish-profile-delete" type="button" onclick="deleteVoiceFishProfile()" hidden
+                                class="px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-300 hover:border-red-500 hover:text-red-400 transition-colors">删除配置</button>
+                        </div>
+                    </div>
                     <div class="space-y-3 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <p class="text-xs font-semibold text-gray-300">Fish Audio TTS</p>
                         <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">API Base</label>
+                            <label for="voice-fish-base-input" class="block text-sm font-medium mb-2 text-gray-300">API Base</label>
                             <input type="text" id="voice-fish-base-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                            <p class="text-[11px] text-gray-500 mt-2">注意区分FishAudio的国际版和国内版链接。</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
+                            <label for="voice-fish-endpoint-select" class="block text-sm font-medium mb-2 text-gray-300">请求端点</label>
+                            <select id="voice-fish-endpoint-select" onchange="changeVoiceFishEndpoint()"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <option value="domestic">国内 · fishaudio.org</option>
+                                <option value="international">国际 · fish.audio</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="voice-fish-key-input" class="block text-sm font-medium mb-2 text-gray-300">API Key</label>
                             <input type="password" id="voice-fish-key-input"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                         </div>
+                        <div>
+                            <label for="voice-fish-model-select" class="block text-sm font-medium mb-2 text-gray-300">语音模型</label>
+                            <select id="voice-fish-model-select"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors"></select>
+                        </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-sm font-medium mb-2 text-gray-300">音色名称</label>
+                                <label for="voice-fish-name-input" class="block text-sm font-medium mb-2 text-gray-300">音色名称</label>
                                 <input type="text" id="voice-fish-name-input"
                                     class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium mb-2 text-gray-300">音色 ID</label>
+                                <label for="voice-fish-id-input" class="block text-sm font-medium mb-2 text-gray-300">音色 ID</label>
                                 <input type="text" id="voice-fish-id-input"
                                     class="w-full bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
                             </div>
@@ -4308,6 +4052,10 @@
                         <i data-lucide="book-open" class="w-[18px] h-[18px]" aria-hidden="true"></i>使用指导
                     </h3>
                     <div>
+                        <button id="open-setup-guide" type="button" onclick="openSetupGuide()" class="settings-guide-entry">
+                            <i data-lucide="book-open" aria-hidden="true"></i><span>配置指引</span>
+                            <i data-lucide="chevron-right" aria-hidden="true"></i>
+                        </button>
                         <p style="font-size:1.8em; font-weight:bold; margin:1em 0 0.5em;">欢迎使用 AIChatUI</p>
                         <p style="margin:0.5em 0; line-height:1.6;">本则使用引导将指导你使用这个全功能的AI对话前端框架，充分发挥生产力，减少遇到的实际体验问题。</p>
 
@@ -4413,13 +4161,6 @@
                     </h3>
                     <p id="settings-lock-agent" class="hidden text-sm text-red-400">正在执行 Agent Loop，部分设置项暂不可更改。</p>
                     <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div class="flex flex-col pr-3"><span
-                                    class="text-sm font-medium text-gray-200">自动滚动到末尾</span><span
-                                    class="text-[11px] text-gray-500 mt-0.5">每次生成新的工具调用提示或纯文本时滚动到底部。</span></div>
-                            <label class="cloud-toggle shrink-0"><input id="agent-auto-scroll" type="checkbox"><span
-                                    class="slider"></span></label>
-                        </div>
                         <div>
                             <label for="agent-diff-max-lines"
                                 class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
@@ -4445,11 +4186,11 @@
                         </div>
                         <div>
                             <label for="agent-detail-default-behavior"
-                                class="block text-sm font-medium mb-2 text-gray-300">详细信息默认行为</label>
+                                class="block text-sm font-medium mb-2 text-gray-300">独立思考与工具详情的默认状态</label>
                             <select id="agent-detail-default-behavior"
                                 class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
-                                <option value="expanded" selected>展开（默认）</option>
-                                <option value="collapsed">折叠</option>
+                                <option value="expanded">展开</option>
+                                <option value="collapsed" selected>折叠（默认）</option>
                             </select>
                         </div>
                         <div>
@@ -4495,7 +4236,7 @@
                             <br>Your Next Gen Vibe Coding Toolkit.<br>
                             享受乐趣。<br>
                             改头换面，消除了之前的一切瓶颈，带来的是全新的专业又美观的体验。<br>
-                            一切都在AIUI NEXT V9
+                            一切都在AIUI NEXT V10
 
                         </p>
                         <p class="leading-relaxed">
@@ -4504,7 +4245,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V9.6.2 Release</span>
+                            <span id="app-version">V10.0.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -4606,7 +4347,6 @@
         const DEFAULT_VOICE_CHAT_MODEL = 'gemini-3.5-flash-nothinking';
         const DEFAULT_CONTEXT_COMPACTION_MODEL = 'gemini-3.5-flash-lite';
         const CONTEXT_COMPACTION_PROMPT = '你是上下文压缩助手。分析下面的历史对话，生成一个精简但信息完整的上下文摘要。1. 保留用户的重要信息、偏好、约束条件。2. 保留当前正在进行的任务、项目状态和关键技术细节。3. 保留已经做出的决定和不可重复询问的信息。4. 删除无关闲聊、重复内容和临时信息。5. 摘要必须让另一个AI仅凭此内容继续对话，不丢失关键上下文。请输出结构化摘要。';
-        const DEFAULT_FISH_AUDIO_BASE = 'https://fishaudio.org';
         const DEFAULT_FISH_AUDIO_KEY = '2980c6d427bfa1406c4537cdd0077a121fef0cacaaffda62bb4d1dce5807cd42';
         const DEFAULT_FISH_VOICE_NAME = '银狼';
         const DEFAULT_FISH_VOICE_ID = '3aba0511-5ed7-4425-94c0-dc406490d8d9';
@@ -5119,6 +4859,13 @@
             const resolved = {
                 ...msg
             };
+            if (resolved.role === 'tool' && !resolved.result && typeof msg.content === 'string' && msg.content.startsWith('{')) {
+                try {
+                    resolved.result = JSON.parse(msg.content);
+                } catch {
+                    // Legacy tool output can also be plain text.
+                }
+            }
             if (resolved.attachments && Array.isArray(resolved.attachments)) {
                 resolved.attachments = await Promise.all(resolved.attachments.map(async (att) => {
                     if (att.isImage && att.fullDataUrl && isImageRef(att.fullDataUrl)) {
@@ -6222,7 +5969,7 @@
         }
 
         async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, options = {}) {
-            const send = async endpoint => {
+            const send = async (endpoint, decorate = true) => {
                 let requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
                 if (window.AIUIModelCapabilities) requestBody = window.AIUIModelCapabilities.map(requestBody, basePayload.model, endpoint, window.AIUIEnhancements?.reasoningFor(basePayload.model));
                 if (endpoint === '/chat/completions' && requestBody.stream) requestBody.stream_options = { ...requestBody.stream_options,include_usage:true };
@@ -6248,23 +5995,26 @@
                     : isOllamaEndpoint(endpoint)
                         ? buildOllamaRequestUrl()
                         : `${getBaseURL()}${endpoint}`;
+                const requestDecorated = decorate && typeof options.decorateRequest === 'function';
+                if (requestDecorated) requestBody = options.decorateRequest(requestBody, endpoint);
                 const response = await fetch(requestUrl, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify(requestBody),
                     signal
                 });
-                return { response, endpoint, requestBody };
+                if (requestDecorated && await options.retryWithoutDecoration?.(response)) return send(endpoint, false);
+                return { response, endpoint, requestBody, requestDecorated };
             };
 
             let result = await send(preferredEndpoint);
             // 原生协议没有对应的等价端点，不参与 501 自动转接。
-            if (result.response.status === 501 && !isGeminiEndpoint(preferredEndpoint) && !isOllamaEndpoint(preferredEndpoint)) {
+            if (!options.disableFallback && result.response.status === 501 && !isGeminiEndpoint(preferredEndpoint) && !isOllamaEndpoint(preferredEndpoint)) {
                 // Fall back through both remaining protocols so a relay that only
                 // implements one of them still works.
                 const fallbackOrder = ['/responses', '/chat/completions', '/v1/messages']
                     .filter(endpoint => endpoint !== preferredEndpoint);
-                const detail = await result.response.text().catch(() => '');
+                const detail = options.redactDiagnostics ? '' : await result.response.text().catch(() => '');
                 for (const fallbackEndpoint of fallbackOrder) {
                     appendLog('info', `${preferredEndpoint} 返回 501，自动转接到 ${fallbackEndpoint}${detail ? `: ${detail.slice(0, 200)}` : ''}`);
                     showVoiceNotification(`接口返回 501，正在转接至 ${fallbackEndpoint}`, false, 3000, false, 'warning');
@@ -6288,7 +6038,8 @@
             })) : []);
             const tools = Array.isArray(requestBody?.tools) ? requestBody.tools : [];
             const systemMessage = messages.find(message => message && message.role === 'system') || null;
-            const systemHash = systemMessage ? hashStringForPromptDebug(stableSerializeForPromptDebug(systemMessage)) : '';
+            const system = requestBody?.instructions ?? requestBody?.system ?? requestBody?.systemInstruction ?? systemMessage;
+            const systemHash = system ? hashStringForPromptDebug(stableSerializeForPromptDebug(system)) : '';
             const toolsHash = hashStringForPromptDebug(stableSerializeForPromptDebug(tools));
             const messageHashes = messages.map((message, index) => ({
                 index,
@@ -6298,6 +6049,7 @@
             const promptHash = hashStringForPromptDebug(stableSerializeForPromptDebug({
                 model: requestBody?.model,
                 messages,
+                system,
                 tools,
                 temperature: requestBody?.temperature,
                 stream: requestBody?.stream,
@@ -6508,7 +6260,6 @@
                 : (textModelList.includes(DEFAULT_CHAT_MODEL) ? DEFAULT_CHAT_MODEL : textModelList[0]);
             select.value = nextModel;
             localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, nextModel);
-            syncRetrySelect();
             populateContextCompactionModel();
         }
 
@@ -6535,7 +6286,6 @@
             if (!isImageMode && select?.value) {
                 localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, select.value);
             }
-            syncRetrySelect();
             updateTokenEstimate();
         }
 
@@ -6742,7 +6492,7 @@
         }
 
         function getAgentDetailDefaultBehavior() {
-            return localStorage.getItem('agent_detail_default_behavior') === 'collapsed' ? 'collapsed' : 'expanded';
+            return localStorage.getItem('agent_detail_default_behavior') === 'expanded' ? 'expanded' : 'collapsed';
         }
 
         function limitThinkingDisplayText(text) {
@@ -6760,30 +6510,13 @@
             ].join('\n');
         }
 
-        function setThinkingStatus(element, running) {
-            const status = element?.closest('.ai-thinking-status');
-            if (!status) return;
-            status.classList.toggle('running', Boolean(running));
-            status.querySelector('.agent-tool-row')?.classList.toggle('running', Boolean(running));
-            const label = status.querySelector('.ai-thinking-label');
-            if (label) label.textContent = running ? 'AI 正在思考' : 'AI 思考过程';
-        }
-
         function renderThinkingText(element, text) {
             if (!element) return;
             element.replaceChildren();
             const rawSource = window.ToolCallNormalizer && typeof window.ToolCallNormalizer.stripReasoningSections === 'function'
                 ? window.ToolCallNormalizer.stripReasoningSections(text)
                 : String(text || '');
-            const status = element.closest('.ai-thinking-status');
             element.style.display = rawSource ? 'block' : 'none';
-            if (status) {
-                status.style.display = rawSource ? 'block' : 'none';
-                if (rawSource && !status.dataset.detailInitialized) {
-                    status.classList.toggle('collapsed', getAgentDetailDefaultBehavior() === 'collapsed');
-                    status.dataset.detailInitialized = 'true';
-                }
-            }
             const source = limitThinkingDisplayText(rawSource);
             const pattern = /\*\*([^*]+?)\*\*/g;
             let cursor = 0;
@@ -6880,7 +6613,10 @@
                     }
                 }
             }
-            const prompt = typeof chat.promptPrefix === 'string' ? chat.promptPrefix : (systemPrompt || '');
+            const prompt = [
+                typeof chat.promptPrefix === 'string' ? chat.promptPrefix : (systemPrompt || ''),
+                isImageMode || !messages.length ? '' : window.AIUIMemory.getContext(chat, { estimateOnly: true })
+            ].filter(Boolean).join('\n\n');
             return normalize([{ role: 'system', content: prompt }, ...messages]);
         }
 
@@ -6901,7 +6637,10 @@
                     });
                     if (runId !== tokenEstimateRunId) return;
                     if (breakdown.usedTokens > 0) {
-                        span.textContent = `Toks: ${breakdown.usedTokens.toLocaleString('zh-CN')}`;
+                        const unit = document.createElement('span');
+                        unit.className = 'token-estimate-unit';
+                        unit.textContent = 'Toks: ';
+                        span.replaceChildren(unit, breakdown.usedTokens.toLocaleString('zh-CN'));
                         span.style.color = breakdown.overWindow ? '#ef4444' : '';
                         span.style.display = 'inline';
                     } else {
@@ -6910,12 +6649,13 @@
                     }
                     renderContextBreakdown(breakdown);
                     updateContextMeter(breakdown);
-                    window.AIUIEnhancements?.context(breakdown);
+                    window.AIUIEnhancements?.context();
                 } catch (error) {
                     if (runId !== tokenEstimateRunId) return;
                     span.textContent = 'Token 估算暂不可用';
                     span.style.display = 'inline';
                     document.getElementById('context-meter')?.classList.remove('visible');
+                    window.AIUIEnhancements?.context();
                 }
             }, 90);
         }
@@ -6971,12 +6711,12 @@
             if (!popover) return false;
             // An empty/new chat can hide the token label until counting finishes.
             // Keep its detail popup anchored to the visible usage row in that state.
-            const triggerRect = ['token-estimate','context-meter','context-estimate-shell']
+            const triggerRect = ['context-meter','token-estimate','context-estimate-shell']
                 .map(id => document.getElementById(id)?.getBoundingClientRect())
                 .find(rect => rect && rect.width > 0 && rect.top > 0);
             if (!triggerRect) { hideContextBreakdown(); return false; }
             const width = Math.min(360, Math.max(0, window.innerWidth - 24));
-            const left = Math.max(12, Math.min(triggerRect.left, window.innerWidth - width - 12));
+            const left = Math.max(12, Math.min(triggerRect.right - width, window.innerWidth - width - 12));
             popover.style.width = `${width}px`;
             popover.style.left = `${left}px`;
             const height = popover.offsetHeight || 220;
@@ -6993,14 +6733,14 @@
         let contextBreakdownCloseTimer = null;
         function showContextBreakdown() {
             clearTimeout(contextBreakdownCloseTimer);
-            if (!positionContextBreakdown()) return;
+            if (document.querySelector('.choice-popover.open, #attach-menu.visible') || !positionContextBreakdown()) return;
             contextBreakdownPopover?.classList.add('is-open');
-            document.getElementById('token-estimate')?.setAttribute('aria-expanded', 'true');
+            for (const id of ['token-estimate', 'context-meter']) document.getElementById(id)?.setAttribute('aria-expanded', 'true');
         }
         function hideContextBreakdown() {
             clearTimeout(contextBreakdownCloseTimer);
             contextBreakdownPopover?.classList.remove('is-open');
-            document.getElementById('token-estimate')?.setAttribute('aria-expanded', 'false');
+            for (const id of ['token-estimate', 'context-meter']) document.getElementById(id)?.setAttribute('aria-expanded', 'false');
         }
         function scheduleContextBreakdownClose() {
             clearTimeout(contextBreakdownCloseTimer);
@@ -7016,6 +6756,7 @@
         contextEstimateShell?.addEventListener('focusin', showContextBreakdown);
         contextEstimateShell?.addEventListener('focusout', scheduleContextBreakdownClose);
         document.getElementById('token-estimate')?.addEventListener('click', showContextBreakdown);
+        document.getElementById('context-meter')?.addEventListener('click', showContextBreakdown);
         contextBreakdownPopover?.addEventListener('mouseenter', showContextBreakdown);
         contextBreakdownPopover?.addEventListener('mouseleave', scheduleContextBreakdownClose);
         contextBreakdownPopover?.addEventListener('focusout', scheduleContextBreakdownClose);
@@ -7090,30 +6831,20 @@
 
         function updateContextMeter(breakdown) {
             const meter = document.getElementById('context-meter');
-            const fill = document.getElementById('context-meter-fill');
-            const label = document.getElementById('context-meter-label');
-            if (!meter || !fill || !label) return;
-            const chat = activeChatId ? chats.find(item => item.id === activeChatId) : null;
-            if (!chat?.agentEnabled || !breakdown || !(breakdown.usedTokens > 0)) {
+            const chat = chats.find(item => item.id === activeChatId);
+            if (!(breakdown?.usedTokens > 0) || !(breakdown.contextWindow > 0)) {
                 meter.classList.remove('visible', 'level-warn', 'level-critical');
                 return;
             }
             const windowSize = breakdown.contextWindow;
-            const ratio = windowSize > 0 ? breakdown.usedTokens / windowSize : 0;
+            const ratio = breakdown.usedTokens / windowSize;
             const percent = Math.round(ratio * 100);
-            fill.style.width = `${Math.max(ratio > 0 ? 2 : 0, Math.min(100, percent))}%`;
-            label.textContent = `${percent}% · ${formatTokenCount(breakdown.usedTokens)}/${formatTokenCount(windowSize)}`;
-            meter.classList.add('visible');
-            const warnAt = chat?.agentEnabled ? AGENT_COMPACTION_THRESHOLD * 0.75 : 0.85;
             const criticalAt = chat?.agentEnabled ? AGENT_COMPACTION_THRESHOLD : 0.95;
-            meter.classList.toggle('level-warn', ratio >= warnAt && ratio < criticalAt);
+            meter.style.setProperty('--usage-percent', String(Math.max(2, Math.min(100, ratio * 100))));
+            meter.classList.add('visible');
+            meter.classList.toggle('level-warn', ratio >= (chat?.agentEnabled ? criticalAt * 0.75 : 0.85) && ratio < criticalAt);
             meter.classList.toggle('level-critical', ratio >= criticalAt);
-            meter.setAttribute('aria-valuenow', String(percent));
             meter.setAttribute('aria-label', `上下文窗口已使用 ${percent}%（${formatTokenCount(breakdown.usedTokens)}/${formatTokenCount(windowSize)}）`);
-            const track = meter.querySelector('.context-meter-track');
-            if (track) {
-                track.title = `上下文：${formatTokenCount(breakdown.usedTokens)} / ${formatTokenCount(windowSize)}（${percent}%）`;
-            }
         }
 
         function getSelectedModelName() {
@@ -7470,10 +7201,60 @@
             renderMessages(resolved, forceRender);
         }
 
+        const userMessageObserver = new ResizeObserver(entries => {
+            for (const { target } of entries) updateUserMessageToggle(target);
+        });
+        let userMessageTextId = 0;
+
+        function updateUserMessageToggle(text) {
+            const clip = text.parentElement;
+            const toggle = clip.nextElementSibling;
+            const style = getComputedStyle(text);
+            const limit = parseFloat(style.lineHeight) * Number(style.getPropertyValue('--user-message-preview-lines'));
+            toggle.hidden = text.offsetHeight <= limit + 1;
+            clip.classList.toggle('is-clipped', !toggle.hidden && toggle.getAttribute('aria-expanded') === 'false');
+        }
+
+        function appendUserMessageText(bubble, content, expanded) {
+            const clip = document.createElement('div');
+            clip.className = 'user-message-clip';
+            const text = document.createElement('div');
+            text.className = 'plain-text-content';
+            text.id = `user-message-text-${++userMessageTextId}`;
+            text.textContent = content;
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'user-message-toggle';
+            toggle.setAttribute('aria-controls', text.id);
+            function setExpanded(open) {
+                toggle.setAttribute('aria-expanded', String(open));
+                toggle.textContent = open ? 'Show less' : 'Show more';
+                updateUserMessageToggle(text);
+            }
+            toggle.onclick = () => {
+                const open = toggle.getAttribute('aria-expanded') !== 'true';
+                setExpanded(open);
+                if (!open) toggle.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+            };
+            clip.append(text);
+            bubble.append(clip, toggle);
+            setExpanded(expanded === true);
+            userMessageObserver.observe(text);
+            return text;
+        }
+
         function renderMessages(messages, forceRender = false) {
             const wrapper = document.getElementById('messages-wrapper');
             if (isGenerating && !forceRender && wrapper && wrapper.children.length) return;
-            wrapper.innerHTML = '';
+            const sameChat = wrapper.dataset.chatId === String(activeChatId);
+            const activityView = sameChat ? window.captureAgentActivityView?.(wrapper) : null;
+            const expandedUserMessages = sameChat ? Array.from(wrapper.querySelectorAll('.user-bubble'), bubble =>
+                bubble.querySelector('.user-message-toggle')?.getAttribute('aria-expanded') === 'true') : [];
+            let userMessageIndex = 0;
+            window.endAgentActivityBlock?.();
+            userMessageObserver.disconnect();
+            wrapper.replaceChildren();
+            wrapper.dataset.chatId = String(activeChatId);
             if (!messages || messages.length === 0) {
                 const greetingText = getGreetingByTime();
                 const welcomeDiv = document.createElement('div');
@@ -7524,7 +7305,9 @@
                         failed: msg.failed === true,
                         agentFinal: msg.agentFinal === true,
                         agentSegment: msg.agentSegment === true,
-                        agentMessage: renderingAgentChat && msg.role === 'assistant'
+                        userExpanded: msg.role === 'user' && expandedUserMessages[userMessageIndex++],
+                        thinkingDurationMs: msg.thinkingDurationMs,
+                        memoryActivity: msg.memoryActivity
                     });
                     pendingFinalRow = msg.role === 'assistant' && msg.agentFinal === true ? renderedRow : null;
                     if (pendingFinalRow && deferredFinishMessage) {
@@ -7537,102 +7320,84 @@
                         deferredFinishMessage = null;
                     }
                 });
-                wrapper.scrollTop = wrapper.scrollHeight;
+                scrollChatToBottom();
                 return;
             }
 
-            // Agent chat: collapse completed rounds into one summary row and
-            // lazy-load the intermediate rows only when the user expands them.
-            let roundIntermediates = [];
+            let activity = [];
             let lastFinalRow = null;
             let pendingFinish = null;
+            function flushPendingFinish() {
+                const duration = pendingFinish?.taskDurationMs;
+                if (Number.isFinite(duration)) window.appendAgentTaskDuration?.(wrapper, duration);
+                pendingFinish = null;
+            }
+            function flushActivity() {
+                if (!activity.length) return;
+                window.appendAgentRoundSummaryUI?.({ messages: activity, container: wrapper, view: activityView });
+                const last = activity.at(-1);
+                if (last.toolName === 'ask_user_question') window.appendAgentQuestionAnswerToUI?.(last, wrapper);
+                const duration = activity.findLast(message => Number.isFinite(message.taskDurationMs))?.taskDurationMs;
+                if (Number.isFinite(duration)) window.appendAgentTaskDuration?.(wrapper, duration);
+                activity = [];
+            }
 
-            const renderIntermediate = (m, container) => {
-                if (m.agentThinking === true) {
-                    window.appendAgentThinkingMessageToUI?.(m, { container });
-                } else if (m.role === 'tool') {
-                    appendAgentToolMessageToUI(m, { container });
-                } else {
-                    appendMessageToUI('assistant', m.content, m.model, false, m.reasoning || '', m.attachments || [], m
-                        .generatedImages || [], m.voiceRecordId || '', {
-                        completedAt: m.completedAt,
-                        failed: m.failed === true,
-                        agentSegment: true,
-                        agentMessage: true,
-                        container
-                    });
+            for (const msg of messages) {
+                if (msg.hidden === true) {
+                    if (msg.agentThinking && msg.reasoning) activity.push(msg);
+                    continue;
                 }
-            };
-
-            const flushRound = collapsed => {
-                if (!roundIntermediates.length) { roundIntermediates = []; return; }
-                if (collapsed) {
-                    window.appendAgentRoundSummaryUI?.({ messages: roundIntermediates, container: wrapper });
-                } else {
-                    for (const m of roundIntermediates) renderIntermediate(m, wrapper);
-                }
-                roundIntermediates = [];
-            };
-
-            messages.forEach(msg => {
-                if (msg?.hidden === true) {
-                    if (msg.agentThinking === true && msg.reasoning) roundIntermediates.push(msg);
-                    return;
-                }
-                if (msg?.role === 'user') {
-                    flushRound(false);
-                    lastFinalRow = null;
-                    appendMessageToUI('user', msg.content, msg.model, false, '', msg.attachments || [], msg
-                        .generatedImages || [], msg.voiceRecordId || '', {});
-                    return;
-                }
-                if (msg?.role === 'tool') {
-                    if (msg.toolName === 'finish_task') {
-                        if (lastFinalRow) {
-                            const contentCol = lastFinalRow.querySelector('.message-content-col');
-                            appendAgentToolMessageToUI(msg, {
-                                inline: true,
-                                container: contentCol,
-                                before: contentCol?.querySelector('.message-footer')
-                            });
-                        } else {
-                            pendingFinish = msg;
-                        }
+                if (msg.role === 'tool') {
+                    if (msg.toolName === 'finish_task' && msg.result?.success && msg.status === 'done') {
+                        if (lastFinalRow) window.appendAgentFinishStatus?.(msg, lastFinalRow);
+                        else pendingFinish = msg;
                     } else {
-                        roundIntermediates.push(msg);
+                        activity.push(msg);
+                        if (msg.toolName === 'ask_user_question') flushActivity();
+                        lastFinalRow = null;
                     }
-                    return;
+                    continue;
                 }
-                if (msg?.agentFinal === true) {
-                    flushRound(true);
-                    lastFinalRow = appendMessageToUI('assistant', msg.content, msg.model, true, msg.reasoning || '', msg
-                        .attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
+                flushActivity();
+                if (msg.role === 'user') flushPendingFinish();
+                const isFinal = msg.agentFinal === true;
+                const rendered = appendMessageToUI(msg.role, msg.content, msg.model, isFinal, msg.reasoning || '',
+                    msg.attachments || [], msg.generatedImages || [], msg.voiceRecordId || '', {
+                        container: wrapper,
+                        agentFinal: isFinal,
+                        agentSegment: msg.agentSegment === true,
+                        agentMessage: msg.role === 'assistant',
                         completedAt: msg.completedAt,
                         failed: msg.failed === true,
-                        agentFinal: true,
-                        agentMessage: true
+                        userExpanded: msg.role === 'user' && expandedUserMessages[userMessageIndex++],
+                        thinkingDurationMs: msg.thinkingDurationMs,
+                        taskDurationMs: msg.taskDurationMs,
+                        memoryActivity: msg.memoryActivity
                     });
-                    if (pendingFinish) {
-                        const contentCol = lastFinalRow?.querySelector('.message-content-col');
-                        appendAgentToolMessageToUI(pendingFinish, {
-                            inline: true,
-                            container: contentCol,
-                            before: contentCol?.querySelector('.message-footer')
-                        });
-                        pendingFinish = null;
-                    }
-                    return;
+                lastFinalRow = isFinal ? rendered : null;
+                if (lastFinalRow && pendingFinish) {
+                    window.appendAgentFinishStatus?.(pendingFinish, lastFinalRow);
+                    pendingFinish = null;
                 }
-                if (msg?.agentSegment === true) {
-                    roundIntermediates.push(msg);
-                    return;
-                }
-                appendMessageToUI('assistant', msg.content, msg.model, false, msg.reasoning || '', msg.attachments || [], msg
-                    .generatedImages || [], msg.voiceRecordId || '', { agentMessage: true });
-            });
-            flushRound(false);
-            wrapper.scrollTop = wrapper.scrollHeight;
+            }
+            flushActivity();
+            flushPendingFinish();
+            window.placeAgentTaskFooter?.();
+            scrollChatToBottom();
         }
+        function renderMessageMemoryActivity(footer, activity) {
+            if (!footer || !activity) return;
+            const counts = window.AIUIMemory?.normalizeActivity(activity);
+            if (!counts) return;
+            const verbs = { created: 'Created', updated: 'Updated', deleted: 'Deleted' };
+            const labels = Object.entries(counts).map(([key, count]) => `${verbs[key]} ${count} ${count === 1 ? 'memory' : 'memories'}`);
+            const status = document.createElement('div');
+            status.className = 'message-memory-activity';
+            status.setAttribute('role', 'status');
+            status.textContent = labels.join(' · ');
+            footer.before(status);
+        }
+
         function appendMessageToUI(role, content, model, showActions = false, reasoning = '', attachments = [],
             generatedImages = [], voiceRecordId = '', messageOptions = {}) {
             const wrapper = messageOptions.container || document.getElementById('messages-wrapper');
@@ -7641,64 +7406,32 @@
                 ? AgentProtocol.stripToolCallsForDisplay(content)
                 : String(content || '');
             if (isAI && messageOptions.agentMessage && content && !displayContent) return null;
+            if (!messageOptions.container) window.endAgentActivityBlock?.();
             const row = document.createElement('div');
-            row.className = `chat-row`;
+            row.className = 'chat-row';
+            if (!isAI) row.classList.add('user-message-row');
             if (messageOptions.agentSegment) row.classList.add('agent-segment-row');
             if (messageOptions.agentFinal) row.classList.add('agent-final-row');
             const contentCol = document.createElement('div');
             contentCol.className = `message-content-col flex flex-col w-full`;
             if (isAI && !messageOptions.agentSegment) {
-                const thinkingStatus = document.createElement('div');
-                thinkingStatus.className = 'ai-thinking-status';
-                thinkingStatus.innerHTML = `<div class="agent-tool-row"><div class="agent-tool-summary clickable" role="button" tabindex="0" aria-expanded="true"><i data-lucide="bot"></i><span class="ai-thinking-label">AI 思考过程</span><i class="agent-tool-toggle" data-lucide="chevron-down" style="display:block"></i></div><div class="ai-thinking-detail"><div class="ai-thinking-detail-inner"><div class="thinking-text text-gray-400 text-xs mb-1"></div></div></div></div>`;
-                const renderedThinkingDiv = thinkingStatus.querySelector('.thinking-text');
-                const summary = thinkingStatus.querySelector('.agent-tool-summary');
-                const toggleThinking = () => {
-                    const collapsed = thinkingStatus.classList.toggle('collapsed');
-                    summary.setAttribute('aria-expanded', String(!collapsed));
-                    lucide.createIcons();
-                };
-                summary.onclick = toggleThinking;
-                summary.onkeydown = event => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        toggleThinking();
-                    }
-                };
-                if (reasoning) {
-                    renderThinkingText(renderedThinkingDiv, reasoning);
-                } else {
-                    thinkingStatus.style.display = 'none';
-                }
-                setThinkingStatus(renderedThinkingDiv, messageOptions.thinkingActive === true);
-                contentCol.appendChild(thinkingStatus);
+                row.responseActivity = window.appendResponseActivity?.(contentCol, reasoning,
+                    messageOptions.thinkingActive === true, messageOptions.thinkingDurationMs);
             }
             const bubble = document.createElement('div');
             bubble.className = `msg-bubble ${isAI ? 'ai-bubble' : 'user-bubble'}`;
+            let userMessageText;
             if (displayContent) {
                 if (isAI) {
                     bubble.innerHTML = `<div class="prose prose-invert prose-sm ai-content-area">${renderAssistantMarkdown(displayContent)}</div>`;
                     const contentArea = bubble.querySelector('.ai-content-area');
-                    if (contentArea) renderMathFormulas(contentArea);
-                    bubble.querySelectorAll('pre').forEach(pre => {
-                        const code = pre.querySelector('code');
-                        if (code && !pre.querySelector('.code-copy-btn') && !pre.closest('.canvas-replace-notice')) {
-                            const copyBtn = document.createElement('button');
-                            copyBtn.className = 'code-copy-btn';
-                            copyBtn.innerText = '复制代码';
-                            copyBtn.onclick = (e) => {
-                                e.stopPropagation();
-                                copyToClipboard(code.innerText, copyBtn);
-                            };
-                            pre.appendChild(copyBtn);
-                        }
-                    });
+                    renderMathFormulas(contentArea);
+                    prepareAssistantCode(contentArea);
                 } else {
-                    bubble.innerHTML = `<div class="plain-text-content">${sanitizeHtml(escapeHtml(content))}</div>`;
+                    userMessageText = appendUserMessageText(bubble, displayContent, messageOptions.userExpanded);
                 }
-            } else {
-                bubble.innerHTML =
-                    `<div class="ai-content-area"><div class="ai-pending-text text-gray-400 text-sm">AI 正在思考...</div></div>`;
+            } else if (isAI) {
+                bubble.innerHTML = '<div class="prose prose-invert prose-sm ai-content-area"></div>';
             }
             if (!isAI && attachments && attachments.length > 0) {
                 const attContainer = document.createElement('div');
@@ -7743,41 +7476,8 @@
             contentCol.appendChild(bubble);
             if (isAI && !messageOptions.agentSegment) {
                 const footer = document.createElement('div');
-                footer.className = "message-footer flex items-center gap-2 mt-1.5 px-4 w-full flex-wrap";
-                const modelSpan = document.createElement('span');
-                modelSpan.className = "text-[13px] text-gray-500 font-bold font-mono uppercase";
-                modelSpan.innerText = model || document.getElementById('model-select').value;
-                const btnGroup = document.createElement('div');
-                btnGroup.className = "flex items-center gap-1";
-                if (!messageOptions.agentFinal) {
-                    const retryBtn = document.createElement('span');
-                    retryBtn.className = 'action-btn';
-                    retryBtn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重试`;
-                    retryBtn.onclick = (e) => openRetryMenu(e);
-                    btnGroup.appendChild(retryBtn);
-                }
-                if (generatedImages && generatedImages.length > 0) {
-                    const downloadBtn = document.createElement('span');
-                    downloadBtn.className = 'action-btn';
-                    downloadBtn.innerHTML = `<i data-lucide="download" class="w-3.5 h-3.5"></i> 下载`;
-                    downloadBtn.onclick = () => {
-                        const lastImg = generatedImages[generatedImages.length - 1];
-                        const a = document.createElement('a');
-                        a.href = lastImg;
-                        a.download = `generated-${Date.now()}.png`;
-                        a.click();
-                    };
-                    btnGroup.appendChild(downloadBtn);
-                } else {
-                    const copyMsgBtn = document.createElement('span');
-                    copyMsgBtn.className = 'action-btn';
-                    copyMsgBtn.innerHTML = `<i data-lucide="copy" class="w-3.5 h-3.5"></i> 复制`;
-                    copyMsgBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        copyToClipboard(displayContent || '', copyMsgBtn);
-                    };
-                    btnGroup.appendChild(copyMsgBtn);
-                }
+                footer.className = "message-footer flex items-center gap-2 mt-1.5 w-full";
+                footer.hidden = messageOptions.thinkingActive === true;
                 if (voiceRecordId) {
                     void (async () => {
                         const record = await VoiceRecordStore.getRecord(voiceRecordId).catch(() => null);
@@ -7789,27 +7489,93 @@
                             e.stopPropagation();
                             playVoiceRecord(record.id);
                         };
-                        btnGroup.appendChild(replayBtn);
+                        footer.insertBefore(replayBtn, footer.querySelector('.message-icon-btn'));
                         lucide.createIcons();
                     })();
                 }
-                footer.appendChild(modelSpan);
-                footer.appendChild(btnGroup);
                 const time = document.createElement('time'); time.className = 'message-time';
                 if (messageOptions.completedAt && !messageOptions.failed) {
                     const date = new Date(messageOptions.completedAt);
                     if (Number.isFinite(date.getTime())) { time.dateTime = date.toISOString(); time.textContent = date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', hour12:false }); }
                 }
-                footer.appendChild(time);
+                footer.append(time);
+                if (!messageOptions.agentFinal) {
+                    footer.append(createMessageIconButton('refresh-cw', '重试', retryLastResponse));
+                }
+                if (generatedImages?.length) {
+                    footer.append(createMessageIconButton('download', '下载图片', () => {
+                        const a = document.createElement('a');
+                        a.href = generatedImages.at(-1);
+                        a.download = `generated-${Date.now()}.png`;
+                        a.click();
+                    }));
+                } else {
+                    footer.appendChild(createCopyIconButton(
+                        messageOptions.getCopyText || (() => displayContent), '复制回复'));
+                }
                 contentCol.appendChild(footer);
+                renderMessageMemoryActivity(footer, messageOptions.memoryActivity);
             }
             row.appendChild(contentCol);
+            if (messageOptions.agentMessage) window.appendResponseDuration?.(row, messageOptions.taskDurationMs);
             wrapper.appendChild(row);
+            if (userMessageText) updateUserMessageToggle(userMessageText);
             lucide.createIcons();
-            if (content) bubble.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
-            wrapper.scrollTop = wrapper.scrollHeight;
+            if (!messageOptions.container) {
+                window.placeAgentTaskFooter?.();
+                scrollChatToBottom();
+            }
             return row;
         }
+
+        function createMessageIconButton(icon, label, onClick) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'message-icon-btn';
+            button.title = label;
+            button.setAttribute('aria-label', label);
+            button.innerHTML = `<i data-lucide="${icon}"></i>`;
+            button.onclick = onClick;
+            return button;
+        }
+
+        function createCopyIconButton(getText, label) {
+            const button = createMessageIconButton('copy', label);
+            button.classList.add('copy-icon-btn');
+            let resetTimer;
+            button.onclick = async () => {
+                const content = getText();
+                if (!content) return;
+                const copied = await copyTextToClipboard(content);
+                clearTimeout(resetTimer);
+                const status = copied ? '已复制' : '复制失败';
+                button.dataset.copyState = copied ? 'success' : 'error';
+                button.innerHTML = copied ? '<i data-lucide="check"></i>' : '<i data-lucide="x"></i>';
+                button.setAttribute('aria-label', status);
+                button.title = status;
+                lucide.createIcons();
+                resetTimer = setTimeout(() => {
+                    delete button.dataset.copyState;
+                    button.innerHTML = '<i data-lucide="copy"></i>';
+                    button.setAttribute('aria-label', label);
+                    button.title = label;
+                    lucide.createIcons();
+                }, 1800);
+            };
+            return button;
+        }
+
+        function prepareAssistantCode(container) {
+            for (const code of container.querySelectorAll('pre > code')) {
+                hljs.highlightElement(code);
+                const pre = code.parentElement;
+                if (pre.closest('.canvas-replace-notice') || pre.querySelector('.code-copy-btn')) continue;
+                const button = createCopyIconButton(() => code.innerText, '复制代码');
+                button.classList.add('code-copy-btn');
+                pre.appendChild(button);
+            }
+        }
+
         async function copyToClipboard(text, btnElement) {
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(text);
@@ -7908,6 +7674,48 @@
         }
 
         function markApiSettingsDirty() { apiSettingsDirty = true; document.getElementById('api-unsaved-hint')?.classList.remove('hidden'); }
+        function refreshMemorySettings() {
+            const toggle = document.getElementById('memory-enabled-toggle');
+            const list = document.getElementById('memory-list');
+            toggle.checked = window.AIUIMemory.isEnabled();
+            const records = window.AIUIMemory.list();
+            document.getElementById('memory-list-empty').classList.toggle('hidden', records.length > 0);
+            list.classList.toggle('hidden', records.length === 0);
+            list.replaceChildren();
+            for (const record of records) {
+                const row = document.createElement('li');
+                row.className = 'flex items-start gap-3 py-2 pr-1 border-b border-gray-700 last:border-b-0';
+                const text = document.createElement('span');
+                text.className = 'min-w-0 flex-1 break-words leading-relaxed';
+                text.textContent = record.text;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'shrink-0 inline-grid place-items-center w-7 h-7 rounded-md text-gray-400 hover:bg-red-500/10 hover:text-red-400';
+                remove.disabled = toggle.disabled;
+                remove.title = '删除记忆';
+                remove.setAttribute('aria-label', '删除记忆');
+                remove.append(lucide.createElement(lucide.Trash2, { width: 16, height: 16, 'aria-hidden': 'true' }));
+                remove.onclick = () => {
+                    if (!window.AIUIMemory.deleteRecord(record.id).ok) {
+                        showVoiceNotification('未能删除这条记忆', true, 2500);
+                    }
+                    refreshMemorySettings();
+                };
+                row.append(text, remove);
+                list.append(row);
+            }
+        }
+
+        function setMemoryEnabled(enabled) {
+            try {
+                if (window.AIUIMemory.setEnabled(enabled) === false) throw new Error('Memory setting was not saved');
+            } catch {
+                showVoiceNotification('未能保存记忆设置', true, 2500);
+            }
+            refreshMemorySettings();
+            updateTokenEstimate();
+        }
+
         function onContextSettingChange() {
             if (contextCompactionRunning) return;
             const radio = document.querySelector('input[name="auto-summary-interval"]:checked');
@@ -7949,11 +7757,8 @@
         }
 
         function populateVoiceChatSettings() {
+            renderVoiceFishProfile(readVoiceFishProfiles());
             const values = {
-                'voice-fish-base-input': localStorage.getItem('voice_fish_base') || DEFAULT_FISH_AUDIO_BASE,
-                'voice-fish-key-input': localStorage.getItem('voice_fish_key') || DEFAULT_FISH_AUDIO_KEY,
-                'voice-fish-name-input': localStorage.getItem('voice_fish_name') || DEFAULT_FISH_VOICE_NAME,
-                'voice-fish-id-input': localStorage.getItem('voice_fish_id') || DEFAULT_FISH_VOICE_ID,
                 'voice-xf-appid-input': localStorage.getItem('voice_xf_appid') || DEFAULT_XF_APPID,
                 'voice-xf-key-input': localStorage.getItem('voice_xf_key') || DEFAULT_XF_API_KEY,
                 'voice-xf-secret-input': localStorage.getItem('voice_xf_secret') || DEFAULT_XF_API_SECRET
@@ -7967,6 +7772,162 @@
             const ignoreParentheses = document.getElementById('voice-tts-ignore-parentheses');
             if (ignoreParentheses) ignoreParentheses.checked = localStorage.getItem('voice_tts_ignore_parentheses') !== 'false';
             updateVoicePresetProbabilityLabel();
+        }
+
+        const VOICE_FISH_PROFILES_KEY = 'voice_fish_profiles';
+        const DEFAULT_VOICE_FISH_PROFILE = 'default';
+        const VOICE_FISH_PROFILE_FIELDS = {
+            'voice-fish-base-input': 'apiBase',
+            'voice-fish-key-input': 'apiKey',
+            'voice-fish-model-select': 'model',
+            'voice-fish-name-input': 'voiceName',
+            'voice-fish-id-input': 'voiceId'
+        };
+
+        function createVoiceFishProfileRecord(id, name, endpoint) {
+            const endpoints = Object.fromEntries(Object.entries(FishAudio.bases).map(([type, apiBase]) => [type, {
+                apiBase, apiKey: '', model: FishAudio.defaultModel,
+                voiceName: DEFAULT_FISH_VOICE_NAME, voiceId: DEFAULT_FISH_VOICE_ID
+            }]));
+            return { id, name, endpoint, endpoints };
+        }
+
+        function readVoiceFishProfiles() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(VOICE_FISH_PROFILES_KEY));
+                if (Array.isArray(saved?.profiles)) {
+                    const profiles = saved.profiles.filter(profile => typeof profile?.id === 'string' &&
+                        typeof profile.name === 'string' && profile.endpoints?.domestic && profile.endpoints?.international);
+                    if (profiles.some(profile => profile.id === DEFAULT_VOICE_FISH_PROFILE)) {
+                        return { activeId: saved.activeId, profiles };
+                    }
+                }
+            } catch {}
+
+            const apiBase = localStorage.getItem('voice_fish_base');
+            const endpoint = FishAudio.endpointFor(localStorage.getItem('voice_fish_endpoint'), apiBase);
+            const profile = createVoiceFishProfileRecord(DEFAULT_VOICE_FISH_PROFILE, '默认配置', endpoint);
+            const legacy = FishAudio.normalizeConfig({ endpoint, apiBase, model: localStorage.getItem('voice_fish_model') });
+            profile.endpoints[endpoint].apiBase = legacy.apiBase;
+            profile.endpoints[endpoint].model = legacy.model;
+            for (const [type, settings] of Object.entries(profile.endpoints)) {
+                settings.apiKey = localStorage.getItem(type === 'international' ? 'voice_fish_international_key' : 'voice_fish_key');
+                settings.voiceName = localStorage.getItem('voice_fish_name') ?? settings.voiceName;
+                settings.voiceId = localStorage.getItem('voice_fish_id') ?? settings.voiceId;
+            }
+            return { activeId: profile.id, profiles: [profile] };
+        }
+
+        function activeVoiceFishProfile(state) {
+            return state.profiles.find(profile => profile.id === state.activeId) ??
+                state.profiles.find(profile => profile.id === DEFAULT_VOICE_FISH_PROFILE);
+        }
+
+        function voiceFishEndpointSettings(profile) {
+            const endpoint = FishAudio.endpointFor(profile.endpoint);
+            const settings = profile.endpoints[endpoint];
+            const inheritedKey = profile.id === DEFAULT_VOICE_FISH_PROFILE && endpoint === 'domestic' ? DEFAULT_FISH_AUDIO_KEY : '';
+            return { ...settings, endpoint, apiKey: settings.apiKey ?? inheritedKey };
+        }
+
+        function getSavedFishAudioSettings() {
+            const settings = voiceFishEndpointSettings(activeVoiceFishProfile(readVoiceFishProfiles()));
+            return { ...FishAudio.normalizeConfig(settings), voiceName: String(settings.voiceName ?? '').trim() };
+        }
+
+        function writeVoiceFishProfiles(state) {
+            try {
+                localStorage.setItem(VOICE_FISH_PROFILES_KEY, JSON.stringify(state));
+                return true;
+            } catch {
+                showVoiceNotification('Fish Audio 配置保存失败', true, 3000);
+                return false;
+            }
+        }
+
+        function renderVoiceFishProfileOptions(state, activeId) {
+            const select = document.getElementById('voice-fish-profile-select');
+            select.replaceChildren(...state.profiles.map(profile => new Option(profile.name.trim() || '未命名配置', profile.id)));
+            select.value = activeId;
+        }
+
+        function renderVoiceFishProfile(state) {
+            const profile = activeVoiceFishProfile(state);
+            const settings = voiceFishEndpointSettings(profile);
+            renderVoiceFishProfileOptions(state, profile.id);
+            const isDefault = profile.id === DEFAULT_VOICE_FISH_PROFILE;
+            const name = document.getElementById('voice-fish-profile-name');
+            name.value = profile.name;
+            name.readOnly = isDefault;
+            document.getElementById('voice-fish-profile-delete').hidden = isDefault;
+            document.getElementById('voice-fish-endpoint-select').value = settings.endpoint;
+            for (const [id, field] of Object.entries(VOICE_FISH_PROFILE_FIELDS)) {
+                if (field === 'model') populateFishAudioModels(settings.endpoint, settings.model);
+                else document.getElementById(id).value = settings[field] ?? '';
+            }
+        }
+
+        function switchVoiceFishProfile(id) {
+            const state = readVoiceFishProfiles();
+            if (!state.profiles.some(profile => profile.id === id)) return;
+            state.activeId = id;
+            renderVoiceFishProfile(writeVoiceFishProfiles(state) ? state : readVoiceFishProfiles());
+        }
+
+        function createVoiceFishProfile() {
+            const state = readVoiceFishProfiles();
+            const endpoint = activeVoiceFishProfile(state).endpoint;
+            const names = new Set(state.profiles.map(profile => profile.name));
+            let number = 1;
+            while (names.has(`配置 ${number}`)) number++;
+            const profile = createVoiceFishProfileRecord(crypto.randomUUID(), `配置 ${number}`, endpoint);
+            state.profiles.push(profile);
+            state.activeId = profile.id;
+            if (!writeVoiceFishProfiles(state)) return;
+            renderVoiceFishProfile(state);
+            const name = document.getElementById('voice-fish-profile-name');
+            name.focus();
+            name.select();
+        }
+
+        function deleteVoiceFishProfile() {
+            const state = readVoiceFishProfiles();
+            const profile = activeVoiceFishProfile(state);
+            if (profile.id === DEFAULT_VOICE_FISH_PROFILE ||
+                !window.confirm(`确定要删除 Fish Audio 配置「${profile.name.trim() || '未命名配置'}」吗？`)) return;
+            state.profiles = state.profiles.filter(item => item.id !== profile.id);
+            state.activeId = DEFAULT_VOICE_FISH_PROFILE;
+            if (writeVoiceFishProfiles(state)) renderVoiceFishProfile(state);
+        }
+
+        function persistVoiceFishInput(input) {
+            if (input.id === 'voice-fish-profile-select' || input.id === 'voice-fish-endpoint-select') return true;
+            const rename = input.id === 'voice-fish-profile-name';
+            const field = rename ? 'name' : VOICE_FISH_PROFILE_FIELDS[input.id];
+            if (!field) return false;
+            const state = readVoiceFishProfiles();
+            const profile = activeVoiceFishProfile(state);
+            const target = rename ? profile : profile.endpoints[FishAudio.endpointFor(profile.endpoint)];
+            if (target[field] !== input.value) {
+                target[field] = input.value;
+                if (writeVoiceFishProfiles(state) && rename) renderVoiceFishProfileOptions(state, profile.id);
+            }
+            return true;
+        }
+
+        function populateFishAudioModels(endpoint, preferredModel) {
+            const select = document.getElementById('voice-fish-model-select');
+            const models = FishAudio.modelsFor(endpoint);
+            select.replaceChildren(...models.map(([id, label]) => new Option(label, id)));
+            select.value = models.some(([id]) => id === preferredModel) ? preferredModel : FishAudio.defaultModel;
+        }
+
+        function changeVoiceFishEndpoint() {
+            const endpoint = document.getElementById('voice-fish-endpoint-select').value;
+            const state = readVoiceFishProfiles();
+            const profile = activeVoiceFishProfile(state);
+            profile.endpoint = FishAudio.endpointFor(endpoint);
+            renderVoiceFishProfile(writeVoiceFishProfiles(state) ? state : readVoiceFishProfiles());
         }
 
         function populateDesktopWorkSettings() {
@@ -8606,11 +8567,7 @@
                 button.textContent = '正在生成 9 条预制语音…';
             }
             try {
-                const result = await window.electronAPI.generateVoicePreset({
-                    apiBase: document.getElementById('voice-fish-base-input').value.trim(),
-                    apiKey: document.getElementById('voice-fish-key-input').value.trim(),
-                    voiceId: document.getElementById('voice-fish-id-input').value.trim()
-                });
+                const result = await window.electronAPI.generateVoicePreset(getSavedFishAudioSettings());
                 showVoiceNotification(`预制语音包已生成，共 ${result.count || 9} 条`, false, 3000);
             } catch (error) {
                 showVoiceNotification(error.message || '预制语音包生成失败', true, 5000);
@@ -9086,10 +9043,6 @@
             if (contextModelSelect && savedContextModel) contextModelSelect.value = savedContextModel;
             if (savedContextModel) localStorage.setItem('context_compaction_model', savedContextModel);
             const voiceChatFields = {
-                voice_fish_base: 'voice-fish-base-input',
-                voice_fish_key: 'voice-fish-key-input',
-                voice_fish_name: 'voice-fish-name-input',
-                voice_fish_id: 'voice-fish-id-input',
                 voice_xf_appid: 'voice-xf-appid-input',
                 voice_xf_key: 'voice-xf-key-input',
                 voice_xf_secret: 'voice-xf-secret-input'
@@ -9126,8 +9079,6 @@
             const recordToggle = document.getElementById('record-logs-toggle');
             if (recordToggle) recordLogsEnabled = recordToggle.checked;
             localStorage.setItem('record_logs', recordLogsEnabled ? 'true' : 'false');
-            const autoScroll = document.getElementById('agent-auto-scroll');
-            if (autoScroll) localStorage.setItem('agent_auto_scroll', autoScroll.checked ? 'true' : 'false');
             apiSettingsDirty = false;
             document.getElementById('api-unsaved-hint')?.classList.add('hidden');
             saveAgentCommandSettings();
@@ -9163,7 +9114,7 @@
             ['编码模式', 'Canvas 用于持续编辑代码或文档。经典布局让输入框横跨底部，分栏布局则把编辑器固定在右侧；代码字号只影响 Canvas 编辑器。', 'assets/guide/5.gif'],
             ['语音聊天', '语音聊天与桌面协作直接使用主界面当前选择的模型，会话开始后切换模型不会影响已经打开的语音会话；语音识别和语音合成仍按本页凭据工作。', 'assets/guide/6.gif'],
             ['桌面协作', '桌面协作可以在语音输入后附带当前显示器截图。你可以设置全局传图快捷键、截图清晰度，并决定是否在没有手动截图时自动传图。', 'assets/guide/7.gif'],
-            ['Agent', 'Agent 设置控制工具调用信息的展示、Shell 超时、图片查看细节以及自动滚动行为。命令前缀仍需在偏好设置 Agent 页面单独维护。', 'assets/guide/8.gif'],
+            ['Agent', 'Agent 设置控制工具调用信息的展示、Shell 超时、图片查看细节及默认搜索引擎。命令前缀仍需在偏好设置 Agent 页面单独维护。', 'assets/guide/8.gif'],
             ['其他设置', '其他设置集中管理 LaTeX 数学公式渲染和启动时的自动更新检查。每项旁边的说明会帮助你了解关闭后的影响。', 'assets/guide/9.gif']
         ];
         function guideToggle(id, checked, label, hint = '') {
@@ -9173,20 +9124,20 @@
             const page = setupGuidePages[setupGuidePage]; const c = document.getElementById('setup-guide-content');
             if (!c || !page) return;
             const blocks = [
-                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V9.6.2 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
+                `<div class="space-y-4">${setupGuidePage === 0 ? `<div class="bg-[#1a1a1a] rounded-xl p-4 border border-gray-700 text-sm"><p>AIChat-UI</p><p class="text-gray-400 mt-2">当前版本：V10.0.0 Release</p><p class="text-gray-400">开发者：JHCWColin</p></div>` : ''}`,
                 setupGuidePage === 1 ? `<label class="block text-sm text-gray-300">Base URL<input id="guide-base-url" value="${escapeHtml(getBaseURL())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">API Key<input id="guide-api-key" type="password" value="${escapeHtml(getAPIKey())}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">最大 Token 限制<input id="guide-max-tokens" type="number" min="0" value="${maxTokensLimit}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><div class="flex gap-2"><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/responses' ? 'active' : ''}" onclick="guideSetEndpoint('/responses',this)">Responses</button><button type="button" class="theme-btn rounded-xl ${getRequestEndpoint() === '/chat/completions' ? 'active' : ''}" onclick="guideSetEndpoint('/chat/completions',this)">Chat Completions</button></div>` : '',
                 setupGuidePage === 2 ? `<div class="setup-guide-section-title">主题</div><div class="flex gap-2"><button type="button" data-guide-theme="light" class="theme-btn rounded-xl ${localStorage.getItem('theme') !== 'dark' ? 'active' : ''}" onclick="guideSetTheme('light',this)">浅色</button><button type="button" data-guide-theme="dark" class="theme-btn rounded-xl ${localStorage.getItem('theme') === 'dark' ? 'active' : ''}" onclick="guideSetTheme('dark',this)">深色</button></div><div class="setup-guide-section-title">强调色</div><div class="accent-color-grid">${[['green', 'Green'], ['sky', 'Sky'], ['amber', 'Amber'], ['rose', 'Rose'], ['claude', 'Claude']].map(([x, label]) => `<button type="button" data-guide-accent="${x}" class="accent-color-btn rounded-xl ${document.body.dataset.accentColor === x ? 'active' : ''}" onclick="guideSetAccent('${x}',this)"><span class="accent-color-swatch" style="--swatch-color:${x === 'green' ? '#10b981' : x === 'sky' ? '#38bdf8' : x === 'amber' ? '#f59e0b' : x === 'rose' ? '#fb7185' : '#d97757'}"></span>${label}</button>`).join('')}</div><div class="setup-guide-section-title">字体大小</div><div class="grid grid-cols-2 gap-2">${[['small', '小'], ['medium', '中'], ['large', '大'], ['extra-large', '特大'], ['huge', '巨大']].map(([x, label]) => `<button type="button" data-guide-font="${x}" class="font-btn rounded-xl ${currentFontSize === x ? 'active' : ''}" onclick="guideSetFont('${x}',this)">${label}</button>`).join('')}</div><div class="setup-guide-section-title">背景图片</div><div class="grid grid-cols-3 gap-3">${[[7, 'Duo Light'], [8, 'Duo Dark'], [9, 'Golden Gate'], [1, '花谱1'], [2, '花谱2'], [3, '洛天依1'], [4, '洛天依2'], [5, '初音未来1'], [6, '初音未来2']].map(([x, name]) => `<button type="button" data-guide-bg="${x}" class="rounded-xl border-2 ${selectedBackgroundImage === x ? 'active border-emerald-500' : 'border-gray-700'} p-1" onclick="guideSetBackground(${x},this)"><img src="assets/backgrounds/${x}.JPG" class="w-full h-16 object-cover rounded-lg" alt="${name}"><span class="block text-[11px] text-gray-400 mt-1">${name}</span></button>`).join('')}</div>` : '',
                 setupGuidePage === 3 ? `<label class="block text-sm text-gray-300">压缩频次<select id="guide-summary-interval" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="0">不自动压缩</option><option value="10">每10轮</option><option value="15">每15轮</option><option value="20">每20轮</option></select></label><label class="block text-sm text-gray-300">压缩模型<select id="guide-summary-model" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></select></label>` : '',
                 setupGuidePage === 4 ? `<div class="setup-guide-section-title">页面布局</div><div class="flex gap-2"><button type="button" data-layout="classic" class="layout-btn rounded-xl ${currentLayoutMode === 'classic' ? 'active' : ''}" onclick="setLayoutMode('classic',this)">经典布局</button><button type="button" data-layout="split" class="layout-btn rounded-xl ${currentLayoutMode === 'split' ? 'active' : ''}" onclick="setLayoutMode('split',this)">分栏布局</button></div><p class="text-[11px] text-gray-500 mt-2">经典布局让输入框横跨底部；分栏布局将 Canvas 编辑器固定在右侧，适合边看对话边修改代码。</p><div class="setup-guide-section-title">Canvas 代码字号</div><div class="flex gap-2"><button type="button" data-size="small" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'small' ? 'active' : ''}" onclick="setCanvasFontSize('small',this)">小</button><button type="button" data-size="medium" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'medium' ? 'active' : ''}" onclick="setCanvasFontSize('medium',this)">中</button><button type="button" data-size="large" class="code-size-btn rounded-xl ${currentCanvasFontSize === 'large' ? 'active' : ''}" onclick="setCanvasFontSize('large',this)">大</button></div><p class="text-[11px] text-gray-500 mt-2">只影响 Canvas 编辑器中的代码显示大小，不会改变聊天正文。</p>` : '',
                 setupGuidePage === 6 ? `<label class="block text-sm text-gray-300">传图按钮快捷键<input id="guide-desktop-shortcut" value="${escapeHtml(localStorage.getItem('desktop_shortcut') || 'Ctrl+A')}" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">传图清晰度<select id="guide-desktop-quality" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">低</option><option value="balanced">均衡</option><option value="high">高</option></select></label>${guideToggle('guide-desktop-auto', localStorage.getItem('desktop_auto_screenshot') === 'true', '自动传图')}` : '',
-                setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">详细信息默认行为<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label><label class="block text-sm text-gray-300">联网搜索默认引擎<select id="guide-agent-search-engine" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="bing">Bing</option><option value="duckduckgo">DuckDuckGo</option></select></label>${guideToggle('guide-agent-scroll', localStorage.getItem('agent_auto_scroll') !== 'false', '自动滚动到末尾')}` : '',
+                setupGuidePage === 7 ? `<label class="block text-sm text-gray-300">工具与思考最大显示行数<select id="guide-agent-diff" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="0">不限制</option></select></label><label class="block text-sm text-gray-300">独立思考与工具详情的默认状态<select id="guide-agent-detail" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="expanded">展开</option><option value="collapsed">折叠</option></select></label><label class="block text-sm text-gray-300">Agent shell 超时<input id="guide-agent-timeout" type="number" min="5" max="3600" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"></label><label class="block text-sm text-gray-300">Agent image detail<select id="guide-agent-image" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="original">Original</option></select></label><label class="block text-sm text-gray-300">联网搜索默认引擎<select id="guide-agent-search-engine" class="w-full mt-2 bg-[#171717] border border-gray-700 rounded-xl p-3 text-sm"><option value="bing">Bing</option><option value="duckduckgo">DuckDuckGo</option></select></label>` : '',
                 setupGuidePage === 8 ? `${guideToggle('guide-math', mathRenderingEnabled, 'LaTeX 渲染', '开启后将数学公式、化学方程式渲染为排版结果；关闭后按原始文本显示。')}${guideToggle('guide-auto-update', autoUpdateEnabled, '自动检测更新', '仅 Setup 安装版会在启动时检查 GitHub Release；Portable 版本不会主动检查。')}` : '',
                 `</div>`
             ].join('');
             c.innerHTML = `<div class="setup-guide-page"><h3 class="text-lg font-semibold mb-2">${page[0]}</h3><img src="${page[2]}" class="setup-guide-gif mb-3" alt="" onerror="this.remove()"><p class="setup-guide-description">${page[1]}</p>${blocks}</div>`;
             if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval'); if (i) i.value = String(autoSummaryInterval); const s = document.getElementById('guide-summary-model'); if (s) { renderModelOptions(s, textModelList.length ? textModelList : loadModelList()); s.value = localStorage.getItem('context_compaction_model') || DEFAULT_CONTEXT_COMPACTION_MODEL; } }
             if (setupGuidePage === 6) { const q = document.getElementById('guide-desktop-quality'); if (q) q.value = localStorage.getItem('desktop_image_quality') || 'balanced'; }
-            if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = localStorage.getItem('agent_detail_default_behavior') || 'expanded'; const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const se = document.getElementById('guide-agent-search-engine'); if (se) se.value = localStorage.getItem('agent_search_engine') === 'duckduckgo' ? 'duckduckgo' : 'bing'; const sc = document.getElementById('guide-agent-scroll'); if (sc) sc.checked = localStorage.getItem('agent_auto_scroll') !== 'false'; }
+            if (setupGuidePage === 7) { const d = document.getElementById('guide-agent-diff'); if (d) d.value = localStorage.getItem('agent_diff_max_lines') || '10'; const b = document.getElementById('guide-agent-detail'); if (b) b.value = getAgentDetailDefaultBehavior(); const t = document.getElementById('guide-agent-timeout'); if (t) t.value = localStorage.getItem('agent_shell_timeout_seconds') || '120'; const im = document.getElementById('guide-agent-image'); if (im) im.value = localStorage.getItem('agent_view_image_detail') || 'medium'; const se = document.getElementById('guide-agent-search-engine'); if (se) se.value = localStorage.getItem('agent_search_engine') === 'duckduckgo' ? 'duckduckgo' : 'bing'; }
             document.getElementById('setup-guide-prev').disabled = setupGuidePage === 0;
             document.getElementById('setup-guide-next').textContent = setupGuidePage === setupGuidePages.length - 1 ? '完成' : '下一页';
         }
@@ -9199,7 +9150,7 @@
             if (setupGuidePage === 1) { const b = document.getElementById('guide-base-url')?.value.trim(); const k = document.getElementById('guide-api-key')?.value.trim(); const mt = Number(document.getElementById('guide-max-tokens')?.value || 0); if (b) localStorage.setItem('base_url', b); if (k) localStorage.setItem('api_key', k); localStorage.setItem('max_tokens_limit', String(Number.isFinite(mt) ? Math.max(0, mt) : 0)); maxTokensLimit = Math.max(0, mt) || 0; const maxInput = document.getElementById('max-tokens-input'); if (maxInput) maxInput.value = String(maxTokensLimit); const baseInput = document.getElementById('base-url-input'); if (baseInput && b) baseInput.value = b; const keyInput = document.getElementById('api-key-input'); if (keyInput && k) keyInput.value = k; if (window._guideEndpoint) { localStorage.setItem('request_endpoint', window._guideEndpoint); const endpointInput = document.querySelector(`input[name="request-endpoint"][value="${window._guideEndpoint}"]`); if (endpointInput) endpointInput.checked = true; } }
             if (setupGuidePage === 3) { const i = document.getElementById('guide-summary-interval')?.value; const m = document.getElementById('guide-summary-model')?.value; if (i) { autoSummaryInterval = Number(i); localStorage.setItem('auto_summary_interval', i); const radio = document.querySelector(`input[name="auto-summary-interval"][value="${i}"]`); if (radio) radio.checked = true; } if (m) { localStorage.setItem('context_compaction_model', m); const select = document.getElementById('context-compaction-model-select'); if (select) select.value = m; } }
             if (setupGuidePage === 6) { const s = document.getElementById('guide-desktop-shortcut')?.value.trim(); const q = document.getElementById('guide-desktop-quality')?.value; if (s) { localStorage.setItem('desktop_shortcut', s); const input = document.getElementById('desktop-shortcut-input'); if (input) input.value = s; } if (q) { localStorage.setItem('desktop_image_quality', q); const select = document.getElementById('desktop-image-quality-input'); if (select) select.value = q; } const auto = document.getElementById('guide-desktop-auto')?.checked ? 'true' : 'false'; localStorage.setItem('desktop_auto_screenshot', auto); const toggle = document.getElementById('desktop-auto-screenshot-input'); if (toggle) toggle.checked = auto === 'true'; }
-            if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const guideEngine = document.getElementById('guide-agent-search-engine')?.value; if (guideEngine) localStorage.setItem('agent_search_engine', guideEngine === 'duckduckgo' ? 'duckduckgo' : 'bing'); const autoScroll = document.getElementById('guide-agent-scroll')?.checked ? 'true' : 'false'; localStorage.setItem('agent_auto_scroll', autoScroll); const autoScrollInput = document.getElementById('agent-auto-scroll'); if (autoScrollInput) autoScrollInput.checked = autoScroll === 'true'; }
+            if (setupGuidePage === 7) { ['guide-agent-diff', 'guide-agent-detail', 'guide-agent-timeout', 'guide-agent-image'].forEach((id, i) => { const v = document.getElementById(id)?.value; if (v) localStorage.setItem(['agent_diff_max_lines', 'agent_detail_default_behavior', 'agent_shell_timeout_seconds', 'agent_view_image_detail'][i], v); }); const guideEngine = document.getElementById('guide-agent-search-engine')?.value; if (guideEngine) localStorage.setItem('agent_search_engine', guideEngine === 'duckduckgo' ? 'duckduckgo' : 'bing'); }
             if (setupGuidePage === 8) { mathRenderingEnabled = Boolean(document.getElementById('guide-math')?.checked); autoUpdateEnabled = Boolean(document.getElementById('guide-auto-update')?.checked); localStorage.setItem('math_rendering_enabled', mathRenderingEnabled ? 'true' : 'false'); localStorage.setItem('auto_update_enabled', autoUpdateEnabled ? 'true' : 'false'); }
         }
         function setupGuideBack() { if (setupGuidePage === 0) closeSetupGuide(); else setupGuidePrev(); }
@@ -9265,41 +9216,25 @@
             updateTokenEstimate();
         }
 
-        function syncRetrySelect() {
-            const mainSelect = document.getElementById('model-select');
-            const retrySelect = document.getElementById('retry-model-select');
-            if (!mainSelect || !retrySelect) return;
-            retrySelect.innerHTML = mainSelect.innerHTML;
-            retrySelect.value = mainSelect.value;
-        }
-
-        function openRetryMenu(e) {
-            e.stopPropagation();
-            const popover = document.getElementById('retry-popover');
-            popover.style.left = `${e.clientX - 10}px`;
-            popover.style.top = `${e.clientY + 15}px`;
-            popover.classList.remove('hidden');
-        }
-
-        function closeRetryMenu(e) {
-            const popover = document.getElementById('retry-popover');
-            if (popover && !popover.contains(e.target)) popover.classList.add('hidden');
-        }
-
-        function confirmRetry() {
-            const selectedModel = document.getElementById('retry-model-select').value;
-            document.getElementById('retry-popover').classList.add('hidden');
+        async function retryLastResponse(event) {
+            if (isGenerating || contextCompactionRunning) return;
+            const model = getSelectedModelName();
             const chat = chats.find(c => c.id === activeChatId);
-            if (!chat || chat.messages.length === 0) return;
-            if (chat.messages[chat.messages.length - 1].role === 'assistant') chat.messages.pop();
-            const lastUserMsg = chat.messages[chat.messages.length - 1];
-            if (!lastUserMsg || lastUserMsg.role !== 'user') return;
-            renderMessagesWithResolvedRefs(chat.messages);
-            const retryAttachments = lastUserMsg.attachments || [];
+            if (!chat || !model) return;
+            const last = chat.messages.at(-1);
+            const user = last?.role === 'assistant' ? chat.messages.at(-2) : last;
+            if (user?.role !== 'user') return;
+            event.currentTarget.disabled = true;
+            if (last !== user) {
+                chat.messages.pop();
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+            }
+            await renderMessagesWithResolvedRefs(chat.messages);
+            if (activeChatId !== chat.id || isGenerating) return;
             if (isImageMode) {
-                retryImageGeneration(chat);
+                await sendImageMessage(chat, user.imagePrompt ?? (user.content === '(无文本)' ? '' : user.content), model, user);
             } else {
-                requestAI(lastUserMsg.content, selectedModel, chat, retryAttachments);
+                await requestAI(user.content, model, chat, user.attachments || []);
             }
         }
 
@@ -9490,8 +9425,7 @@
         }
 
         function renderChatHistory() {
-            filteredChats = chats;
-            renderFilteredHistory();
+            filterChats();
         }
 
         function filterChats() {
@@ -9502,41 +9436,29 @@
 
         function renderFilteredHistory() {
             const container = document.getElementById('chat-history');
-            container.innerHTML = '';
-            (filteredChats.length ? filteredChats : chats).forEach(chat => {
-                const btn = document.createElement('button');
-                btn.className =
-                    `w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-colors text-sm ${activeChatId === chat.id ? 'active-chat' : ''}`;
-                const icon = document.createElement('i');
-                icon.setAttribute('data-lucide', 'message-square');
-                icon.className = 'w-4 h-4 text-gray-400 flex-shrink-0';
-                const title = document.createElement('span');
-                title.className = 'truncate text-left flex-grow';
-                title.textContent = String(chat.title || '新对话');
-                if (chat.canvasEnabled) {
-                    const canvasBadge = document.createElement('span');
-                    canvasBadge.style.cssText = `font-size:0.55rem;color:${getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981'};margin-left:0.25rem;`;
-                    canvasBadge.textContent = '[Canvas]';
-                    title.appendChild(canvasBadge);
-                }
-                if (chat.agentEnabled) {
-                    const agentBadge = document.createElement('span');
-                    agentBadge.style.cssText = `font-size:0.55rem;color:${getComputedStyle(document.body).getPropertyValue('--accent-primary').trim() || '#10b981'};margin-left:0.25rem;`;
-                    agentBadge.textContent = '[Agent]';
-                    title.appendChild(agentBadge);
-                }
-                const deleteBtn = document.createElement('span');
-                deleteBtn.className = 'delete-chat-btn p-1';
-                deleteBtn.dataset.chatId = chat.id;
-                deleteBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4 text-gray-400"></i>';
-                deleteBtn.onclick = (event) => {
-                    event.stopPropagation();
-                    deleteChat(chat.id);
-                };
-                btn.append(icon, title, deleteBtn);
-                btn.onclick = () => switchChat(chat.id);
-                container.appendChild(btn);
-            });
+            container.replaceChildren();
+            for (const chat of filteredChats) {
+                const active = activeChatId === chat.id;
+                const entry = document.createElement('div');
+                entry.className = active ? 'history-entry current' : 'history-entry';
+                const select = document.createElement('button');
+                select.type = 'button';
+                select.className = 'history-title';
+                select.textContent = String(chat.title || '新对话');
+                select.title = [select.textContent, chat.agentEnabled ? 'Agent' : chat.canvasEnabled ? 'Canvas' : ''].filter(Boolean).join(' · ');
+                if (active) select.setAttribute('aria-current', 'true');
+                select.onclick = () => switchChat(chat.id);
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'delete-chat-btn';
+                remove.dataset.chatId = chat.id;
+                remove.title = '删除对话';
+                remove.setAttribute('aria-label', `删除对话 ${select.textContent}`);
+                remove.innerHTML = '<i data-lucide="trash-2"></i>';
+                remove.onclick = () => deleteChat(chat.id);
+                entry.append(select, remove);
+                container.append(entry);
+            }
             lucide.createIcons();
         }
         async function deleteChat(chatId) {
@@ -9549,6 +9471,7 @@
             if (!chat) return;
             const index = chats.findIndex(c => c.id === chatId);
             if (index !== -1) chats.splice(index, 1);
+            window.AIUIMemory.removeSnapshot(chatId);
             if (chat.agentEnabled && window.electronAPI?.removeAgentWorkspace) {
                 window.electronAPI.removeAgentWorkspace(chat.id).catch(() => { });
             }
@@ -9718,13 +9641,21 @@
             if (chat.agentEnabled) await requestAgentLoop(model, chat);
             else await requestAI(actualMessage, model, chat, attachmentsToSend);
         }
+        function scrollChatToBottom() {
+            const wrapper = document.getElementById('messages-wrapper');
+            if (wrapper) wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'instant' });
+        }
+
         function renderQueuedAgentMessages() {
             const el = document.getElementById('queued-agent-messages'); if (!el) return;
             const visibleQueue = queuedAgentMessages.filter(entry => !entry || typeof entry !== 'object' || String(entry.gatewayChatId) === String(activeChatId));
             const queuedHtml = visibleQueue.map(entry => `<div>↳ ${sanitizeHtml(escapeHtml(String(entry && typeof entry === 'object' ? entry.content || '' : entry || '')))}（将在下次插入时插入）</div>`).join('');
             const reconnectHtml = window.agentReconnectNotice ? `<div class="agent-reconnect-status">${sanitizeHtml(window.agentReconnectNotice)}</div>` : '';
             el.classList.toggle('hidden', visibleQueue.length === 0 && !window.agentReconnectNotice);
-            el.innerHTML = queuedHtml + reconnectHtml;
+            const notice = queuedHtml + reconnectHtml;
+            if (notice === el.innerHTML) return;
+            el.innerHTML = notice;
+            if (notice) scrollChatToBottom();
         }
         window.renderQueuedAgentMessages = renderQueuedAgentMessages;
         function onCodeMirrorChange() {
@@ -9737,31 +9668,45 @@
             }
         }
 
-        // 加号菜单增强功能
-        function toggleAttachMenu(e) {
-            if (e) e.stopPropagation();
-            const menu = document.getElementById('attach-menu');
-            window.AIUIEnhancements?.closeChoices();
-            // Match the Context popover's glass by escaping the input area's backdrop root.
-            if (menu.parentElement !== document.body) document.body.append(menu);
-            menu.style.position = 'fixed';
-            menu.style.bottom = 'auto';
-            menu.classList.toggle('visible');
-            if (menu.classList.contains('visible')) {
-                const anchor = document.getElementById('attach-plus-btn').getBoundingClientRect();
-                const bounds = menu.getBoundingClientRect();
-                menu.style.left = Math.max(12, Math.min(anchor.left, innerWidth - bounds.width - 12)) + 'px';
-                menu.style.top = Math.max(12, anchor.top - bounds.height - 4) + 'px';
-            }
-            updateAttachMenuButtons();
+        const attachMenu = document.getElementById('attach-menu');
+        const attachMenuTrigger = document.getElementById('attach-plus-btn');
+        // Keep fixed positioning and the menu's blur outside the composer.
+        document.body.append(attachMenu);
+        function closeAttachMenu(restoreFocus = false) {
+            if (!attachMenu.classList.contains('visible')) return;
+            attachMenu.classList.remove('visible');
+            attachMenu.inert = true;
+            attachMenuTrigger.setAttribute('aria-expanded', 'false');
+            if (restoreFocus) attachMenuTrigger.focus();
         }
-        window.addEventListener('resize', () => document.getElementById('attach-menu').classList.remove('visible'));
-        document.addEventListener('click', function (e) {
-            const menu = document.getElementById('attach-menu');
-            const btn = document.getElementById('attach-plus-btn');
-            if (menu && btn && !btn.contains(e.target) && !menu.contains(e.target)) {
-                menu.classList.remove('visible');
+
+        function toggleAttachMenu(e) {
+            e?.stopPropagation();
+            if (attachMenu.classList.contains('visible')) {
+                closeAttachMenu();
+                return;
             }
+            window.AIUIEnhancements?.closeChoices();
+            hideContextBreakdown();
+            updateAttachMenuButtons();
+            const anchor = attachMenuTrigger.getBoundingClientRect();
+            attachMenu.style.setProperty('--attach-menu-max-height', Math.max(0, anchor.top - 18) + 'px');
+            const bounds = attachMenu.getBoundingClientRect();
+            attachMenu.style.left = Math.max(12, Math.min(anchor.left, innerWidth - bounds.width - 12)) + 'px';
+            attachMenu.style.top = Math.max(12, anchor.top - bounds.height - 6) + 'px';
+            attachMenu.classList.add('visible');
+            attachMenu.inert = false;
+            attachMenuTrigger.setAttribute('aria-expanded', 'true');
+            if (e?.detail === 0) attachMenu.querySelector('button:not(:disabled)')?.focus();
+        }
+        window.addEventListener('resize', () => closeAttachMenu());
+        document.addEventListener('click', function (e) {
+            if (!attachMenuTrigger.contains(e.target) && !attachMenu.contains(e.target)) closeAttachMenu();
+        });
+        attachMenu.addEventListener('keydown', e => {
+            if (e.key !== 'Escape') return;
+            e.stopPropagation();
+            closeAttachMenu(true);
         });
 
         const messagesWrapper = document.getElementById('messages-wrapper');
@@ -9795,15 +9740,18 @@
         }
 
         function getVoiceChatSettingsSnapshot() {
+            const fish = getSavedFishAudioSettings();
             return {
                 apiKey: getAPIKey(),
                 baseUrl: getBaseURL(),
                 model: getSelectedModelName() || DEFAULT_VOICE_CHAT_MODEL,
                 systemPrompt: systemPrompt || '',
-                fishApiBase: localStorage.getItem('voice_fish_base') || DEFAULT_FISH_AUDIO_BASE,
-                fishApiKey: localStorage.getItem('voice_fish_key') || DEFAULT_FISH_AUDIO_KEY,
-                fishVoiceName: localStorage.getItem('voice_fish_name') || DEFAULT_FISH_VOICE_NAME,
-                fishVoiceId: localStorage.getItem('voice_fish_id') || DEFAULT_FISH_VOICE_ID,
+                fishApiBase: fish.apiBase,
+                fishApiEndpoint: fish.endpoint,
+                fishApiKey: fish.apiKey,
+                fishModel: fish.model,
+                fishVoiceName: fish.voiceName,
+                fishVoiceId: fish.voiceId,
                 xfAppId: localStorage.getItem('voice_xf_appid') || DEFAULT_XF_APPID,
                 xfApiKey: localStorage.getItem('voice_xf_key') || DEFAULT_XF_API_KEY,
                 xfApiSecret: localStorage.getItem('voice_xf_secret') || DEFAULT_XF_API_SECRET,
@@ -9838,7 +9786,7 @@
                 return;
             }
             const context = (chat.messages || [])
-                .filter(message => message && (message.role === 'user' || message.role === 'assistant'))
+                .filter(message => message && message.hidden !== true && (message.role === 'user' || message.role === 'assistant'))
                 .map(message => ({
                     role: message.role,
                     content: typeof message.content === 'string' ? message.content : ''
@@ -9889,10 +9837,12 @@
             const turns = [];
             for (const turn of (Array.isArray(payload.turns) ? payload.turns : [])) {
                 if (!turn || (turn.role !== 'user' && turn.role !== 'assistant')) continue;
+                const memoryActivity = turn.role === 'assistant' && window.AIUIMemory.normalizeActivity(turn.memoryActivity);
                 const nextTurn = {
                     role: turn.role,
                     content: String(turn.content || ''),
                     ...(turn.role === 'assistant' ? { completedAt:Number(turn.completedAt) || Date.now() } : {}),
+                    ...(memoryActivity ? { memoryActivity } : {}),
                     ...(turn.role === 'assistant' ? {
                         model: window._voiceSessionModel || getSelectedModelName() || DEFAULT_VOICE_CHAT_MODEL,
                         voiceRecordId: String(turn.voiceRecordId || '').trim()
@@ -9916,11 +9866,12 @@
                     }
                     if (!nextTurn.attachments.length) delete nextTurn.attachments;
                 }
-                if (nextTurn.content.trim() || nextTurn.attachments?.length) turns.push(nextTurn);
+                if (nextTurn.content.trim() || nextTurn.attachments?.length || memoryActivity) turns.push(nextTurn);
             }
             if (!turns.length) {
                 if (chat.ephemeralCollaboration) {
                     chats = chats.filter(item => item.id !== chat.id);
+                    window.AIUIMemory.removeSnapshot(chat.id);
                     localStorage.setItem('ai_chats', JSON.stringify(chats));
                     renderChatHistory();
                     if (activeChatId === chat.id) {
@@ -10028,7 +9979,6 @@
             document.getElementById('model-select').innerHTML = IMAGE_MODELS.map(m =>
                 `<option value="${m.value}">${m.text}</option>`).join('');
             document.getElementById('model-select').value = IMAGE_MODELS[0].value;
-            syncRetrySelect();
             updateAttachMenuButtons();
             updateTokenEstimate();
             showVoiceNotification('已切换到图像生成模式', false);
@@ -10049,7 +9999,6 @@
             document.getElementById('model-select').innerHTML = IMAGE_MODELS.map(m =>
                 `<option value="${m.value}">${m.text}</option>`).join('');
             document.getElementById('model-select').value = IMAGE_MODELS[0].value;
-            syncRetrySelect();
             updateAttachMenuButtons();
             updateTokenEstimate();
             showVoiceNotification('已切换到图像编辑模式，将使用已有图片', false);
@@ -10182,50 +10131,38 @@
             };
         }
 
-        async function sendImageMessage(chat, prompt, model) {
+        async function sendImageMessage(chat, prompt, model, retryMessage = null) {
             abortController = new AbortController();
             isGenerating = true;
             document.getElementById('send-btn').classList.add('hidden');
             document.getElementById('stop-btn').classList.remove('hidden');
-            const sendAttachments = [...currentAttachments];
-            const userMsg = {
-                role: 'user',
-                content: prompt || '(无文本)',
-                attachments: sendAttachments.map(att => ({
-                    name: att.name,
-                    type: att.type,
-                    data: att.data,
-                    fullDataUrl: att.fullDataUrl
-                }))
-            };
-            chat.messages.push(userMsg);
-            chat.updatedAt = Date.now();
-            appendMessageToUI('user', prompt || '(无文本)', null, false, '', sendAttachments);
-            localStorage.setItem('ai_chats', JSON.stringify(chats));
-            resetInputState(); // 清空输入框
-            currentAttachments = [];
-            onAttachmentsChanged();
-            let imageBase64 = null;
-            if (sendAttachments.length > 0) {
-                imageBase64 = sendAttachments[0].fullDataUrl;
-            } else if (imageEditMode) {
-                imageBase64 = await getLastImageInChat(chat);
+            const sendAttachments = retryMessage ? [] : [...currentAttachments];
+            if (!retryMessage) {
+                chat.messages.push({
+                    role: 'user',
+                    content: prompt || '(无文本)',
+                    imagePrompt: prompt,
+                    imageEdit: imageEditMode,
+                    attachments: sendAttachments.map(({ name, type, data, fullDataUrl, isImage }) =>
+                        ({ name, type, data, fullDataUrl, isImage }))
+                });
+                chat.updatedAt = Date.now();
+                appendMessageToUI('user', prompt || '(无文本)', null, false, '', sendAttachments);
+                localStorage.setItem('ai_chats', JSON.stringify(chats));
+                resetInputState();
+                currentAttachments = [];
+                onAttachmentsChanged();
             }
-            const params = {
-                prompt,
-                model,
-                imageBase64,
-                aspectRatio: parseImageAspectRatio(prompt).aspectRatio,
-                imageSize: parseImageAspectRatio(prompt).size,
-                isImage: true
-            };
-            window._lastImageRequest = params;
             const ratioInfo = parseImageAspectRatio(prompt);
             if (ratioInfo.aspectRatio) appendLog('debug', `图像比例识别：${ratioInfo.aspectRatio} -> ${ratioInfo.size}`);
             // 像正常对话一样插入占位气泡
             const aiRow = appendMessageToUI('assistant', 'AI正在绘画中……', model, true);
             const contentArea = aiRow.querySelector('.ai-content-area');
             try {
+                const attachments = retryMessage ? (await resolveMessageReferences(retryMessage)).attachments : sendAttachments;
+                const source = attachments?.[0]?.fullDataUrl;
+                const imageBase64 = isImageRef(source) ? await ImageStore.getImage(source.slice(4))
+                    : source || ((retryMessage?.imageEdit ?? imageEditMode) ? await getLastImageInChat(chat) : null);
                 const baseUrl = getBaseURL();
                 const apiKey = getAPIKey();
                 let response;
@@ -10272,10 +10209,11 @@
                 const refId = await ImageStore.storeImage(imgDataUrl);
                 // 移除占位气泡，然后添加真实消息并重新渲染整个对话
                 aiRow.remove();
+                const completedAt = Date.now();
                 const aiMsg = {
                     role: 'assistant',
                     content: '生成完成',
-                    completedAt: Date.now(),
+                    completedAt,
                     generatedImages: [`img:${refId}`],
                     model
                 };
@@ -10307,16 +10245,6 @@
             }
         }
 
-        function retryImageGeneration(chat) {
-            const params = window._lastImageRequest;
-            if (!params) return;
-            if (chat.messages.length > 0 && chat.messages[chat.messages.length - 1].role === 'assistant') chat
-                .messages.pop();
-            localStorage.setItem('ai_chats', JSON.stringify(chats));
-            renderMessagesWithResolvedRefs(chat.messages);
-            sendImageMessage(chat, params.prompt, params.model);
-        }
-
         function dataURLtoBlob(dataurl) {
             const arr = dataurl.split(',');
             const mime = arr[0].match(/:(.*?);/)[1];
@@ -10344,6 +10272,19 @@
             document.body.classList.add(`font-size-${currentFontSize}`);
             lucide.createIcons();
             document.getElementById('sys-prompt').value = systemPrompt;
+            refreshMemorySettings();
+            window.electronAPI?.onMemoryChanged?.(() => {
+                refreshMemorySettings();
+                if (!preferencesPage) updateTokenEstimate();
+            });
+            if (!window.electronAPI?.requestMemory) {
+                window.addEventListener('storage', event => {
+                    if (event.key === window.AIUIMemory.ENABLED_KEY || event.key === window.AIUIMemory.RECORDS_KEY) {
+                        refreshMemorySettings();
+                        updateTokenEstimate();
+                    }
+                });
+            }
             document.getElementById('api-key-input').value = getAPIKey();
             document.getElementById('base-url-input').value = getBaseURL();
             ['api-profile-name', 'api-key-input', 'base-url-input', 'max-tokens-input', 'model-list-input'].forEach(id => document.getElementById(id)?.addEventListener('input', markApiSettingsDirty));
@@ -10355,7 +10296,6 @@
             updateTempUI();
             updateBackgroundImage();
             highlightBackgroundThumb();
-            syncRetrySelect();
             renderChatHistory();
             chats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             const latestChat = chats.length ? chats[0] : null;
@@ -10625,6 +10565,7 @@
             el.textContent = message;
             el.style.color = isError ? '#f87171' : (tone === 'warning' ? '#fbbf24' : '');
             el.classList.add('show');
+            scrollChatToBottom();
             clearTimeout(el._timeout);
             if (persistent) {
                 el._persistent = true;
@@ -10648,27 +10589,30 @@
             const requestMetrics = window.AIUIRequestMetrics?.create();
             chat.lastRequestFailed = false;
             abortController = new AbortController();
+            const signal = abortController.signal;
             isGenerating = true;
             window.AIUIEnhancements?.beginRequestTask();
             document.getElementById('send-btn').classList.add('hidden');
             document.getElementById('stop-btn').classList.remove('hidden');
             setCanvasEditable(false);
-            const aiRow = appendMessageToUI('assistant', '', model, true, '', [], [], '', { thinkingActive: true });
-            const thinkingDiv = aiRow.querySelector('.thinking-text');
+            let rawFullContent = "", thinkingContent = "";
+            const aiRow = appendMessageToUI('assistant', '', model, true, '', [], [], '', {
+                thinkingActive: true, getCopyText: () => rawFullContent
+            });
+            const activity = aiRow.responseActivity;
             const contentArea = aiRow.querySelector('.ai-content-area');
-            let rawFullContent = "",
-                thinkingContent = "";
             let receivedAny = false;
             let responseEndpoint = '';
+            let memoryActivity = null;
             const responsePayloads = [];
             processedReplaceCount = 0;
             sessionReplaceBlocks = [];
             streamBytesReceived = 0;
-            const systemWithMem = typeof chat.promptPrefix === 'string'
+            const chatSystemPrompt = typeof chat.promptPrefix === 'string'
                 ? chat.promptPrefix
                 : (systemPrompt || '');
             if (typeof chat.promptPrefix !== 'string') {
-                chat.promptPrefix = systemWithMem;
+                chat.promptPrefix = chatSystemPrompt;
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
             }
             try {
@@ -10696,18 +10640,21 @@
                     }
                 }
                 const preferredEndpoint = getRequestEndpoint();
-                let endpoint = preferredEndpoint;
+                const memory = window.AIUIMemory;
+                const memoryTransport = window.AIUIMemoryTransport;
+                const memoryContext = memoryTransport ? memory?.getContext(chat) : '';
+                const systemWithMemory = [chatSystemPrompt, memoryContext].filter(Boolean).join('\n\n');
                 const promptCacheKey = getPromptCacheKeyForChat(chat);
                 const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
                 appendLog('debug', '开始请求 AI 接口');
-                appendLog('trace', `AI 请求 URL: ${getBaseURL()}${endpoint}`);
+                appendLog('trace', `AI 请求 URL: ${getBaseURL()}${preferredEndpoint}`);
                 const basePayload = {
                     model,
                     temperature: currentTemp,
                     __aiuiStructuredResponsesInput: true,
                     messages: [{
                         role: 'system',
-                        content: systemWithMem
+                        content: systemWithMemory
                     }, ...apiMessages],
                     stream: true,
                     ...(maxTokensLimit > 0 ? {
@@ -10720,217 +10667,235 @@
                         cache_control: cacheControl
                     } : {})
                 };
-                const requestResult = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal);
-                const { response, endpoint: resolvedEndpoint, requestBody } = requestResult;
-                endpoint = resolvedEndpoint;
-                responseEndpoint = endpoint;
-                lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
-                appendLog('trace', `请求体: ${JSON.stringify(requestBody)}`);
-                if (!response.ok) {
-                    const errorText = await response.text().catch(() => '');
-                    let detailMessage = '';
-                    try {
-                        const parsed = JSON.parse(errorText);
-                        detailMessage = parsed?.error?.message || JSON.stringify(parsed);
-                    } catch (e) {
-                        detailMessage = errorText;
-                    }
-                    appendLog('error', `AI 接口响应错误: ${response.status} ${response.statusText || ''}${detailMessage ? ` - ${detailMessage}` : ''}`);
-                    throw new Error(`API error: ${response.status}${detailMessage ? ` - ${detailMessage}` : ''}`);
-                }
-                appendLog('trace', `AI 接口响应状态: ${response.status} ${response.statusText || ''}`);
-                const nonStreamingPayload = !response.body || typeof response.body.getReader !== 'function' ? await response.json() : null;
-                let nonStreamingConsumed = false;
-                const reader = nonStreamingPayload ? { read: async () => {
-                    if (nonStreamingConsumed) return { done: true };
-                    nonStreamingConsumed = true;
-                    return { done: false, value: new TextEncoder().encode(JSON.stringify(nonStreamingPayload)) };
-                } } : response.body.getReader();
-                const decoder = new TextDecoder();
+                const memoryTool = memoryContext ? memory.getTool() : null;
+                const memoryOptions = memoryTool ? {
+                    decorateRequest: (body, endpoint) => memoryTransport.declareTool(body, endpoint, memoryTool),
+                    retryWithoutDecoration: memoryTransport.isUnsupportedToolError,
+                    redactDiagnostics: true
+                } : {};
                 const debugStream = developerModeEnabled && (logLevel === 'debug' || logLevel === 'trace');
-                const traceStream = developerModeEnabled && logLevel === 'trace';
-                let sseBuffer = '';
-                let sawSSEEvent = false;
-                const seenStreamEvents = new Set();
-                const renderLiveContent = () => {
-                    contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
-                    if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                const traceStream = !memoryContext && developerModeEnabled && logLevel === 'trace';
+                let requestResult = await fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, memoryOptions);
+                for (let round = 0; ; round += 1) {
+                    const { response, endpoint, requestBody, requestDecorated } = requestResult;
+                    const memoryCollector = round === 0 && memoryTool && requestDecorated ? memoryTransport.createCollector(endpoint) : null;
+                    responseEndpoint = endpoint;
+                    lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
+                    if (!memoryContext) appendLog('trace', `请求体: ${JSON.stringify(requestBody)}`);
+                    if (!response.ok) {
+                        const errorText = memoryContext ? '' : await response.text().catch(() => '');
+                        let detailMessage = '';
+                        try {
+                            if (errorText) {
+                                const parsed = JSON.parse(errorText);
+                                detailMessage = parsed?.error?.message || JSON.stringify(parsed);
+                            }
+                        } catch (e) {
+                            detailMessage = errorText;
+                        }
+                        appendLog('error', `AI 接口响应错误: ${response.status} ${response.statusText || ''}${detailMessage ? ` - ${detailMessage}` : ''}`);
+                        throw new Error(`API error: ${response.status}${detailMessage ? ` - ${detailMessage}` : ''}`);
+                    }
+                    appendLog('trace', `AI 接口响应状态: ${response.status} ${response.statusText || ''}`);
+                    const nonStreamingPayload = !response.body || typeof response.body.getReader !== 'function' ? await response.json() : null;
+                    let nonStreamingConsumed = false;
+                    const reader = nonStreamingPayload ? { read: async () => {
+                        if (nonStreamingConsumed) return { done: true };
+                        nonStreamingConsumed = true;
+                        return { done: false, value: new TextEncoder().encode(JSON.stringify(nonStreamingPayload)) };
+                    } } : response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let sseBuffer = '';
+                    let sawSSEEvent = false;
+                    const seenStreamEvents = new Set();
+                    const renderLiveContent = () => {
+                        if (rawFullContent) activity?.replying();
                         contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
-                    }
-                    renderMathFormulas(contentArea);
-                    if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                };
-                const applyStreamPayload = (payload, eventType = '', eventId = '') => {
-                    if (!payload || typeof payload !== 'object') return false;
-                    const normalizedPayload = !payload.type && eventType ? { ...payload, type: eventType } : payload;
-                    const streamError = getStreamingErrorMessage(normalizedPayload);
-                    if (streamError) throw new Error(streamError);
-                    const sequence = normalizedPayload.sequence_number;
-                    const eventKey = Number.isSafeInteger(sequence) && sequence >= 0
-                        ? `${normalizedPayload.type || endpoint}:${sequence}:${JSON.stringify(normalizedPayload)}` : '';
-                    if (eventKey && seenStreamEvents.has(eventKey)) return false;
-                    if (eventKey) seenStreamEvents.add(eventKey);
-                    responsePayloads.push(normalizedPayload);
+                        if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
+                            contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
+                        }
+                        renderMathFormulas(contentArea);
+                        if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                        scrollChatToBottom();
+                    };
+                    const applyStreamPayload = (payload, eventType = '', eventId = '') => {
+                        if (!payload || typeof payload !== 'object') return false;
+                        const normalizedPayload = !payload.type && eventType ? { ...payload, type: eventType } : payload;
+                        const streamError = getStreamingErrorMessage(normalizedPayload);
+                        if (streamError) throw new Error(memoryContext ? '模型回复中断' : streamError);
+                        const sequence = normalizedPayload.sequence_number;
+                        const eventKey = Number.isSafeInteger(sequence) && sequence >= 0
+                            ? `${normalizedPayload.type || endpoint}:${sequence}:${JSON.stringify(normalizedPayload)}` : '';
+                        if (eventKey && seenStreamEvents.has(eventKey)) return false;
+                        if (eventKey) seenStreamEvents.add(eventKey);
+                        responsePayloads.push(normalizedPayload);
+                        memoryCollector?.ingest(normalizedPayload);
 
-                    const update = extractStreamingUpdate(normalizedPayload, endpoint);
-                    if (requestMetrics) {
-                        window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
-                        window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
-                    }
-                    const nextThinking = mergeStreamingText(
-                        thinkingContent,
-                        update.reasoningDelta,
-                        update.reasoningSnapshot
-                    );
-                    const nextContent = mergeStreamingText(
-                        rawFullContent,
-                        update.contentDelta,
-                        update.contentSnapshot
-                    );
-                    const thinkingChanged = nextThinking !== thinkingContent;
-                    const contentChanged = nextContent !== rawFullContent;
-                    thinkingContent = nextThinking;
-                    rawFullContent = nextContent;
-                    if (thinkingChanged && thinkingDiv) {
-                        thinkingDiv.style.display = thinkingContent ? 'block' : 'none';
-                        renderThinkingText(thinkingDiv, thinkingContent);
-                    }
-                    if (contentChanged) {
-                        receivedAny = true;
-                        renderLiveContent();
-                    }
-                    return thinkingChanged || contentChanged;
-                };
-                const processSSEBlock = block => {
-                    const event = parseSSEEventBlock(block);
-                    if (!event.data) return false;
-                    sawSSEEvent = true;
-                    if (event.data === '[DONE]') return true;
-                    try {
-                        applyStreamPayload(JSON.parse(event.data), event.eventType, event.eventId);
-                    } catch (error) {
-                        if (error instanceof SyntaxError) {
-                            rawFullContent = mergeStreamingText(rawFullContent, event.data);
+                        const update = extractStreamingUpdate(normalizedPayload, endpoint);
+                        if (requestMetrics) {
+                            window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
+                            window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
+                        }
+                        const nextThinking = mergeStreamingText(
+                            thinkingContent,
+                            update.reasoningDelta,
+                            update.reasoningSnapshot
+                        );
+                        const nextContent = mergeStreamingText(
+                            rawFullContent,
+                            update.contentDelta,
+                            update.contentSnapshot
+                        );
+                        const thinkingChanged = nextThinking !== thinkingContent;
+                        const contentChanged = nextContent !== rawFullContent;
+                        thinkingContent = nextThinking;
+                        rawFullContent = nextContent;
+                        if (thinkingChanged) activity?.update(thinkingContent);
+                        if (contentChanged) {
                             receivedAny = true;
                             renderLiveContent();
-                        } else {
-                            throw error;
                         }
-                    }
-                    return true;
-                };
-                // Ollama 以 NDJSON 逐行返回，没有 SSE 的 data: 前缀与空行分隔。
-                const processOllamaLine = line => {
-                    const text = String(line || '').trim();
-                    if (!text) return false;
-                    sawSSEEvent = true;
-                    if (text === '[DONE]') return true;
-                    applyStreamPayload(JSON.parse(text));
-                    return true;
-                };
-                if (debugStream) {
-                    appendLog('debug', '流式输出接收开始');
-                    showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
-                }
-                while (true) {
-                    const {
-                        done,
-                        value
-                    } = await reader.read();
-                    if (done) break;
-                    streamBytesReceived += value ? value.length : 0;
-                    sseBuffer += decoder.decode(value, { stream: true });
-                    if (debugStream) {
-                        appendLog('debug', `收到流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
-                        showVoiceNotification(`正在接收流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
-                    }
-                    if (traceStream) {
-                        appendLog('trace', `原始流内容: ${sseBuffer.replace(/\n/g, '\\n')}`);
-                    }
-                    const ndjsonStream = isOllamaEndpoint(endpoint);
-                    const parts = ndjsonStream ? sseBuffer.split(/\r?\n/) : sseBuffer.split(/\r?\n\r?\n/);
-                    sseBuffer = parts.pop() || '';
-                    for (const part of parts) {
+                        return thinkingChanged || contentChanged;
+                    };
+                    const processSSEBlock = block => {
+                        const event = parseSSEEventBlock(block);
+                        if (!event.data) return false;
+                        sawSSEEvent = true;
+                        if (event.data === '[DONE]') return true;
                         try {
-                            if (ndjsonStream) processOllamaLine(part);
-                            else processSSEBlock(part);
-                        } catch (e) {
-                            appendLog('debug', `解析流数据失败: ${e.message}`);
-                            throw e;
-                        }
-                    }
-                }
-                const finalBuffer = decoder.decode();
-                if (finalBuffer) {
-                    sseBuffer += finalBuffer;
-                }
-                if (sseBuffer.trim()) {
-                    const tailIsNdjson = isOllamaEndpoint(endpoint);
-                    if (tailIsNdjson || /^(?:event:|data:|id:)/m.test(sseBuffer)) {
-                        try {
-                            if (tailIsNdjson) processOllamaLine(sseBuffer);
-                            else processSSEBlock(sseBuffer);
-                        } catch (e) {
-                            appendLog('debug', `解析尾部流数据失败: ${e.message}`);
-                            throw e;
-                        }
-                    }
-                }
-                appendLog('debug', '流式输出接收完毕');
-                if (sseBuffer.trim() && !sawSSEEvent && !/^(?:event:|data:|id:)/m.test(sseBuffer)) {
-                    const rawResponse = sseBuffer.trim();
-                    try {
-                        const payload = JSON.parse(rawResponse);
-                        const changed = applyStreamPayload(payload);
-                        if (!changed) {
-                            const fallbackText = extractNonStreamingResponseText(payload, endpoint);
-                            if (fallbackText) {
-                                rawFullContent = mergeStreamingText(rawFullContent, '', fallbackText);
+                            applyStreamPayload(JSON.parse(event.data), event.eventType, event.eventId);
+                        } catch (error) {
+                            if (error instanceof SyntaxError) {
+                                if (memoryContext && /^[{\[]/.test(event.data)) return true;
+                                rawFullContent = mergeStreamingText(rawFullContent, event.data);
                                 receivedAny = true;
                                 renderLiveContent();
+                            } else {
+                                throw error;
                             }
                         }
-                    } catch (error) {
-                        if (error instanceof SyntaxError) {
-                            rawFullContent = mergeStreamingText(rawFullContent, '', rawResponse);
-                            receivedAny = true;
-                            renderLiveContent();
-                        } else {
-                            throw error;
+                        return true;
+                    };
+                    // Ollama 以 NDJSON 逐行返回，没有 SSE 的 data: 前缀与空行分隔。
+                    const processOllamaLine = line => {
+                        const text = String(line || '').trim();
+                        if (!text) return false;
+                        sawSSEEvent = true;
+                        if (text === '[DONE]') return true;
+                        applyStreamPayload(JSON.parse(text));
+                        return true;
+                    };
+                    if (debugStream) {
+                        appendLog('debug', '流式输出接收开始');
+                        showVoiceNotification(`正在接收流数据 已接收数据量：0 字节`, false, 0, true);
+                    }
+                    while (true) {
+                        const {
+                            done,
+                            value
+                        } = await reader.read();
+                        if (done) break;
+                        streamBytesReceived += value ? value.length : 0;
+                        sseBuffer += decoder.decode(value, { stream: true });
+                        if (debugStream) {
+                            appendLog('debug', `收到流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
+                            showVoiceNotification(`正在接收流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
+                        }
+                        if (traceStream) {
+                            appendLog('trace', `原始流内容: ${sseBuffer.replace(/\n/g, '\\n')}`);
+                        }
+                        const ndjsonStream = isOllamaEndpoint(endpoint);
+                        const parts = ndjsonStream ? sseBuffer.split(/\r?\n/) : sseBuffer.split(/\r?\n\r?\n/);
+                        sseBuffer = parts.pop() || '';
+                        for (const part of parts) {
+                            try {
+                                if (ndjsonStream) processOllamaLine(part);
+                                else processSSEBlock(part);
+                            } catch (e) {
+                                appendLog('debug', `解析流数据失败: ${e.message}`);
+                                throw e;
+                            }
                         }
                     }
+                    const finalBuffer = decoder.decode();
+                    if (finalBuffer) {
+                        sseBuffer += finalBuffer;
+                    }
+                    if (sseBuffer.trim()) {
+                        const tailIsNdjson = isOllamaEndpoint(endpoint);
+                        if (tailIsNdjson || /^(?:event:|data:|id:)/m.test(sseBuffer)) {
+                            try {
+                                if (tailIsNdjson) processOllamaLine(sseBuffer);
+                                else processSSEBlock(sseBuffer);
+                            } catch (e) {
+                                appendLog('debug', `解析尾部流数据失败: ${e.message}`);
+                                throw e;
+                            }
+                        }
+                    }
+                    appendLog('debug', '流式输出接收完毕');
+                    if (sseBuffer.trim() && !sawSSEEvent && !/^(?:event:|data:|id:)/m.test(sseBuffer)) {
+                        const rawResponse = sseBuffer.trim();
+                        try {
+                            const payload = JSON.parse(rawResponse);
+                            const changed = applyStreamPayload(payload);
+                            if (!changed) {
+                                const fallbackText = extractNonStreamingResponseText(payload, endpoint);
+                                if (fallbackText) {
+                                    rawFullContent = mergeStreamingText(rawFullContent, '', fallbackText);
+                                    receivedAny = true;
+                                    renderLiveContent();
+                                }
+                            }
+                        } catch (error) {
+                            if (error instanceof SyntaxError) {
+                                    if (!memoryContext || !/^[{\[]/.test(rawResponse)) {
+                                        rawFullContent = mergeStreamingText(rawFullContent, '', rawResponse);
+                                        receivedAny = true;
+                                        renderLiveContent();
+                                    }
+                            } else {
+                                throw error;
+                            }
+                        }
+                    }
+                    const memoryCalls = memoryCollector?.finish().filter(call => memory.isCall(call)) || [];
+                    if (!memoryCalls.length || signal.aborted) break;
+                    const memoryResults = memory.applyCalls(memoryCalls);
+                    memoryActivity = memory.summarizeResults(memoryResults);
+                    if (rawFullContent.trim()) break;
+                    const continuation = memoryCollector.continuation(requestBody, memoryCalls, memoryResults, thinkingContent);
+                    if (!continuation) break;
+                    rawFullContent = '';
+                    thinkingContent = '';
+                    responsePayloads.length = 0;
+                    requestResult = await fetchEndpointWithFallback(basePayload, endpoint, signal, {
+                        disableFallback: true,
+                        redactDiagnostics: true,
+                        decorateRequest: () => continuation
+                    });
                 }
                 hideVoiceNotification();
                 if (debugStream) {
                     showVoiceNotification(`流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
                 }
                 if (!receivedAny && !rawFullContent.trim()) rawFullContent = '';
-                setThinkingStatus(thinkingDiv, false);
                 contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                 if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                     contentArea.innerHTML = renderAssistantMarkdown(rawFullContent);
                 }
                 renderMathFormulas(contentArea);
                 if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
-                contentArea.querySelectorAll('pre code').forEach(el => {
-                    hljs.highlightElement(el);
-                    if (!el.parentElement.querySelector('.code-copy-btn') && !el.closest('.canvas-replace-notice')) {
-                        const copyBtn = document.createElement('button');
-                        copyBtn.className = 'code-copy-btn';
-                        copyBtn.innerText = '复制代码';
-                        copyBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            copyToClipboard(el.innerText, copyBtn);
-                        };
-                        el.parentElement.appendChild(copyBtn);
-                    }
-                });
+                prepareAssistantCode(contentArea);
+                const thinkingDurationMs = activity?.finish();
                 chat.messages.push({
                     role: 'assistant',
                     content: rawFullContent,
                     completedAt: Date.now(),
                     model,
                     reasoning: thinkingContent,
+                    thinkingDurationMs,
+                    ...(memoryActivity ? { memoryActivity } : {}),
                     responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint: responseEndpoint, model, baseURL: getBaseURL() })
                 });
                 chat.updatedAt = Date.now();
@@ -10947,25 +10912,33 @@
                 if (err.name !== 'AbortError') {
                     window.AIUIEnhancements?.failed(chat);
                     appendLog('debug', `AI 请求出错: ${err.message}`);
-                    setThinkingStatus(thinkingDiv, false);
+                    activity?.finish();
                     contentArea.innerHTML = `<span class="text-red-500">Error: ${sanitizeHtml(err.message)}</span>`;
+                    if (memoryActivity) {
+                        chat.messages.push({ role: 'assistant', content: rawFullContent, model, failed: true, memoryActivity });
+                        chat.updatedAt = Date.now();
+                        renderChatHistory();
+                    }
                 } else {
                     appendLog('debug', `AI 请求被中止`);
                     showVoiceNotification('已停止', false, 1800, false);
                     if (!rawFullContent.trim() && !receivedAny) rawFullContent = '';
-                    setThinkingStatus(thinkingDiv, false);
+                    const thinkingDurationMs = activity?.finish();
                     contentArea.innerHTML = renderAssistantMarkdown(rawFullContent || '');
                     if (!contentArea.innerHTML.trim() && rawFullContent.trim()) {
                         contentArea.innerHTML = renderAssistantMarkdown(rawFullContent || '');
                     }
                     renderMathFormulas(contentArea);
                     if (chat.canvasEnabled) parseAndApplyReplaceBlocks(rawFullContent, chat);
+                    prepareAssistantCode(contentArea);
                     chat.messages.push({
                         role: 'assistant',
                         content: rawFullContent,
                         completedAt: Date.now(),
                         model,
                         reasoning: thinkingContent,
+                        thinkingDurationMs,
+                        ...(memoryActivity ? { memoryActivity } : {}),
                         responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint: responseEndpoint, model, baseURL: getBaseURL() })
                     });
                     chat.updatedAt = Date.now();
@@ -10976,14 +10949,16 @@
                 abortController = null;
                 isGenerating = false;
                 window.AIUIEnhancements?.endRequestTask();
+                const footer = aiRow.querySelector('.message-footer');
+                if (memoryActivity) renderMessageMemoryActivity(footer, memoryActivity);
+                if (footer) footer.hidden = false;
                 document.getElementById('send-btn').classList.remove('hidden');
                 document.getElementById('stop-btn').classList.add('hidden');
                 setCanvasEditable(true);
                 localStorage.setItem('ai_chats', JSON.stringify(chats));
                 if (typeof updateTokenEstimate === 'function') updateTokenEstimate();
                 lucide.createIcons();
-                document.getElementById('messages-wrapper').scrollTop = document.getElementById('messages-wrapper')
-                    .scrollHeight;
+                scrollChatToBottom();
             }
         }
     </script>

@@ -11,7 +11,11 @@
     </script>
     <title>AIUI 语音聊天</title>
     <script src="../node_modules/onnxruntime-web/dist/ort.min.js"></script>
+    <script src="renderer/tool-call-normalizer.js"></script>
+    <script src="renderer/user-memory.js"></script>
+    <script src="renderer/memory-transport.js"></script>
     <script src="renderer/voicechat-api.js"></script>
+    <script src="shared/fish-audio.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -625,25 +629,22 @@
         }
 
         async function requestFishSpeechDirect(text, settings) {
-            const base = String(settings?.fishApiBase || 'https://fishaudio.org').trim().replace(/\/$/, '');
-            const apiKey = String(settings?.fishApiKey || '').trim();
-            const voiceId = String(settings?.fishVoiceId || '').trim();
-            if (!apiKey || !voiceId) throw new Error('请先填写 Fish Audio API Key 和音色 ID');
-
-            const url = `${base}/api/open/v1/speech/tts`;
-            const body = JSON.stringify({ text, voiceId, format: 'mp3', speed: 1 });
+            const { url, headers, body } = FishAudio.buildRequest(text, {
+                endpoint: settings.fishApiEndpoint,
+                apiBase: settings.fishApiBase,
+                apiKey: settings.fishApiKey,
+                model: settings.fishModel,
+                voiceId: settings.fishVoiceId
+            });
             let lastError = null;
             for (let attempt = 0; attempt < 2; attempt += 1) {
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 90000);
-                console.info(`[AudioChat][TTS][Network] request attempt=${attempt + 1} url=${url} voiceId=${voiceId} chars=${String(text || '').length}`);
+                console.info(`[AudioChat][TTS][Network] request attempt=${attempt + 1} url=${url} chars=${String(text || '').length}`);
                 try {
                     const response = await fetch(url, {
                         method: 'POST',
-                        headers: {
-                            Authorization: `Bearer ${apiKey}`,
-                            'Content-Type': 'application/json'
-                        },
+                        headers,
                         body,
                         signal: controller.signal
                     });
@@ -1188,7 +1189,9 @@
                 await this.vad.init(VAD_MODEL_URL);
 
                 this.preset = await (desktopMode ? bridge.getDesktopVoicePreset : bridge.getVoicePreset)({
+                    endpoint: this.settings.fishApiEndpoint,
                     apiBase: this.settings.fishApiBase,
+                    model: this.settings.fishModel,
                     voiceId: this.settings.fishVoiceId
                 });
                 this.setStatus('initializing', '正在启动麦克风…');
@@ -1617,7 +1620,7 @@
                 return [
                     { role: 'system', content: this.voiceSystemPrompt() },
                     ...this.context,
-                    ...this.turns.map(turn => ({
+                    ...this.turns.filter(turn => turn.content || turn.attachments?.length).map(turn => ({
                         role: turn.role,
                         content: turn.role === 'user' && Array.isArray(turn.attachments) && turn.attachments.length
                             ? [
@@ -1708,6 +1711,7 @@
                 this.mode = 'responding';
                 this.responseFinished = false;
                 this.currentAssistantText = '';
+                this.currentMemoryActivity = null;
                 this.currentAssistantCommitted = false;
                 this.aiActiveSentenceText = '';
                 this.aiLastMatchedSentenceIndex = -1;
@@ -1734,6 +1738,7 @@
                         baseUrl: this.settings.baseUrl,
                         apiKey: this.settings.apiKey,
                         endpoint: this.settings.requestEndpoint,
+                        memoryChat: this.session?.targetChatId ? { id: this.session.targetChatId } : null,
                         payload: {
                             model: this.settings.model,
                             messages: this.apiMessages(),
@@ -1743,6 +1748,9 @@
                         },
                         signal: this.responseAbortController.signal,
                         onFallback: () => this.showToast('Responses 不受支持，已回退 Chat Completions'),
+                        onMemoryActivity: counts => {
+                            if (serial === this.responseSerial) this.currentMemoryActivity = counts;
+                        },
                         onText: nextText => {
                             if (serial !== this.responseSerial) return;
                             const next = String(nextText || '');
@@ -1779,12 +1787,14 @@
                 if (this.currentAssistantCommitted) return;
                 this.currentAssistantCommitted = true;
                 const text = cleanVoiceText(this.currentAssistantText);
-                if (text) {
-                    const voiceRecordId = await this.storeCurrentVoiceRecord(text);
+                const memoryActivity = this.currentMemoryActivity;
+                if (text || memoryActivity) {
+                    const voiceRecordId = text ? await this.storeCurrentVoiceRecord(text) : '';
                     this.turns.push({
                         role: 'assistant',
                         content: text,
                         completedAt: Date.now(),
+                        ...(memoryActivity ? { memoryActivity } : {}),
                         ...(voiceRecordId ? { voiceRecordId } : {})
                     });
                     await this.checkpoint();

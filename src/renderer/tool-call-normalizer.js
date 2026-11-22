@@ -709,10 +709,19 @@
         const name = translateToolName(originalName);
         const sourceArgs = call.arguments && typeof call.arguments === "object" && !Array.isArray(call.arguments) ? call.arguments : {};
         const args = { ...sourceArgs };
-        if (name === "run_shell") {
+        if (name === "run_shell" || name === "start_process") {
             let command = args.command ?? args.cmd ?? args.input ?? args.script;
-            if (Array.isArray(command)) command = command.join(" ");
-            return { ...call, name: "run_shell", arguments: { command: String(command || "") } };
+            if (name === "run_shell") command = Array.isArray(command) ? command.join(" ") : command || "";
+            const description = typeof args.description === "string" ? args.description.trim() : "";
+            return {
+                ...call,
+                name,
+                arguments: {
+                    command: String(command ?? ""),
+                    ...(name === "start_process" ? { process_id: String(args.process_id || args.processId || args.id || "") } : {}),
+                    ...(description ? { description } : {})
+                }
+            };
         }
         if (name === "read_file_range" && (originalName !== "read_file_range" || args.offset !== undefined || args.limit !== undefined || args.file_path !== undefined)) {
             const filePath = String(args.file_path || args.path || "");
@@ -804,16 +813,6 @@
                     from: String(args.from || args.source || args.src || args.path || ""),
                     to: String(args.to || args.destination || args.dest || args.target || ""),
                     overwrite: args.overwrite === true
-                }
-            };
-        }
-        if (name === "start_process") {
-            return {
-                ...call,
-                name: "start_process",
-                arguments: {
-                    command: String(args.command ?? args.cmd ?? args.input ?? args.script ?? ""),
-                    process_id: String(args.process_id || args.processId || args.id || "")
                 }
             };
         }

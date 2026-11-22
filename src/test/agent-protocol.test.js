@@ -190,6 +190,9 @@ test("fixed prompt keeps tool definitions before agent rules and environment", (
     assert.ok(prompt.indexOf("User System Prompt") < prompt.indexOf("Current Environment"));
     assert.match(prompt, /finish_task is mandatory even for pure-text tasks/i);
     assert.match(prompt, /emit exactly one finish_task JSON object/i);
+    assert.match(prompt, /run_shell\nArguments: \{"command":"string","description":"string"\}/);
+    assert.match(prompt, /start_process\nArguments: \{"command":"string","process_id":"string","description":"string"\}/);
+    assert.match(prompt, /For every run_shell and start_process call, include a short, accurate description/);
     // The protocol itself is English-only; a user-supplied system prompt may stay Chinese.
     assert.doesNotMatch(buildFixedAgentPrompt({}), /[一-鿿]/);
 });

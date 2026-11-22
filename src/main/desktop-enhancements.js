@@ -120,7 +120,7 @@ function registerDesktopEnhancements({ app, BrowserWindow, ipcMain, Notification
             minWidth: 360, minHeight: 600, show: false, autoHideMenuBar: true,
             backgroundColor: theme.theme === 'dark' ? '#212121' : '#f8f8f8',
             icon: path.join(__dirname, '..', 'assets', 'icons', 'favicon.ico'),
-            webPreferences: { preload: path.join(__dirname, 'preload.js'), nodeIntegration: false, contextIsolation: true, sandbox: false }
+            webPreferences: { preload: path.join(__dirname, 'preload.js'), additionalArguments: ['--aiui-memory-store'], nodeIntegration: false, contextIsolation: true, sandbox: false }
         });
         const win = preferences;
         win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

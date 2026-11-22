@@ -4,7 +4,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const AgentProtocol = require("../renderer/agent-protocol");
+const AgentActivity = require("../renderer/agent-activity");
 const ToolCallNormalizer = require("../renderer/tool-call-normalizer");
+const AIUIMemoryTransport = require("../renderer/memory-transport");
+const { createStore } = require("../renderer/user-memory");
 
 const projectRoot = path.resolve(__dirname, "..");
 const agentSource = fs.readFileSync(path.join(projectRoot, "renderer", "agent-ui.js"), "utf8");
@@ -24,10 +27,10 @@ const adapterSource = adapterNames.map(name => {
 
 function element() {
     const children = new Map();
-    return { value: "", textContent: "", innerHTML: "", dataset: {}, style: { removeProperty() {} },
+    return { value: "", textContent: "", innerHTML: "", dataset: {}, isConnected: true, style: { removeProperty() {} },
         classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
         querySelector(selector) { if (!children.has(selector)) children.set(selector, element()); return children.get(selector); },
-        querySelectorAll: () => [], setAttribute() {}, appendChild() {}, replaceChildren() {}, remove() {}, scrollTop: 0, scrollHeight: 0 };
+        querySelectorAll: () => [], setAttribute() {}, append() {}, appendChild() {}, replaceChildren() {}, remove() {}, scrollTop: 0, scrollHeight: 0 };
 }
 
 const outputMessage = text => ({ type: "message", role: "assistant", content: [{ type: "output_text", text }] });
@@ -42,32 +45,39 @@ function streamResponse(events) {
         ? { done: false, value: encoded[index++] } : { done: true } }) } };
 }
 
-function fixture(responses) {
+function fixture(responses, { memory = false } = {}) {
     const nodes = new Map();
+    const values = new Map();
+    const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+    const memoryStore = memory ? createStore(storage) : null;
     const requests = [];
+    const memoryAtRequest = [];
     const executedTools = [];
-    const chat = { id: "test-chat", title: "简单总结未来", agentEnabled: true,
+    const chat = { id: "test-chat", title: "简单总结未来", agentEnabled: true, agentSystemPrompt: "已有用户规则",
         agentFixedPrompt: "严格按照工具定义来调用，你现在不身处于你的官方cli环境！", messages: [{ role: "user", content: "简单总结未来" }] };
     const context = {
         console, Date, Promise, AbortController, TextDecoder, CSS: { escape: String },
         setInterval: () => 1, clearInterval() {}, setTimeout: () => 1,
         document: { body: element(), createElement: element, querySelector: () => null,
             getElementById(id) { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); } },
-        localStorage: { getItem: () => null, setItem() {} }, chats: [chat], activeChatId: chat.id,
+        localStorage: storage, chats: [chat], activeChatId: chat.id,
         queuedAgentMessages: [], isGenerating: false, contextCompactionRunning: false, isImageMode: false,
         currentTemp: 0.7, maxTokensLimit: 0, abortController: null, developerModeEnabled: false, logLevel: "info", lastPromptCacheDebug: null,
-        AgentProtocol, ToolCallNormalizer, lucide: { createIcons() {} },
+        AgentProtocol, AgentActivity, ToolCallNormalizer, AIUIMemory: memoryStore, AIUIMemoryTransport, lucide: { createIcons() {} },
         renderThinkingText() {}, escapeHtml: String, showVoiceNotification() {}, hideVoiceNotification() {},
-        updateSettingsLocks() {}, renderChatHistory() {}, updateAttachMenuButtons() {},
+        updateSettingsLocks() {}, renderChatHistory() {}, updateAttachMenuButtons() {}, scrollChatToBottom() {},
         renderMessagesWithResolvedRefs: async () => {}, appendMessageToUI: element,
         buildCompactedChatMessages: value => value.messages,
         buildSingleApiMessage: async message => ({ role: message.role, content: message.content }),
         getRequestEndpoint: () => "/responses", getBaseURL: () => "https://model.test/v1", logPromptCacheDebug() {}, appendLog() {},
         getAgentDetailDefaultBehavior: () => "expanded",
-        fetchEndpointWithFallback: async body => {
-            requests.push(JSON.parse(JSON.stringify(body)));
+        fetchEndpointWithFallback: async (body, endpoint = "/responses", _signal, options = {}) => {
+            const requestBody = options.decorateRequest?.(body, endpoint) || body;
+            requests.push(JSON.parse(JSON.stringify(requestBody)));
+            memoryAtRequest.push(memoryStore?.list());
             if (requests.length > 8) throw new Error("Unexpected unbounded model loop");
-            return { response: responses[Math.min(requests.length - 1, responses.length - 1)], endpoint: "/responses", requestBody: body };
+            return { response: responses[Math.min(requests.length - 1, responses.length - 1)], endpoint, requestBody,
+                requestDecorated: Boolean(options.decorateRequest) };
         },
         electronAPI: { getAgentWorkspace: async () => ({ exists: true }),
             executeAgentTool: async request => { executedTools.push(request); return { success: true }; } }
@@ -76,7 +86,7 @@ function fixture(responses) {
     vm.createContext(context);
     vm.runInContext(adapterSource, context, { filename: "shipped-index-adapters.js" });
     vm.runInContext(agentSource, context, { filename: "agent-ui.js" });
-    return { context, chat, requests, executedTools,
+    return { context, chat, requests, executedTools, memoryStore, memoryAtRequest,
         run: async () => {
             await context.requestAgentLoop("model", chat);
             assert.ok(!chat.messages.some(message => /^Agent 执行失败：.*(?:not defined|is not a function)/.test(message.content)),
@@ -85,6 +95,65 @@ function fixture(responses) {
         visible: () => chat.messages.filter(message => message.role === "assistant" && !message.hidden),
         successfulFinishes: () => chat.messages.filter(message => message.toolName === "finish_task" && message.result?.success === true) };
 }
+
+test("private native Agent memory keeps textual finish and the cached conversation prefix", async () => {
+    const saved = "用户偏好四格缩进。";
+    const finish = '{"tool_call":{"name":"finish_task","arguments":{}}}';
+    const f = fixture([outputResponse(`已了解你的代码风格。\n${finish}`, [nativeCall("manage_memory", { action: "add", text: saved })]),
+        outputResponse("这是一条后续回复。")], { memory: true });
+    await f.run();
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests[0].tools[0].name, "manage_memory");
+    assert.equal(f.successfulFinishes().length, 1);
+    assert.equal(f.visible().at(-1).content, "已了解你的代码风格。");
+    const activity = { created: 1 };
+    assert.deepEqual(f.visible().at(-1).memoryActivity, activity);
+    const savedChat = JSON.parse(f.context.localStorage.getItem("ai_chats"))[0];
+    assert.deepEqual(savedChat.messages.find(message => message.agentFinal).memoryActivity, activity);
+    assert.deepEqual(f.memoryStore.list().map(record => record.text), [saved]);
+    assert.doesNotMatch(JSON.stringify(f.chat.messages), /manage_memory|四格缩进/);
+
+    f.chat.messages.push({ role: "user", content: "继续之前的回复。" });
+    await f.run();
+    assert.equal(f.requests[1].messages[0].content, f.requests[0].messages[0].content);
+    assert.match(f.memoryStore.getContext({ id: "another-chat" }), /四格缩进/);
+});
+
+test("an Agent memory-only response waits privately for a visible answer", async () => {
+    const saved = "用户偏好短标题。";
+    const f = fixture([outputResponse("", [nativeCall("manage_memory", { action: "add", text: saved })]),
+        outputResponse("会采用简短标题。")], { memory: true });
+    await f.run();
+    assert.deepEqual(f.memoryAtRequest, [[], []]);
+    assert.match(f.requests[1].messages.at(-1).content, /no complete answer/);
+    assert.deepEqual(f.visible().map(message => message.content), ["会采用简短标题。"]);
+    assert.deepEqual(f.visible().at(-1).memoryActivity, { created: 1 });
+    assert.deepEqual(f.memoryStore.list().map(record => record.text), [saved]);
+});
+
+test("remote Agent input receives a normal response without desktop memories or tool arguments", async () => {
+    const saved = "用户偏好 PDF 报告。";
+    const remote = "用户偏好远程修改记录。";
+    const hiddenCall = JSON.stringify({ tool_call: { name: "manage_memory", arguments: { action: "add", text: remote } } });
+    const f = fixture([outputResponse(`收到你的任务。\n${hiddenCall}`, [nativeCall("manage_memory", { action: "add", text: remote })])], { memory: true });
+    f.memoryStore.applyCalls([{ name: "manage_memory", args: { action: "add", text: saved } }]);
+    f.context.queuedAgentMessages.push({ gatewayChatId: f.chat.id, content: "来自网关的任务" });
+    await f.run();
+    assert.equal(f.requests.length, 1);
+    assert.equal(f.requests[0].tools, undefined);
+    assert.doesNotMatch(JSON.stringify(f.requests[0]), /PDF 报告/);
+    assert.doesNotMatch(JSON.stringify(f.chat.messages), /manage_memory|远程修改记录/);
+    assert.equal(f.visible().at(-1).content, "收到你的任务。");
+    assert.deepEqual(f.memoryStore.list().map(record => record.text), [saved]);
+});
+
+test("refreshes the command tool definitions for saved Agent chats", async () => {
+    const f = fixture([]);
+    const [system] = await f.context.buildAgentMessagesForContextEstimate(f.chat);
+    assert.equal(system.role, "system");
+    assert.match(system.content, /For every run_shell and start_process call, include a short, accurate description/);
+    assert.match(system.content, /User System Prompt\n\n已有用户规则/);
+});
 
 test("Responses events sharing an SSE id retain final item/completed text after reasoning", async () => {
     const final = "未来的发展将更重视技术进步、可持续发展与人机协作。";

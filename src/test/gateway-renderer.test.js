@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const AgentProtocol = require("../renderer/agent-protocol");
+const AgentActivity = require("../renderer/agent-activity");
 const ToolCallNormalizer = require("../renderer/tool-call-normalizer");
 
 const readSource = name => fs.readFileSync(path.join(__dirname, "..", "renderer", name), "utf8");
@@ -12,7 +13,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 function node() {
     const children = new Map();
     const classes = new Set();
-    return { value: "", textContent: "", innerHTML: "", dataset: {}, style: { removeProperty() {} }, hidden: false,
+    return { value: "", textContent: "", innerHTML: "", dataset: {}, style: { removeProperty() {} }, hidden: false, isConnected: true,
         classList: { add: value => classes.add(value), remove: value => classes.delete(value),
             contains: value => classes.has(value), toggle(value, force) {
                 const enabled = force === undefined ? !classes.has(value) : force;
@@ -20,7 +21,7 @@ function node() {
                 return enabled;
             } },
         querySelector(selector) { if (!children.has(selector)) children.set(selector, node()); return children.get(selector); },
-        querySelectorAll: () => [], setAttribute() {}, appendChild() {}, remove() {},
+        querySelectorAll: () => [], setAttribute() {}, append() {}, appendChild() {}, remove() {},
         addEventListener() {}, scrollTop: 0, scrollHeight: 0 };
 }
 
@@ -49,9 +50,9 @@ function fixture({ agent = true, workspace } = {}) {
             messages: [{ role: "user", content: "OTHER_CHAT_SECRET" }] }],
         activeChatId: chat.id, isGenerating: false, contextCompactionRunning: false,
         queuedAgentMessages: [], isImageMode: false, currentAttachments: [{ name: "LOCAL_ATTACHMENT" }],
-        AgentProtocol, ToolCallNormalizer, systemPrompt: "SECRET_SYSTEM_PROMPT", currentTemp: 0.7,
+        AgentProtocol, AgentActivity, ToolCallNormalizer, systemPrompt: "SECRET_SYSTEM_PROMPT", currentTemp: 0.7,
         maxTokensLimit: 0, abortController: null, developerModeEnabled: false, logLevel: "info", lastPromptCacheDebug: null,
-        lucide: { createIcons() {} }, updateSettingsLocks() {}, renderQueuedAgentMessages() {},
+        lucide: { createIcons() {} }, updateSettingsLocks() {}, renderQueuedAgentMessages() {}, scrollChatToBottom() {},
         showVoiceNotification: message => notifications.push(message), hideVoiceNotification() {},
         closeAnimatedModal() {},
         escapeHtml: value => value, renderThinkingText() {}, renderChatHistory() {}, updateAttachMenuButtons() {},

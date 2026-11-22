@@ -32,7 +32,7 @@ function fixture(response) {
         getBaseURL: () => options.baseURL, getRequestEndpoint: () => options.endpoint,
         buildCompactedChatMessages: value => value.messages, getPromptCacheKeyForChat: () => "",
         appendMessageToUI: node, setCanvasEditable() {}, logPromptCacheDebug() {}, appendLog() {},
-        renderAssistantMarkdown: value => value, renderMathFormulas() {}, renderThinkingText() {}, setThinkingStatus() {},
+        renderAssistantMarkdown: value => value, renderMathFormulas() {}, scrollChatToBottom() {},
         hideVoiceNotification() {}, showVoiceNotification() {}, renderChatHistory() {}, lucide: { createIcons() {} },
         sanitizeHtml: String,
         fetchEndpointWithFallback: async base => { requests.push(same(base)); return { response, endpoint: options.endpoint,
@@ -44,7 +44,7 @@ function fixture(response) {
         "getStreamingErrorMessage", "extractNonStreamingResponseText", "buildSingleApiMessage",
         "buildAPIMessagesWithTemp", "buildAPIMessagesWithContext", "buildResponsesInputFromMessages",
         "buildMessagesPayloadFromBase", "buildMessagesContentBlocks", "toAnthropicImageBlock", "cacheControlEnabled",
-        "buildRequestPayloadForEndpoint", "requestAI",
+        "buildRequestPayloadForEndpoint", "prepareAssistantCode", "requestAI",
         "isGeminiEndpoint", "isOllamaEndpoint", "toGeminiParts", "buildGeminiPayloadFromBase", "buildOllamaPayloadFromBase",
         "extractGeminiStreamUpdate", "extractGeminiOutputText", "extractOllamaStreamUpdate", "extractOllamaOutputText"].map(extract).join("\n"), context);
     return { context, chat, requests };

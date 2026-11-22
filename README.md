@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V9.6.2_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V10.0.0_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -27,6 +27,7 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 - 桌面协作模式：透明置顶字幕、点击穿透、全局快捷键截图与语音上下文协作。
 - 语音聊天模式：使用 Silero VAD、讯飞流式听写和 Fish Audio HTTP TTS。
 - 多模型聊天：可配置 API Key、Base URL、模型列表和默认模型。
+- 跨会话记忆：普通对话、Agent、语音聊天与桌面协作共用本机记忆，可在偏好设置中管理。
 - 上下文用量：按模型选择本地 tokenizer 或估算方式，悬停查看消息、工具与系统提示等用量分解。
 - 常驻系统托盘：支持新建或恢复最近会话，并可直接启动语音聊天或桌面协作。
 - 语音回放：语音聊天模式生成的 AI 语音可保存并在主对话中回放。
@@ -38,6 +39,13 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V10.0.0 Release
+
+- 新增跨会话记忆，支持新增、修改、删除及操作数量提示。新会话读取最新记忆，已有会话的前缀可继续复用。
+- 重构聊天布局、单行输入底栏、长消息折叠和消息操作，统一模型、Effort、审批、附件与归档菜单。
+- 升级 Agent 思考、工具活动与运行计时，新增 Always Ask 命令模式和多级工具详情。
+- Fish Audio 新增国内与国际端点，默认使用 S2.1 Pro (Free)。[完整更新日志](UPDATE.md#v1000-release--2026-11-22)
 
 ### V9.6.2 Release
 

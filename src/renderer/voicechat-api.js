@@ -17,11 +17,11 @@
         return '';
     }
 
-    function buildResponsesInput(messages) {
+    function buildResponsesInput(messages, forceStructured = false) {
         const filtered = (Array.isArray(messages) ? messages : []).filter(message => message?.role !== 'system');
         const hasImage = filtered.some(message => Array.isArray(message?.content)
             && message.content.some(part => part?.type === 'image_url' || part?.type === 'input_image'));
-        if (!hasImage) {
+        if (!hasImage && !forceStructured) {
             return filtered.map(message => {
                 const text = extractText(message?.content).trim();
                 if (!text) return '';
@@ -220,7 +220,7 @@
         return { delta: typeof content === 'string' ? content : '' };
     }
 
-    function buildPayload(basePayload, endpoint) {
+    function buildPayload(basePayload, endpoint, { structuredInput = false } = {}) {
         if (endpoint === '/gemini') return buildGeminiPayload(basePayload);
         if (endpoint === '/ollama') return buildOllamaPayload(basePayload);
         if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayload(basePayload);
@@ -230,7 +230,7 @@
         const { messages: _, max_tokens, prompt_cache_key, cache_control, ...rest } = basePayload;
         return {
             ...rest,
-            input: buildResponsesInput(messages),
+            input: buildResponsesInput(messages, structuredInput),
             ...(systemMessage && extractText(systemMessage.content).trim()
                 ? { instructions: extractText(systemMessage.content) }
                 : {}),
@@ -313,12 +313,28 @@
         const SUPPORTED_ENDPOINTS = ['/responses', '/chat/completions', '/v1/messages', '/gemini', '/ollama'];
         const nativeEndpoint = endpoint => endpoint === '/gemini' || endpoint === '/ollama';
         const preferredEndpoint = SUPPORTED_ENDPOINTS.includes(options.endpoint) ? options.endpoint : '/responses';
-        const send = endpoint => {
+        const memory = window.AIUIMemory;
+        const transport = window.AIUIMemoryTransport;
+        const memoryContext = options.memoryChat && transport ? memory?.getContext(options.memoryChat) : '';
+        const tool = memoryContext ? memory.getTool() : null;
+        const basePayload = options.payload;
+        const messages = basePayload.messages || [];
+        const payload = memoryContext
+            ? {
+                ...basePayload,
+                messages: messages[0]?.role === 'system'
+                    ? [{ ...messages[0], content: [messages[0].content, memoryContext].filter(Boolean).join('\n\n') }, ...messages.slice(1)]
+                    : [{ role: 'system', content: memoryContext }, ...messages]
+            } : basePayload;
+        const send = (endpoint, body) => {
             const headers = {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${options.apiKey || ''}`
             };
-            if (endpoint === '/v1/messages') headers['anthropic-version'] = '2023-06-01';
+            if (endpoint === '/v1/messages') {
+                headers['anthropic-version'] = '2023-06-01';
+                if (options.apiKey) headers['x-api-key'] = options.apiKey;
+            }
             if (endpoint === '/gemini' && options.apiKey) headers['x-goog-api-key'] = options.apiKey;
             if (endpoint === '/ollama' && !options.apiKey) delete headers.Authorization;
             const baseUrl = String(options.baseUrl || '').replace(/\/+$/, '');
@@ -328,40 +344,71 @@
             return fetch(requestUrl, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify(buildPayload(options.payload, endpoint)),
+                body: JSON.stringify(body),
                 signal: options.signal
             });
         };
+        async function request(endpoint) {
+            const base = buildPayload(payload, endpoint, { structuredInput: Boolean(tool) });
+            if (!tool) return { response: await send(endpoint, base) };
+            const body = transport.declareTool(base, endpoint, tool);
+            const response = await send(endpoint, body);
+            if (await transport.isUnsupportedToolError(response)) {
+                return { response: await send(endpoint, buildPayload(payload, endpoint)) };
+            }
+            return { response, body };
+        }
 
         let endpoint = preferredEndpoint;
-        let response = await send(endpoint);
-        if (response.status === 501 && !nativeEndpoint(preferredEndpoint)) {
+        let turn = await request(endpoint);
+        if (turn.response.status === 501 && !nativeEndpoint(preferredEndpoint)) {
             // A 501 means the relay does not implement that path at all, so walk the
             // remaining protocols in turn before giving up.
-            await response.text().catch(() => '');
+            await turn.response.text().catch(() => '');
             for (const candidate of SUPPORTED_ENDPOINTS.filter(item => item !== preferredEndpoint)) {
                 endpoint = candidate;
                 if (typeof options.onFallback === 'function') options.onFallback(endpoint);
-                response = await send(endpoint);
-                if (response.status !== 501) break;
-                await response.text().catch(() => '');
+                turn = await request(endpoint);
+                if (turn.response.status !== 501) break;
+                await turn.response.text().catch(() => '');
             }
         }
+        const collector = turn.body ? transport.createCollector(endpoint) : null;
+        const readOptions = { ...options, privateProtocol: Boolean(tool) };
+        const read = (response, privateCollector) => readTextResponse(response, endpoint, readOptions, privateCollector).catch(error => {
+            if (tool && error instanceof SyntaxError) throw new Error('模型返回了无效的响应格式');
+            throw error;
+        });
+        const text = await read(turn.response, collector);
+        if (!collector || options.signal?.aborted) return { text, endpoint };
+        const calls = collector.finish().filter(memory.isCall);
+        if (!calls.length) return { text, endpoint };
+        const results = memory.applyCalls(calls);
+        const activity = memory.summarizeResults(results);
+        if (activity) options.onMemoryActivity?.(activity);
+        if (text.trim()) return { text, endpoint };
+        const followUp = collector.continuation(turn.body, calls, results);
+        if (!followUp) return { text, endpoint };
+        return { text: await read(await send(endpoint, followUp)), endpoint };
+    }
+
+    async function readTextResponse(response, endpoint, options, collector) {
         if (!response.ok) {
             const detail = await response.text().catch(() => '');
-            throw new Error(`LLM API 错误 (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
+            throw new Error(`LLM API 错误 (${response.status})${detail && !options.privateProtocol ? `: ${detail.slice(0, 300)}` : ''}`);
         }
 
         const reader = response.body?.getReader();
         if (!reader) {
             const payload = await response.json();
+            collector?.ingest(payload);
             const text = endpoint === '/chat/completions'
                 ? extractText(payload?.choices?.[0]?.message?.content)
                 : endpoint === '/gemini' ? extractGeminiOutput(payload)
                     : endpoint === '/ollama' ? extractText(payload?.message?.content)
                         : (endpoint === '/v1/messages' ? extractMessagesOutput(payload) : extractResponsesOutput(payload));
             if (typeof options.onText === 'function') options.onText(text);
-            return { text, endpoint };
+            return text;
         }
 
         const decoder = new TextDecoder();
@@ -371,8 +418,9 @@
         const applyPayload = payload => {
             const errorMessage = payload?.error?.message || payload?.response?.error?.message;
             if (payload?.type === 'response.error' || payload?.type === 'response.failed' || errorMessage) {
-                throw new Error(errorMessage || 'API stream error');
+                throw new Error(!options.privateProtocol && errorMessage ? errorMessage : '模型回复中断');
             }
+            collector?.ingest(payload);
             const update = extractUpdate(payload, endpoint);
             const next = mergeText(fullText, update.delta, update.snapshot);
             if (next !== fullText) {
@@ -414,7 +462,7 @@
                 try {
                     applyPayload(JSON.parse(buffer));
                 } catch (error) {
-                    if (error instanceof SyntaxError) {
+                    if (error instanceof SyntaxError && !options.privateProtocol) {
                         fullText = buffer.trim();
                         if (typeof options.onText === 'function') options.onText(fullText);
                     } else {
@@ -423,7 +471,7 @@
                 }
             }
         }
-        return { text: fullText, endpoint };
+        return fullText;
     }
 
     window.VoiceChatAPI = { buildPayload, streamText };

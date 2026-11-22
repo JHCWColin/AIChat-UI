@@ -4,11 +4,13 @@
     let archiveBusy = false;
     function finishProgress() {
         archiveBusy = false;
-        for (const id of ['export-chats-btn','import-chats-btn']) if ($(id)) $(id).disabled = false;
+        const trigger = $('chat-archive-btn');
+        if (trigger) trigger.disabled = false;
     }
     async function beginProgress(action) {
         archiveBusy = true;
-        for (const id of ['export-chats-btn','import-chats-btn']) if ($(id)) $(id).disabled = true;
+        const trigger = $('chat-archive-btn');
+        if (trigger) trigger.disabled = true;
         let lastPaint = 0, current = 0;
         const label = document.createElement('div'); label.className = 'archive-progress-label';
         const track = document.createElement('div'); track.className = 'archive-progress-track';
@@ -155,16 +157,26 @@
     window.addEventListener('load',() => {
         // Archive operations run in the main window, with its live result store.
         if (new URLSearchParams(location.search).has('preferences')) return;
-        function archiveButton(id,label,icon) {
-            const button = document.createElement('button'); button.type = 'button'; button.id = id;
-            button.className = 'flex items-center gap-3 px-3 py-2 hover:bg-gray-800 rounded-xl transition-colors';
-            button.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5"></i><span class="text-sm">${label}</span>`;
-            return button;
-        }
-        const exportButton = archiveButton('export-chats-btn','导出记录','file-output'); exportButton.onclick = exportChats;
-        const importButton = archiveButton('import-chats-btn','导入记录','file-input');
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.id = 'chat-archive-btn';
+        trigger.className = $('agent-gateway-btn').className;
+        trigger.innerHTML = '<i data-lucide="archive" class="w-5 h-5"></i><span class="text-sm">导入 / 导出记录</span>';
+        trigger.setAttribute('aria-haspopup', 'dialog');
+        trigger.setAttribute('aria-controls', 'chat-archive-menu');
+        trigger.setAttribute('aria-expanded', 'false');
+        const { createPopover, openChoice, closeChoices } = window.AIUIEnhancements;
+        const menu = createPopover('聊天记录');
+        menu.id = 'chat-archive-menu';
+        menu.innerHTML = `<div class="choice-options">
+            <button class="choice-option" type="button" data-archive-action="import"><i data-lucide="file-input"></i> 导入记录</button>
+            <button class="choice-option" type="button" data-archive-action="export"><i data-lucide="file-output"></i> 导出记录</button>
+        </div>`;
         const input = document.createElement('input'); input.type = 'file'; input.accept = '.zip'; input.hidden = true; input.onchange = async () => { if (input.files[0]) await importChats(input.files[0]); input.value = ''; };
-        importButton.onclick = () => input.click(); $('sidebar').lastElementChild.prepend(exportButton,importButton,input);
+        trigger.onclick = () => { if (!archiveBusy) openChoice(menu, trigger); };
+        menu.querySelector('[data-archive-action="import"]').onclick = () => { closeChoices(true); input.click(); };
+        menu.querySelector('[data-archive-action="export"]').onclick = () => { closeChoices(true); void exportChats(); };
+        $('sidebar').lastElementChild.prepend(trigger,input);
         lucide.createIcons();
     });
     window.AIUIChatArchive = { materialize,importChats,exportChats,buildArchive };

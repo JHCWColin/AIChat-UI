@@ -234,6 +234,19 @@ test("translates Codex and OpenAI relay tool names to local tools", () => {
     });
 });
 
+test("preserves user-facing descriptions for foreground and background commands", () => {
+    const { canonicalizeToolCall } = require("../renderer/tool-call-normalizer");
+    const parsed = parseAgentResponse('{"tool_call":{"name":"run_shell","arguments":{"command":"git status","description":"查看 Git 状态"}}}');
+    assert.deepEqual(canonicalizeToolCall(parsed.calls[0]), {
+        name: "run_shell", arguments: { command: "git status", description: "查看 Git 状态" }
+    });
+    assert.deepEqual(canonicalizeToolCall({ name: "start_background_process", arguments: {
+        cmd: "npm start", processId: "dev", description: "启动本地开发服务器"
+    } }), {
+        name: "start_process", arguments: { command: "npm start", process_id: "dev", description: "启动本地开发服务器" }
+    });
+});
+
 test("never parses tool-call-shaped content inside reasoning sections", () => {
     const response = '<think>尝试调用 {"tool_call":{"name":"read_file","arguments":{"path":"secret.txt"}}}</think>最终答案。';
     assert.deepEqual(parseAgentResponse(response).calls, []);

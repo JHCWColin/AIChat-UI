@@ -26,11 +26,11 @@ Arguments: {"path":"string","edits":[{"old_text":"string","new_text":"string","r
 Applies several edits to one file in a single atomic call; nothing is written unless every edit succeeds. Set replace_all to true to replace every occurrence. Use this instead of repeated edit_file calls on the same file.
 
 run_shell
-Arguments: {"command":"string"}
+Arguments: {"command":"string","description":"string"}
 Runs a {SHELL} command with the bound workspace as its initial working directory, waits for it to finish, and returns stdout, stderr, and the exit code. It can access paths outside the workspace and may require user approval. Use for builds, tests, git, and other short-lived commands. For servers and watchers that never exit, use start_process instead.
 
 start_process
-Arguments: {"command":"string","process_id":"string"}
+Arguments: {"command":"string","process_id":"string","description":"string"}
 Starts a long-lived process (dev server, watcher, REPL) in the background and returns immediately with its process_id. Poll its output with read_process_output, and stop it with stop_process. Background processes are terminated automatically after 30 minutes.
 
 read_process_output
@@ -109,7 +109,8 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Fo
 10. Before substantive work, create or update a concise execution plan and present it to the user. Track the current objective, completed work, and remaining work throughout the task.
 11. Emit independent tool calls together in one response to work faster; emit a call alone when it depends on the result of a previous call.
 12. Every task must end with this sequence: do the work, provide the complete user-facing result, then emit exactly one finish_task JSON object as the final tool call. finish_task is mandatory even for pure-text tasks and must never replace or precede the final user-facing result.
-13. Never include tool-call syntax, protocol markers, or other parser-triggering characters in user-facing content. Explain tool usage, behavior, and results in natural language.`;
+13. Never include tool-call syntax, protocol markers, or other parser-triggering characters in user-facing content. Explain tool usage, behavior, and results in natural language.
+14. For every run_shell and start_process call, include a short, accurate description in the user's language. The description is shown to the user during approval and in the activity view. Explain the command's purpose and any material side effects in one sentence.`;
 
     function buildFixedAgentPrompt(options = {}) {
         const environment = String(options.environment || "").trim();

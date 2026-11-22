@@ -31,31 +31,6 @@
         web_search: "search",
         browse_web: "globe"
     };
-    const TOOL_LABELS = {
-        ask_user_question: '询问用户',
-        read_file_range: "读取",
-        write_file: "写入",
-        edit_file: "编辑",
-        multi_edit_file: "批量编辑",
-        run_shell: "运行",
-        start_process: "启动进程",
-        read_process_output: "读取进程输出",
-        stop_process: "停止进程",
-        list_processes: "进程列表",
-        finish_task: "完成任务",
-        agent_protocol: "协议提示",
-        list_dir: "列目录",
-        glob_files: "查找文件",
-        grep_files: "搜索",
-        delete_path: "删除",
-        move_path: "移动",
-        copy_path: "复制",
-        view_image: "查看图片",
-        update_plan: "更新计划",
-        _claude_insert_text: "插入文本",
-        _claude_undo_edit: "撤销编辑",
-        _codex_apply_patch: "应用补丁"
-    };
     // Tools that only read state can run concurrently; anything that mutates the
     // workspace, the shell, or the UI must stay in strict sequential order.
     const READ_ONLY_TOOLS = new Set([
@@ -78,16 +53,19 @@
     let agentApprovalResolver = null;
     let agentQuestionResolver = null;
     let agentApprovalRow = null;
-    let agentApprovalPrefix = "";
     let agentWorkspaceTrustResolver = null;
     let agentYoloResolver = null;
     let agentCommandMode = "safe";
+    let agentCommandModeChatId = null;
     let agentToolSequence = 0;
     let agentCurrentExecutionId = "";
     let agentShellProgressUnsubscribe = null;
     let agentTaskStartedAt = 0;
     let agentTaskTimer = null;
-    let agentActiveStatusRow = null;
+    let agentTaskFooter = null;
+    let liveActivityBlock = null;
+    const liveToolBlocks = new Map();
+    const activeToolMessages = new WeakSet();
     const agentShellProgressByExecution = new Map();
     const agentPlansByChat = new Map();
     const agentEditHistoryByFile = new Map();
@@ -202,7 +180,9 @@
 
     function updateAgentUIForChat(chat) {
         setActiveChatTitle(chat);
-        agentCommandMode = "safe";
+        const modeChatId = chat?.agentEnabled ? chat.id : null;
+        if (modeChatId !== agentCommandModeChatId || agentCommandMode === "yolo") agentCommandMode = "safe";
+        agentCommandModeChatId = modeChatId;
         const modeBar = document.getElementById("agent-command-mode-bar");
         const modeSelect = document.getElementById("agent-command-mode-select");
         if (modeSelect) modeSelect.value = agentCommandMode;
@@ -216,7 +196,7 @@
             canvasToggle.classList.toggle("visible", Boolean(chat?.canvasEnabled && !chat?.agentEnabled));
         }
         const input = document.getElementById("user-input");
-        if (input) input.placeholder = chat?.agentEnabled ? "向 Agent 描述任务..." : "给 AI 发送消息...   支持附件 | /canvas 编码模式 | /compact 压缩上下文";
+        if (input) input.placeholder = chat?.agentEnabled ? "描述任务，或输入 / 使用命令" : "发送消息，或输入 / 使用命令";
         updateAttachMenuButtons();
         if (typeof updateTokenEstimate === 'function') updateTokenEstimate();
         if (chat?.agentEnabled) refreshAgentWorkspace(chat).then(() => {
@@ -363,24 +343,21 @@
     }
 
     async function onAgentCommandModeChange(value) {
-        if (value !== "yolo") {
-            agentCommandMode = "safe";
-            return;
+        const select = document.getElementById("agent-command-mode-select");
+        if (value === "yolo") {
+            if (agentCommandMode !== "yolo" && await requestAgentYoloWarning()) agentCommandMode = "yolo";
+        } else {
+            agentCommandMode = value === "ask" ? "ask" : "safe";
         }
-        const confirmed = await requestAgentYoloWarning();
-        if (!confirmed) {
-            agentCommandMode = "safe";
-            const select = document.getElementById("agent-command-mode-select");
-            if (select) select.value = "safe";
-            return;
-        }
-        agentCommandMode = "yolo";
+        if (select) select.value = agentCommandMode;
+        window.AIUIEnhancements?.changed();
     }
 
     function resolveAgentCommandApproval(decision) {
         const row = agentApprovalRow;
         agentApprovalRow = null;
         if (row) {
+            row.inert = true;
             row.classList.add("leaving");
             setTimeout(() => row.remove(), 160);
         }
@@ -389,30 +366,86 @@
         if (resolver) resolver(decision);
     }
 
-    function requestAgentCommandApproval(command, suggestedPrefix) {
-        window.AIUIEnhancements?.notifyQuestion('Agent 请求运行非白名单命令');
+    function requestAgentCommandApproval(command, message, alwaysAsk) {
+        const title = "允许 Agent 运行这条命令吗？";
+        const reason = alwaysAsk ? "当前模式要求逐条审批命令。" : "此命令不在允许列表中。";
+        window.AIUIEnhancements?.notifyQuestion(title);
         const wrapper = document.getElementById("messages-wrapper");
         if (!wrapper) return Promise.resolve("reject");
         const row = document.createElement("div");
-        row.className = "chat-row agent-tool-row-wrapper agent-command-approval-row";
-        row.setAttribute("role", "alert");
-        row.setAttribute("aria-live", "assertive");
-        row.innerHTML = `<div class="agent-tool-row agent-command-approval-tool"><div class="agent-tool-summary"><i data-lucide="shield-alert"></i><span>Agent 请求运行非白名单命令</span></div><div class="agent-command-code"></div><div class="agent-command-actions"><button type="button" class="border border-gray-600 text-gray-300 hover:bg-gray-800" onclick="resolveAgentCommandApproval('reject')">拒绝</button><button type="button" class="border border-gray-600 text-gray-200 hover:bg-gray-800" onclick="resolveAgentCommandApproval('allow')">允许</button><button type="button" class="text-white" style="background:var(--accent-strong)" onclick="resolveAgentCommandApproval('always')">始终允许</button></div></div>`;
-        const commandEl = row.querySelector(".agent-command-code");
+        row.className = "chat-row agent-command-approval-row";
+        const allowAlways = alwaysAsk ? "" : '<button type="button" data-decision="always">始终允许</button>';
+        row.innerHTML = `
+            <section class="detail-surface agent-interaction-card agent-command-approval-tool" tabindex="-1">
+                <h4 class="agent-card-heading"></h4>
+                <div class="agent-command-body">
+                    <p class="agent-command-description"></p>
+                    <p class="agent-command-reason"></p>
+                    <pre class="agent-command-code"><code></code></pre>
+                </div>
+                <div class="agent-card-actions agent-command-actions">
+                    <button type="button" data-decision="reject">拒绝</button>
+                    ${allowAlways}
+                    <button type="button" class="agent-card-primary" data-decision="allow">允许一次</button>
+                </div>
+            </section>`;
+        const card = row.firstElementChild;
+        const heading = card.querySelector(".agent-card-heading");
+        heading.id = `agent-approval-${message.toolId}`;
+        heading.textContent = title;
+        card.setAttribute("aria-labelledby", heading.id);
+        const description = toolArguments(message).description;
+        card.querySelector(".agent-command-description").textContent = typeof description === "string" ? description.trim() : "";
+        card.querySelector(".agent-command-reason").textContent = reason;
+        const commandEl = card.querySelector("code");
         commandEl.textContent = command;
-        agentApprovalPrefix = String(suggestedPrefix || "").trim();
+        const highlight = window.hljs;
+        if (highlight) {
+            const languages = ["powershell", "bash"].filter(language => highlight.getLanguage(language));
+            commandEl.innerHTML = highlight.highlightAuto(command, languages).value;
+        }
+        for (const button of card.querySelectorAll("[data-decision]")) {
+            button.onclick = () => {
+                if (agentApprovalRow === row) resolveAgentCommandApproval(button.dataset.decision);
+            };
+        }
+        bindAgentCardSubmitShortcut(card, card.querySelector('[data-decision="allow"]'));
         agentApprovalRow = row;
-        wrapper.appendChild(row);
-        lucide.createIcons();
-        wrapper.scrollTop = wrapper.scrollHeight;
+        const block = liveToolBlocks.get(message);
+        if (block?.isConnected) block.after(row);
+        else wrapper.appendChild(row);
+        placeAgentTaskFooter();
+        revealAgentCard(card, card);
         return new Promise(resolve => {
             agentApprovalResolver = resolve;
         });
     }
 
-    function formatAgentWorkingTime(milliseconds, completed = false) {
+    function bindAgentCardSubmitShortcut(card, button) {
+        const modifier = /Mac/i.test(navigator.platform) ? "Meta" : "Control";
+        button.setAttribute("aria-keyshortcuts", `${modifier}+Enter`);
+        const hint = document.createElement("kbd");
+        hint.setAttribute("aria-hidden", "true");
+        hint.textContent = modifier === "Meta" ? "⌘ ↵" : "Ctrl ↵";
+        button.append(hint);
+        card.addEventListener("keydown", event => {
+            if (event.defaultPrevented || event.isComposing || event.repeat || event.key !== "Enter" ||
+                (modifier === "Meta" ? !event.metaKey : !event.ctrlKey) || event.altKey || event.shiftKey) return;
+            event.preventDefault();
+            button.click();
+        });
+    }
+
+    function revealAgentCard(card, focusTarget) {
+        focusTarget?.focus({ preventScroll: true });
+        const wrapper = document.getElementById("messages-wrapper");
+        card.scrollIntoView({ block: card.offsetHeight > wrapper.clientHeight ? "start" : "nearest", behavior: "instant" });
+    }
+
+    function formatAgentWorkingTime(milliseconds) {
         const seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
-        return completed ? `worked for ${seconds}s` : `working for ${seconds}s...`;
+        const duration = seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
+        return `Worked for ${duration}`;
     }
 
     function currentAgentTaskDuration() {
@@ -420,45 +453,59 @@
     }
 
     function updateAgentTaskTimer() {
-        const elapsed = agentActiveStatusRow?.querySelector(".agent-working-time");
-        if (elapsed) elapsed.textContent = formatAgentWorkingTime(currentAgentTaskDuration());
+        const elapsed = agentTaskFooter?.querySelector(".response-worked-duration");
+        if (!elapsed) return;
+        const text = formatAgentWorkingTime(currentAgentTaskDuration());
+        if (elapsed.textContent !== text) elapsed.textContent = text;
     }
 
-    function setAgentActiveStatusRow(row) {
-        if (agentActiveStatusRow && agentActiveStatusRow !== row) {
-            const previous = agentActiveStatusRow.querySelector(".agent-working-time");
-            if (previous) previous.textContent = "";
-        }
-        agentActiveStatusRow = row || null;
-        updateAgentTaskTimer();
+    function placeAgentTaskFooter() {
+        if (!agentTaskStartedAt || !agentTaskFooter || String(agentTaskChatId) !== String(activeChatId)) return;
+        const wrapper = document.getElementById("messages-wrapper");
+        if (wrapper && wrapper.lastElementChild !== agentTaskFooter) wrapper.append(agentTaskFooter);
+    }
+
+    function createAgentTaskFooter() {
+        const row = document.createElement("div");
+        row.className = "chat-row agent-task-duration-row";
+        row.innerHTML = '<div class="message-footer"><span class="response-worked-duration"></span></div>';
+        return row;
+    }
+
+    function appendAgentTaskDuration(container, durationMs) {
+        const row = createAgentTaskFooter();
+        row.querySelector(".response-worked-duration").textContent = formatAgentWorkingTime(durationMs);
+        container.append(row);
     }
 
     function startAgentTaskTimer() {
         if (agentTaskTimer) clearInterval(agentTaskTimer);
         agentTaskStartedAt = Date.now();
-        agentActiveStatusRow = null;
+        agentTaskFooter = createAgentTaskFooter();
+        updateAgentTaskTimer();
+        placeAgentTaskFooter();
         agentTaskTimer = setInterval(updateAgentTaskTimer, 1000);
     }
 
     function finishAgentTaskTimer(chat, targetMessage = null) {
         const durationMs = currentAgentTaskDuration();
         if (agentTaskTimer) clearInterval(agentTaskTimer);
+        updateAgentTaskTimer();
         agentTaskTimer = null;
         agentTaskStartedAt = 0;
-        const elapsed = agentActiveStatusRow?.querySelector(".agent-working-time");
-        if (elapsed) elapsed.textContent = formatAgentWorkingTime(durationMs, true);
-        const persistedTarget = targetMessage || [...(chat?.messages || [])].reverse().find(message => message?.role === "tool");
-        if (persistedTarget && !persistedTarget.taskDurationMs) persistedTarget.taskDurationMs = durationMs;
-        agentActiveStatusRow = null;
+        const persistedTarget = targetMessage || chat?.messages.findLast(message => !message.hidden);
+        if (persistedTarget && persistedTarget.role !== "user") persistedTarget.taskDurationMs = durationMs;
+        agentTaskFooter = null;
         return durationMs;
     }
 
-    function appendAgentThinkingRow(text = "Agent 正在考虑下一步决策", options = {}) {
+    function appendAgentThinkingRow(text = "Thinking", options = {}) {
         const wrapper = options.container || document.getElementById("messages-wrapper");
         const row = document.createElement("div");
         row.className = "chat-row agent-tool-row-wrapper agent-thinking-row";
         const running = options.running !== false;
-        row.innerHTML = `<div class="agent-tool-row${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="bot"></i><span class="agent-tool-summary-text">${escapeHtml(text)}</span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"><div class="thinking-text"></div></div></div></div>`;
+        const grouped = options.grouped || running && options.activate !== false || Boolean(options.container?.closest?.(".agent-round-detail"));
+        row.innerHTML = `<div class="agent-tool-row${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="bot"></i><span class="agent-tool-summary-text">${escapeHtml(text)}</span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"><div class="thinking-text"></div></div></div></div>`;
         const toolRow = row.querySelector(".agent-tool-row");
         const summary = row.querySelector(".agent-tool-summary");
         const thinkingText = row.querySelector(".thinking-text");
@@ -477,7 +524,7 @@
             const toggle = summary.querySelector(".agent-tool-toggle");
             if (toggle) toggle.style.display = hasReasoning ? "block" : "none";
             if (hasReasoning && !row.dataset.detailInitialized) {
-                toolRow.classList.toggle("collapsed", getAgentDetailDefaultBehavior() === "collapsed");
+                toolRow.classList.toggle("collapsed", grouped || getAgentDetailDefaultBehavior() === "collapsed");
                 row.dataset.detailInitialized = "true";
             }
             summary.setAttribute("aria-expanded", String(hasReasoning && !toolRow.classList.contains("collapsed")));
@@ -485,16 +532,12 @@
         row.finishThinking = durationMs => {
             if (agentLiveThinkingRow === row) agentLiveThinkingRow = null;
             if (!row.reasoningText) {
-                if (agentActiveStatusRow === row) setAgentActiveStatusRow(null);
                 row.remove();
                 return false;
             }
             const seconds = Math.max(0, Math.round(Number(durationMs || 0) / 1000));
             toolRow.classList.remove("running");
-            row.querySelector(".agent-tool-summary-text").textContent = `思考了${seconds}秒`;
-            const elapsed = row.querySelector(".agent-working-time");
-            if (elapsed) elapsed.textContent = "";
-            if (agentActiveStatusRow === row) setAgentActiveStatusRow(null);
+            row.querySelector(".agent-tool-summary-text").textContent = durationMs > 0 ? `Thought for ${seconds}s` : "Thought";
             return true;
         };
         const toggleReasoning = () => {
@@ -510,12 +553,26 @@
                 toggleReasoning();
             }
         };
-        wrapper.appendChild(row);
+        if (running && options.activate !== false) {
+            const message = { agentThinking: true, status: "running", gatewayThinkingId: row.gatewayThinkingId };
+            const block = appendLiveAgentActivity(message, row);
+            const finishThinking = row.finishThinking;
+            row.finishThinking = durationMs => {
+                const hasReasoning = finishThinking(durationMs);
+                message.status = "done";
+                message.reasoning = row.reasoningText;
+                if (!hasReasoning) {
+                    block._agentRoundMessages.splice(block._agentRoundMessages.indexOf(message), 1);
+                }
+                refreshAgentRoundSummary(block);
+                return hasReasoning;
+            };
+        } else {
+            wrapper.appendChild(row);
+        }
         if (options.reasoning) row.updateReasoning(options.reasoning);
         if (!running) row.finishThinking(options.durationMs);
         lucide.createIcons();
-        if (running && options.activate !== false) setAgentActiveStatusRow(row);
-        wrapper.scrollTop = wrapper.scrollHeight;
         return row;
     }
 
@@ -529,11 +586,11 @@
         if (!wrapper) return null;
         const row = document.createElement("div");
         row.className = "chat-row agent-tool-row-wrapper agent-endpoint-fallback-row";
-        row.innerHTML = `<div class="agent-tool-row warning running"><div class="agent-tool-summary"><i data-lucide="route"></i><span class="agent-tool-summary-text">接口返回 501，正在转接至 ${escapeHtml(info?.to || "备用接口")}</span><span class="agent-working-time"></span></div></div>`;
+        row.innerHTML = `<div class="agent-tool-row warning running"><div class="agent-tool-summary"><i data-lucide="route"></i><span class="agent-tool-summary-text">接口返回 501，正在转接至 ${escapeHtml(info?.to || "备用接口")}</span></div></div>`;
         wrapper.appendChild(row);
         lucide.createIcons();
-        setAgentActiveStatusRow(row);
-        wrapper.scrollTop = wrapper.scrollHeight;
+        placeAgentTaskFooter();
+        scrollChatToBottom();
         return row;
     }
 
@@ -617,16 +674,19 @@
 
     function getAgentPreviewLines(message) {
         if (!message?.result || message.status === "running") return [];
-        if (message.toolName === "write_file" || message.toolName === "edit_file") {
+        if (window.AgentActivity.WRITE_TOOLS.has(message.toolName)) {
             const diff = message.displayDiff || message.result.displayDiff;
-            return truncateAgentDisplayLines(Array.isArray(diff?.lines) ? diff.lines : []);
+            return Array.isArray(diff?.lines) ? diff.lines : [];
         }
-        if (message.toolName === "run_shell") {
+        if (message.toolName === "read_file_range" && message.result.success) {
+            return splitAgentDisplayLines(message.result.content).map(text => ({ type: "output", text }));
+        }
+        if (["run_shell", "start_process", "read_process_output", "stop_process"].includes(message.toolName)) {
             const output = [
                 ...splitAgentDisplayLines(message.result.stdout).map(text => ({ type: "output", text })),
                 ...splitAgentDisplayLines(message.result.stderr).map(text => ({ type: "error", text }))
             ];
-            return truncateAgentDisplayLines(output);
+            return output;
         }
         if (message.toolName === "list_dir" && message.result?.success) {
             const entries = Array.isArray(message.result.entries) ? message.result.entries : [];
@@ -635,7 +695,7 @@
                 text: `${entry.type === "directory" ? "[DIR] " : "[FILE]"}${entry.path || entry.name}${entry.type === "file" && entry.size ? ` (${entry.size} bytes)` : ""}`
             }));
             if (message.result.hasMore) lines.push({ type: "output", text: `……还有 ${message.result.totalCount - (message.result.offset + entries.length)} 项` });
-            return truncateAgentDisplayLines(lines);
+            return lines;
         }
         if (message.toolName === "grep_files" && message.result?.success) {
             const matches = Array.isArray(message.result.matches) ? message.result.matches : [];
@@ -644,7 +704,7 @@
                 text: `${match.path}:${match.line}: ${String(match.content || "").slice(0, 200)}`
             }));
             if (message.result.truncated) lines.push({ type: "output", text: "……结果已截断" });
-            return truncateAgentDisplayLines(lines);
+            return lines;
         }
         if (message.toolName === "view_image" && message.result?.success) {
             const r = message.result;
@@ -665,10 +725,6 @@
             });
             return lines;
         }
-        if ((message.toolName === "multi_edit_file" || message.toolName === "_codex_apply_patch") && message.result?.success) {
-            const diff = message.displayDiff || message.result.displayDiff;
-            return truncateAgentDisplayLines(Array.isArray(diff?.lines) ? diff.lines : []);
-        }
         if (message.toolName === "glob_files" && message.result?.success) {
             const items = Array.isArray(message.result.matches) ? message.result.matches : [];
             const lines = items.map(item => ({
@@ -676,24 +732,17 @@
                 text: `${item.path}${item.size ? ` (${item.size} bytes)` : ""}`
             }));
             if (message.result.truncated) lines.push({ type: "output", text: "……结果已截断" });
-            return truncateAgentDisplayLines(lines);
+            return lines;
         }
         if (message.toolName === "web_search" && message.result?.success) {
             const items = Array.isArray(message.result.results) ? message.result.results : [];
-            return truncateAgentDisplayLines(items.map(item => ({
+            return items.map(item => ({
                 type: "output",
                 text: `${item.title}\n${item.url}${item.snippet ? `\n${item.snippet}` : ""}`
-            })));
+            }));
         }
         if (message.toolName === "browse_web" && message.result?.success) {
-            return truncateAgentDisplayLines(splitAgentDisplayLines(message.result.text).map(text => ({ type: "output", text })));
-        }
-        if ((message.toolName === "read_process_output" || message.toolName === "stop_process") && message.result?.success) {
-            const output = [
-                ...splitAgentDisplayLines(message.result.stdout).map(text => ({ type: "output", text })),
-                ...splitAgentDisplayLines(message.result.stderr).map(text => ({ type: "error", text }))
-            ];
-            return truncateAgentDisplayLines(output);
+            return splitAgentDisplayLines(message.result.text).map(text => ({ type: "output", text }));
         }
         if (message.toolName === "list_processes" && message.result?.success) {
             const items = Array.isArray(message.result.processes) ? message.result.processes : [];
@@ -725,28 +774,65 @@
         const lines = getAgentPreviewLines(message);
         const hadPreview = toolRow.classList.contains("has-preview");
         const wasCollapsed = toolRow.classList.contains("collapsed");
+        const fullWasOpen = previewContent.querySelector(".agent-full-output")?.open;
         previewContent.replaceChildren();
-        if (message.toolName === "view_image" && message.result?.success && message.result.dataUrl) {
+        const command = ["run_shell", "start_process"].includes(message.toolName) && toolArguments(message).command;
+        if (command) {
+            const code = document.createElement("pre");
+            code.className = "agent-command-preview";
+            code.textContent = "$ " + command;
+            previewContent.append(code);
+        }
+        const image = message.toolName === "view_image" && message.result?.success && message.result.dataUrl;
+        if (image) {
             const img = document.createElement("img");
-            img.src = message.result.dataUrl;
-            img.alt = message.result.path || "image";
             img.className = "agent-tool-preview-image";
-            img.style.maxWidth = "100%";
-            img.style.maxHeight = "400px";
-            img.style.borderRadius = "6px";
-            img.style.marginTop = "8px";
-            previewContent.appendChild(img);
+            img.src = image;
+            img.alt = message.result.path || "image";
+            previewContent.append(img);
         }
-        for (const line of lines) {
-            const element = document.createElement("div");
-            element.className = `agent-tool-preview-line ${line.type || "output"}`;
-            element.textContent = String(line.text || "");
-            previewContent.appendChild(element);
+        function makeOutput(items) {
+            const output = document.createElement("div");
+            output.className = "agent-preview-output";
+            for (const line of items) {
+                const element = document.createElement("div");
+                element.className = `agent-tool-preview-line ${line.type || "output"}`;
+                element.textContent = line.text ?? "";
+                output.append(element);
+            }
+            return output;
         }
-        const hasImage = message.toolName === "view_image" && message.result?.success && message.result.dataUrl;
-        const canToggle = lines.length > 0 || hasImage;
+        if (lines.length) {
+            const preview = truncateAgentDisplayLines(lines);
+            previewContent.append(makeOutput(preview));
+            if (preview !== lines) {
+                const full = document.createElement("details");
+                full.className = "agent-full-output";
+                const label = document.createElement("summary");
+                label.textContent = `Show all ${lines.length} lines`;
+                full.append(label);
+                function updateFullOutput() {
+                    toolRow.classList.toggle("show-full-output", full.open);
+                    label.textContent = full.open ? "Show preview" : `Show all ${lines.length} lines`;
+                    if (full.open && full.children.length === 1) full.append(makeOutput(lines));
+                }
+                full.addEventListener("toggle", updateFullOutput);
+                full.open = Boolean(fullWasOpen);
+                previewContent.append(full);
+                updateFullOutput();
+            }
+        }
+        const detail = formatAgentToolDetail(message);
+        if (detail) {
+            const info = document.createElement("div");
+            info.className = "agent-preview-meta";
+            info.textContent = detail;
+            previewContent.append(info);
+        }
+        const canToggle = Boolean(command || image || detail || lines.length);
         toolRow.classList.toggle("has-preview", canToggle);
-        const shouldCollapse = canToggle && (hadPreview ? wasCollapsed : getAgentDetailDefaultBehavior() === "collapsed");
+        const shouldCollapse = canToggle && (hadPreview ? wasCollapsed :
+            Boolean(row.closest(".agent-round-detail")) || getAgentDetailDefaultBehavior() === "collapsed");
         toolRow.classList.toggle("collapsed", shouldCollapse);
         summary.classList.toggle("clickable", canToggle);
         summary.tabIndex = canToggle ? 0 : -1;
@@ -764,300 +850,338 @@
         } : null;
     }
 
-    function formatAgentToolSummary(message) {
-        const name = String(message?.toolName || "");
+    function agentToolFailed(message) {
+        return message.status === "error" || message.result?.success === false || message.result?.timedOut ||
+            (message.toolName === "run_shell" && Number.isInteger(message.result?.exitCode) && message.result.exitCode !== 0);
+    }
+
+    function agentToolStopped(message) {
+        return message.status === "interrupted" || message.importedInterrupted || message.result?.cancelled;
+    }
+
+    function describeAgentTool(message) {
         const args = toolArguments(message);
-        const status = message?.status || "running";
-        if (name === "read_file_range") {
-            const pathText = String(args.path || "文件");
-            if (status === "running") return `读取${pathText}，${args.start_line ?? "?"}-${args.end_line ?? "?"}行`;
-            if (message.result?.success) return `读取${message.result.path || pathText}，${message.result.actualStartLine ?? "?"}-${message.result.actualEndLine ?? "?"}行（实际返回 ${message.result.returnedLines ?? 0} 行）`;
-            return `读取${pathText}失败`;
+        const result = message.result || {};
+        const path = result.path || args.path;
+        const command = String(args.command || "").trim().split(/\r?\n/)[0];
+        const description = typeof args.description === "string" ? args.description.trim() : "";
+        const start = result.actualStartLine ?? args.start_line;
+        const end = result.actualEndLine ?? args.end_line;
+        const range = start && end ? ` (${start}–${end})` : "";
+        switch (message.toolName || message.name) {
+            case "run_shell": return description ? ["", "", description] : ["Running command", command ? "Ran" : "Ran a command", command];
+            case "start_process": return description ? ["", "", description] : ["Starting process", "Started process", command];
+            case "read_file_range": return ["Reading file", "Read", path, range];
+            case "write_file": return ["Writing file", result.created ? "Created" : "Wrote", path];
+            case "edit_file":
+            case "multi_edit_file":
+            case "_claude_insert_text": return ["Editing file", "Edited", path];
+            case "_codex_apply_patch": return ["Applying patch", "Applied patch",
+                Array.isArray(result.operations) ? result.operations.map(item => item?.path).filter(Boolean).join(", ") :
+                    String(args.input || args.patch || args.diff || "").match(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/m)?.[1]];
+            case "_claude_undo_edit": return ["Undoing edit", "Undid edit", path];
+            case "list_dir": return ["Listing directory", "Listed", path || args.dir_path || "."];
+            case "glob_files": return ["Finding files", "Matched", args.pattern];
+            case "grep_files": return ["Searching files", "Searched for", args.pattern];
+            case "view_image": return ["Viewing image", "Viewed", path];
+            case "delete_path": return ["Deleting path", "Deleted", path];
+            case "move_path": return ["Moving path", "Moved", args.from && `${args.from} → ${args.to || "?"}`];
+            case "copy_path": return ["Copying path", "Copied", args.from && `${args.from} → ${args.to || "?"}`];
+            case "web_search": return ["Searching the web", "Searched the web", args.query];
+            case "browse_web": return ["Opening page", "Opened", result.url || args.url];
+            case "read_process_output": return ["Reading process output", "Read process output", args.process_id];
+            case "stop_process": return ["Stopping process", "Stopped process", args.process_id];
+            case "list_processes": return ["Listing processes", "Listed processes"];
+            case "update_plan": return ["Updating plan", "Updated plan", args.plan?.find?.(item => item?.status === "in_progress")?.step];
+            case "ask_user_question": return ["Waiting for your answer", "Asked a question", args.questions?.[0]?.question];
+            case "finish_task": return ["Finishing task", "Finished task"];
+            default: return ["Running tool", "Called", message.toolName || message.name];
         }
-        if (name === "write_file") {
-            if (status === "running") return `写入${String(args.path || "文件")}，${String(args.content || "").length}字符`;
-            return message.result?.success ? `写入${message.result.path || args.path || "文件"}，${message.result.charactersWritten ?? 0}字符` : `写入${args.path || "文件"}失败`;
-        }
-        if (name === "edit_file") {
-            if (status === "running") return `编辑${String(args.path || "文件")}，等待唯一匹配`;
-            return message.result?.success ? `编辑${message.result.path || args.path || "文件"}，已替换 1 处` : `编辑${args.path || "文件"}失败`;
-        }
-        if (name === "run_shell") {
-            const progress = agentShellProgressByExecution.get(message.executionId) || {};
-            const result = message.result || {};
-            const milliseconds = Math.max(0, Math.round(Number(progress.elapsedMs || result.durationMs || 0)));
-            const bytes = Number(progress.stdoutBytes || 0) + Number(progress.stderrBytes || 0) || Number(result.stdoutBytes || 0) + Number(result.stderrBytes || 0);
-            if (status === "running") return `运行命令，${milliseconds}毫秒，${bytes}字节`;
-            return result.exitCode === 0 && !result.timedOut && !result.cancelled ? `运行命令完成，${milliseconds}毫秒，${bytes}字节（exitCode 0）` : `运行命令结束，${milliseconds}毫秒，${bytes}字节（exitCode ${result.exitCode ?? 1}）`;
-        }
-        if (name === "finish_task") return "任务完成";
-        if (name === "list_dir") {
-            const pathText = String(args.dir_path || args.path || ".");
-            if (status === "running") return `列目录 ${pathText}`;
-            if (message.result?.success) return `列目录 ${message.result.path || pathText}，共 ${message.result.totalCount ?? 0} 项`;
-            return `列目录 ${pathText} 失败`;
-        }
-        if (name === "grep_files") {
-            const patternText = String(args.pattern || "");
-            if (status === "running") return `搜索 "${patternText}"`;
-            if (message.result?.success) return `搜索 "${patternText}"，${message.result.totalCount ?? 0} 处匹配${message.result.truncated ? "（已截断）" : ""}`;
-            return `搜索 "${patternText}" 失败`;
-        }
-        if (name === "view_image") {
-            const pathText = String(args.path || "图片");
-            if (status === "running") return `查看图片 ${pathText}`;
-            if (message.result?.success) return `查看图片 ${message.result.path || pathText}，${message.result.fileSize ? `${(message.result.fileSize / 1024).toFixed(1)} KB` : ""}`;
-            return `查看图片 ${pathText} 失败`;
-        }
-        if (name === "update_plan") {
-            if (status === "running") return "更新任务计划";
-            if (message.result?.success) {
-                const steps = Array.isArray(message.result.plan) ? message.result.plan : [];
-                const completed = steps.filter(s => s.status === "completed").length;
-                const inProgress = steps.filter(s => s.status === "in_progress").length;
-                return `任务计划已更新，${steps.length} 步（完成 ${completed}，进行中 ${inProgress}）`;
-            }
-            return "更新任务计划失败";
-        }
-        if (name === "_claude_insert_text") {
-            const pathText = String(args.path || "文件");
-            if (status === "running") return `插入文本到 ${pathText} 第 ${args.insert_line ?? "?"} 行`;
-            return message.result?.success ? `插入文本到 ${pathText} 完成` : `插入文本到 ${pathText} 失败`;
-        }
-        if (name === "multi_edit_file") {
-            const pathText = String(args.path || "文件");
-            const count = Array.isArray(args.edits) ? args.edits.length : (args.old_text ? 1 : 0);
-            if (status === "running") return `批量编辑${pathText}，${count} 处改动`;
-            if (message.result?.success) return `批量编辑${message.result.path || pathText}，已应用 ${message.result.editCount ?? count} 处改动`;
-            const failed = Number.isInteger(message.result?.failedIndex) ? `（第 ${message.result.failedIndex + 1} 处失败）` : "";
-            return `批量编辑${pathText}失败${failed}，未写入任何改动`;
-        }
-        if (name === "glob_files") {
-            const patternText = String(args.pattern || "");
-            if (status === "running") return `查找文件 "${patternText}"`;
-            if (message.result?.success) return `查找文件 "${patternText}"，${message.result.totalCount ?? 0} 个结果${message.result.truncated ? "（已截断）" : ""}`;
-            return `查找文件 "${patternText}" 失败`;
-        }
-        if (name === "delete_path") {
-            const pathText = String(args.path || "目标");
-            if (status === "running") return `删除 ${pathText}`;
-            if (message.result?.success) return `已删除 ${message.result.type === "directory" ? "目录" : "文件"} ${message.result.path || pathText}`;
-            return `删除 ${pathText} 失败`;
-        }
-        if (name === "move_path") {
-            if (status === "running") return `移动 ${String(args.from || "来源")} → ${String(args.to || "目标")}`;
-            if (message.result?.success) return `已移动 ${message.result.from} → ${message.result.to}`;
-            return `移动 ${String(args.from || "来源")} 失败`;
-        }
-        if (name === "copy_path") {
-            if (status === "running") return `复制 ${String(args.from || "来源")} → ${String(args.to || "目标")}`;
-            if (message.result?.success) return `已复制 ${message.result.from} → ${message.result.to}`;
-            return `复制 ${String(args.from || "来源")} 失败`;
-        }
-        if (name === "web_search") {
-            const queryText = String(args.query || "");
-            if (status === "running") return `联网搜索 "${queryText}"`;
-            if (message.result?.success) {
-                const engine = message.result.engine ? `（${message.result.engine}）` : "";
-                const fallback = message.result.fellBack ? "，已自动切换引擎" : "";
-                return `联网搜索 "${queryText}"${engine}，${message.result.resultCount ?? 0} 条结果${fallback}`;
-            }
-            return `联网搜索 "${queryText}" 失败`;
-        }
-        if (name === "browse_web") {
-            const urlText = String(args.url || "");
-            if (status === "running") return `浏览 ${urlText}`;
-            if (message.result?.success) return `浏览 ${message.result.url || urlText}，${String(message.result.text || "").length} 字符`;
-            return `浏览 ${urlText} 失败`;
-        }
-        if (name === "start_process") {
-            const commandText = String(args.command || "");
-            if (status === "running") return `后台启动：${commandText}`;
-            if (message.result?.success) return `后台进程已启动 ${message.result.processId}：${commandText}`;
-            return `后台启动失败：${commandText}`;
-        }
-        if (name === "read_process_output") {
-            const idText = String(args.process_id || "");
-            if (status === "running") return `读取进程输出 ${idText}`;
-            if (message.result?.success) {
-                const state = message.result.running ? "运行中" : `已退出（exitCode ${message.result.exitCode ?? "?"}）`;
-                return `进程 ${idText} ${state}，输出 ${message.result.stdoutBytes ?? 0}/${message.result.stderrBytes ?? 0} 字节`;
-            }
-            return `读取进程 ${idText} 输出失败`;
-        }
-        if (name === "stop_process") {
-            const idText = String(args.process_id || "");
-            if (status === "running") return `停止进程 ${idText}`;
-            return message.result?.success ? `已停止进程 ${idText}` : `停止进程 ${idText} 失败`;
-        }
-        if (name === "list_processes") {
-            if (status === "running") return "列出后台进程";
-            if (message.result?.success) {
-                const list = Array.isArray(message.result.processes) ? message.result.processes : [];
-                const running = list.filter(item => item.running).length;
-                return `后台进程 ${list.length} 个（运行中 ${running}）`;
-            }
-            return "列出后台进程失败";
-        }
-        if (name === "_claude_undo_edit") return status === "running" ? "撤销编辑" : "撤销编辑不支持";
-        if (name === "_codex_apply_patch") {
-            if (status === "running") return "应用补丁";
-            if (message.result?.success) {
-                const ops = Array.isArray(message.result.operations) ? message.result.operations : [];
-                const paths = ops.map(op => op.path).filter(Boolean);
-                const summary = paths.length > 2 ? `${paths.slice(0, 2).join("、")} 等 ${paths.length} 个文件` : paths.join("、");
-                return `已应用补丁（${ops.length} 个操作${summary ? `：${summary}` : ""}）`;
-            }
-            return `应用补丁失败：${String(message.result?.error || "").slice(0, 80)}`;
-        }
-        return status === "running" ? `执行 ${name}` : `${name} 已返回结果`;
     }
 
     function formatAgentToolDetail(message) {
-        if (!message?.result || message.status === "running") return "";
-        if (message.result.error) return String(message.result.error).slice(0, 500);
-        return "";
+        const result = message.result || {};
+        if (result.error) return String(result.error).slice(0, 500);
+        if (message.toolName === "run_shell") {
+            const progress = agentShellProgressByExecution.get(message.executionId) || {};
+            const ms = progress.elapsedMs ?? result.durationMs;
+            const bytes = Number(progress.stdoutBytes ?? result.stdoutBytes ?? 0) + Number(progress.stderrBytes ?? result.stderrBytes ?? 0);
+            return [Number.isFinite(ms) ? `${Math.round(ms)} ms` : "", bytes ? `${bytes} bytes` : "",
+                Number.isInteger(result.exitCode) ? `Exit code ${result.exitCode}` : "",
+                result.timedOut ? "Timed out" : ""].filter(Boolean).join(" · ");
+        }
+        if (message.toolName === "ask_user_question" && result.answers) return Object.values(result.answers).join("\n");
+        if (message.toolName === "start_process" && result.processId) return result.processId;
+        return result.note || "";
+    }
+
+    function writeDiffCounts(node, { added, removed }) {
+        node.querySelector(".agent-diff-add").textContent = added ? `+${added}` : "";
+        node.querySelector(".agent-diff-remove").textContent = removed ? `−${removed}` : "";
+    }
+
+    function agentDiffCounts(message) {
+        const diff = message.displayDiff || message.result?.displayDiff;
+        const lines = Array.isArray(diff?.lines) ? diff.lines : [];
+        return window.AgentActivity.normalize({
+            added: diff?.addedLines ?? lines.filter(line => line?.type === "add").length,
+            removed: diff?.removedLines ?? lines.filter(line => line?.type === "delete").length
+        });
+    }
+
+    function setAgentToolRow(row, message) {
+        const [action, done, subject, suffix] = describeAgentTool(message);
+        const running = message.status === "running";
+        const queued = running && liveToolBlocks.has(message) && !activeToolMessages.has(message);
+        const stopped = agentToolStopped(message);
+        const failed = !stopped && agentToolFailed(message);
+        const toolRow = row.querySelector(".agent-tool-row");
+        toolRow.classList.toggle("running", running && !queued);
+        toolRow.classList.toggle("failed", Boolean(failed));
+        const title = row.querySelector(".agent-tool-summary-text");
+        title.querySelector(".agent-step-action").textContent = running ? action : done;
+        title.querySelector(".agent-step-subject").textContent = subject || "";
+        title.querySelector(".agent-step-extra").textContent = suffix || "";
+        title.title = [subject, suffix].filter(Boolean).join("");
+        row.querySelector(".agent-step-status").textContent = queued ? "Queued" : stopped ? "Stopped" : failed ? "Failed" : "";
+        writeDiffCounts(row, agentDiffCounts(message));
+        renderAgentToolPreview(row, message);
+        lucide.createIcons();
     }
 
     function appendAgentToolMessageToUI(message, options = {}) {
-        const wrapper = document.getElementById("messages-wrapper");
+        const wrapper = options.container || document.getElementById("messages-wrapper");
         if (!wrapper || !message) return null;
         const row = document.createElement("div");
-        row.className = options.inline
-            ? "agent-tool-row-wrapper agent-tool-inline"
-            : "chat-row agent-tool-row-wrapper";
+        row.className = options.inline ? "agent-tool-row-wrapper agent-tool-inline" : "chat-row agent-tool-row-wrapper";
         row.dataset.agentToolId = message.toolId || "";
-        if (["start_process", "read_process_output", "stop_process", "list_processes"].includes(message.toolName)) row.classList.add('agent-background-compact');
-        const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
-        const running = message.status === "running";
-        row.innerHTML = `<div class="agent-tool-row${failed ? " failed" : ""}${running ? " running" : ""}"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"></span><span class="agent-working-time"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-detail"></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
-        row.querySelector(".agent-tool-summary-text").textContent = formatAgentToolSummary(message);
-        if (message.taskDurationMs) row.querySelector(".agent-working-time").textContent = formatAgentWorkingTime(message.taskDurationMs, true);
-        row.querySelector(".agent-tool-detail").textContent = formatAgentToolDetail(message);
-        renderAgentToolPreview(row, message);
-        const container = options.container || wrapper;
-        if (options.before && options.before.parentNode === container) container.insertBefore(row, options.before);
-        else container.appendChild(row);
-        lucide.createIcons();
-        if (running && isAgentTaskRunning()) setAgentActiveStatusRow(row);
-        wrapper.scrollTop = wrapper.scrollHeight;
+        row.innerHTML = `<div class="agent-tool-row"><div class="agent-tool-summary"><i data-lucide="${TOOL_ICONS[message.toolName] || "wrench"}"></i><span class="agent-tool-summary-text"><span class="agent-step-action"></span> <span class="agent-step-subject"></span><span class="agent-step-extra"></span></span><span class="agent-step-status"></span><span class="agent-diff-add"></span><span class="agent-diff-remove"></span><i class="agent-tool-toggle" data-lucide="chevron-down"></i></div><div class="agent-tool-preview"><div class="agent-tool-preview-content"></div></div></div>`;
+        wrapper.insertBefore(row, options.before?.parentNode === wrapper ? options.before : null);
+        setAgentToolRow(row, message);
         return row;
     }
 
     function summarizeAgentRound(messages) {
-        const sets = window.AgentActivity || {};
-        const commands = new Set(sets.COMMAND_TOOLS || []);
-        const reads = new Set(sets.READ_TOOLS || []);
-        const writes = new Set(sets.WRITE_TOOLS || []);
-        const web = new Set(sets.WEB_TOOLS || []);
-        let commandsN = 0, filesN = 0, editsN = 0, webN = 0, thinkingN = 0, toolsN = 0;
-        for (const m of messages || []) {
-            const name = String(m && m.toolName || "");
-            if (m && m.role === "tool") {
-                toolsN += 1;
-                if (commands.has(name)) commandsN += 1;
-                if (reads.has(name)) filesN += 1;
-                if (writes.has(name)) editsN += 1;
-                if (web.has(name)) webN += 1;
-            } else if (m && m.agentThinking) {
-                thinkingN += 1;
+        let commands = 0, files = 0, created = 0, edits = 0, web = 0, searches = 0, thinking = 0, tools = 0;
+        let failed = 0, stopped = 0, added = 0, removed = 0;
+        for (const message of messages) {
+            if (message.agentThinking) { thinking += 1; continue; }
+            if (message.status === "running" || agentToolStopped(message)) {
+                stopped += 1;
+                continue;
             }
+            if (agentToolFailed(message)) { failed += 1; continue; }
+            const name = message.toolName || message.name;
+            if (window.AgentActivity.COMMAND_TOOLS.has(name)) commands += 1;
+            else if (name === "read_file_range") files += 1;
+            else if (window.AgentActivity.READ_TOOLS.has(name)) searches += 1;
+            else if (window.AgentActivity.WEB_TOOLS.has(name)) web += 1;
+            else if (name === "write_file" && message.result?.created) created += 1;
+            else if (window.AgentActivity.WRITE_TOOLS.has(name)) edits += 1;
+            else tools += 1;
+            const diff = agentDiffCounts(message);
+            added += diff.added;
+            removed += diff.removed;
         }
         const parts = [];
-        if (commandsN) parts.push(`运行 ${commandsN} 条指令`);
-        if (filesN) parts.push(`探索 ${filesN} 个文件`);
-        if (editsN) parts.push(`编辑 ${editsN} 处文件`);
-        if (webN) parts.push(`联网 ${webN} 次`);
-        if (thinkingN) parts.push(`思考 ${thinkingN} 次`);
-        if (!parts.length) parts.push(`${toolsN} 次工具调用`);
-        return { label: parts.join(" · "), commands: commandsN, files: filesN, edits: editsN, web: webN, thinking: thinkingN, tools: toolsN };
+        const count = (n, singular) => `${n} ${singular}${n === 1 ? "" : "s"}`;
+        if (commands) parts.push(`Ran ${count(commands, "command")}`);
+        if (files) parts.push(`Read ${count(files, "file")}`);
+        if (searches) parts.push(`Explored ${count(searches, "result set")}`);
+        if (created) parts.push(`Created ${count(created, "file")}`);
+        if (edits) parts.push(`Edited ${count(edits, "file")}`);
+        if (web) parts.push(`Made ${count(web, "web request")}`);
+        if (tools) parts.push(`Used ${count(tools, "tool")}`);
+        if (failed) parts.push(`${failed} failed`);
+        if (stopped) parts.push(`${stopped} stopped`);
+        if (!parts.length && thinking) parts.push("Thought");
+        return { label: parts.map((part, i) => i ? part[0].toLowerCase() + part.slice(1) : part).join(", "), added, removed };
+    }
+
+    function activityKey(message) {
+        return message.agentThinking ? message.gatewayThinkingId : message.toolId;
+    }
+
+    function captureAgentActivityView(wrapper) {
+        const groups = new Set();
+        const details = new Map();
+        for (const block of wrapper.querySelectorAll(":scope > .agent-round-summary-wrapper")) {
+            if (!block.querySelector(".agent-round-summary")?.classList.contains("expanded")) continue;
+            for (const message of block._agentRoundMessages) {
+                const key = activityKey(message);
+                if (key) groups.add(key);
+            }
+            for (const row of block.querySelectorAll("[data-agent-detail-key]")) {
+                if (row.querySelector(".agent-tool-summary")?.getAttribute("aria-expanded") !== "true") continue;
+                details.set(row.dataset.agentDetailKey, Boolean(row.querySelector(".agent-full-output")?.open));
+            }
+        }
+        return { groups, details };
+    }
+
+    function appendAgentRoundItem(block, message, thinkingRow) {
+        const container = block.querySelector(".agent-round-detail-inner");
+        const display = !block._agentLive && message.status === "running" ? { ...message, status: "interrupted" } : message;
+        const row = message.agentThinking
+            ? thinkingRow || appendAgentThinkingMessageToUI(message, { container })
+            : appendAgentToolMessageToUI(display, { container });
+        if (!row) return;
+        if (thinkingRow) container.append(row);
+        const key = activityKey(message);
+        if (key) row.dataset.agentDetailKey = key;
+        if (block._agentView?.details.has(key)) {
+            const header = row.querySelector(".agent-tool-summary");
+            if (header?.getAttribute("aria-expanded") === "false") header.click();
+            if (block._agentView.details.get(key)) {
+                const full = row.querySelector(".agent-full-output");
+                if (full) full.open = true;
+            }
+        }
+        lucide.createIcons();
     }
 
     function expandAgentRoundSummary(row) {
-        const bar = row && row.querySelector(".agent-round-summary");
-        const detail = row && row.querySelector(".agent-round-detail");
-        if (!bar || !detail) return;
-        const messages = row._agentRoundMessages || [];
-        if (!row._agentRoundRendered) {
-            row._agentRoundRendered = true;
-            const inner = detail.querySelector(".agent-round-detail-inner");
-            for (const m of messages) {
-                if (m.agentThinking === true) {
-                    appendAgentThinkingMessageToUI(m, { container: inner });
-                } else if (m.role === "tool") {
-                    appendAgentToolMessageToUI(m, { container: inner });
-                } else if (m.role === "assistant") {
-                    const renderer = window.appendMessageToUI || appendMessageToUI;
-                    renderer("assistant", m.content, m.model, false, m.reasoning || "", m.attachments || [], m.generatedImages || [], m.voiceRecordId || "", {
-                        completedAt: m.completedAt, failed: m.failed === true, agentSegment: true, agentMessage: true, container: inner
-                    });
-                }
-            }
-            lucide.createIcons();
-        }
+        const bar = row.querySelector(".agent-round-summary");
+        const detail = row.querySelector(".agent-round-detail");
         const open = bar.classList.toggle("expanded");
+        if (open && !row._agentRoundRendered) {
+            row._agentRoundRendered = true;
+            for (const message of row._agentRoundMessages) appendAgentRoundItem(row, message, row._agentThinkingRows?.get(message));
+        }
+        if (!open) {
+            for (const step of detail.querySelectorAll('.agent-tool-summary[aria-expanded="true"]')) step.click();
+            for (const output of detail.querySelectorAll(".agent-full-output[open]")) output.open = false;
+        }
+        detail.inert = !open;
         detail.classList.toggle("is-open", open);
         bar.setAttribute("aria-expanded", String(open));
+    }
+
+    function refreshAgentRoundSummary(row) {
+        const messages = row._agentRoundMessages;
+        const unfinished = row._agentLive && messages.some(message => message.status === "running");
+        const active = unfinished ? messages.find(message => message.status === "running" &&
+            (message.agentThinking || activeToolMessages.has(message))) : null;
+        const summary = unfinished ? { label: "Waiting for tools", added: 0, removed: 0 } : summarizeAgentRound(messages);
+        const bar = row.querySelector(".agent-round-summary");
+        let label = summary.label;
+        if (active?.agentThinking) {
+            label = active.activityLabel || "Thinking";
+        } else if (active) {
+            const [action, , subject, suffix] = describeAgentTool(active);
+            label = [action, subject].filter(Boolean).join(" ") + (suffix || "");
+        }
+        const text = bar.querySelector(".agent-tool-summary-text");
+        if (text.textContent !== label) {
+            text.textContent = label;
+            bar.title = active ? label : "";
+        }
+        bar.classList.toggle("running", Boolean(active));
+        writeDiffCounts(bar, summary);
+        row.hidden = !messages.length;
     }
 
     function appendAgentRoundSummaryUI(options = {}) {
         const wrapper = options.container || document.getElementById("messages-wrapper");
         if (!wrapper) return null;
-        const summary = options.summary || summarizeAgentRound(options.messages || []);
         const row = document.createElement("div");
         row.className = "chat-row agent-round-summary-wrapper";
         row._agentRoundMessages = options.messages || [];
-        row.innerHTML = `<div class="agent-tool-row agent-round-summary" role="button" tabindex="0" aria-expanded="false"><div class="agent-tool-summary"><i data-lucide="layers"></i><span class="agent-tool-summary-text">${escapeHtml(summary.label || "")}</span><i class="agent-tool-toggle" data-lucide="chevron-right"></i></div></div><div class="agent-round-detail"><div class="agent-round-detail-inner"></div></div>`;
+        row._agentLive = options.live === true;
+        row._agentView = options.view;
+        row.innerHTML = `<button type="button" class="agent-round-summary" aria-expanded="false"><span class="agent-tool-summary-text" aria-live="polite"></span><span class="agent-diff-add"></span><span class="agent-diff-remove"></span><i class="agent-tool-toggle" data-lucide="chevron-right"></i></button><div class="agent-round-detail" inert><div class="agent-round-detail-inner"></div></div>`;
         const bar = row.querySelector(".agent-round-summary");
         bar.onclick = () => expandAgentRoundSummary(row);
-        bar.onkeydown = event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); expandAgentRoundSummary(row); } };
-        wrapper.appendChild(row);
+        wrapper.append(row);
+        if (!options.container) placeAgentTaskFooter();
+        refreshAgentRoundSummary(row);
+        if (options.view && row._agentRoundMessages.some(message => options.view.groups.has(activityKey(message)))) expandAgentRoundSummary(row);
         lucide.createIcons();
-        if (wrapper === document.getElementById("messages-wrapper")) wrapper.scrollTop = wrapper.scrollHeight;
         return row;
     }
 
+    function endAgentActivityBlock() {
+        if (liveActivityBlock?.hidden) liveActivityBlock.remove();
+        liveActivityBlock = null;
+    }
 
-    function appendFinishTaskToFinalRow(message, finalRow = null) {
-        const wrapper = document.getElementById("messages-wrapper");
-        const rows = wrapper ? wrapper.querySelectorAll(".agent-final-row") : [];
-        const targetRow = finalRow || rows[rows.length - 1];
-        const contentCol = targetRow?.querySelector(".message-content-col");
-        if (!contentCol) return appendAgentToolMessageToUI(message);
-        return appendAgentToolMessageToUI(message, {
-            inline: true,
-            container: contentCol,
-            before: contentCol.querySelector(".message-footer")
+    function appendLiveAgentActivity(message, thinkingRow) {
+        if (!liveActivityBlock?.isConnected) {
+            liveActivityBlock = appendAgentRoundSummaryUI({ live: true });
+            liveActivityBlock._agentThinkingRows = new WeakMap();
+        }
+        const block = liveActivityBlock;
+        if (thinkingRow) block._agentThinkingRows.set(message, thinkingRow);
+        else liveToolBlocks.set(message, block);
+        block._agentRoundMessages.push(message);
+        refreshAgentRoundSummary(block);
+        if (block._agentRoundRendered) appendAgentRoundItem(block, message, thinkingRow);
+        scrollChatToBottom();
+        return block;
+    }
+
+    function appendFinishTaskToFinalRow(message, finalRow) {
+        appendResponseDuration(finalRow, message.taskDurationMs);
+    }
+
+    function appendResponseDuration(finalRow, durationMs) {
+        const footer = finalRow?.querySelector(".message-footer");
+        if (!footer || !Number.isFinite(durationMs)) return;
+        const duration = footer.querySelector(".response-worked-duration") || document.createElement("span");
+        duration.className = "response-worked-duration";
+        duration.textContent = formatAgentWorkingTime(durationMs);
+        footer.prepend(duration);
+    }
+
+    function appendResponseActivity(container, reasoning, running, durationMs) {
+        if (!running && !reasoning) return null;
+        const message = { agentThinking: true, reasoning, thinkingDurationMs: durationMs, status: running ? "running" : "done" };
+        const block = appendAgentRoundSummaryUI({ messages: [message], container, live: running });
+        block.classList.add("response-activity");
+        if (!running) return null;
+        const step = appendAgentThinkingRow("Thinking", {
+            activate: false, grouped: true, container: document.createDocumentFragment()
         });
+        block._agentThinkingRows = new WeakMap([[message, step]]);
+        let elapsed;
+        let replyStartedAt;
+        return {
+            update: text => step.updateReasoning(text),
+            replying: () => {
+                if (message.activityLabel) return;
+                replyStartedAt = Date.now();
+                message.activityLabel = "Responding";
+                refreshAgentRoundSummary(block);
+            },
+            finish: () => {
+                if (elapsed !== undefined) return elapsed;
+                elapsed = (replyStartedAt ?? Date.now()) - step.thinkingStartedAt;
+                message.status = "done";
+                message.reasoning = step.reasoningText;
+                message.thinkingDurationMs = elapsed;
+                if (!step.finishThinking(elapsed)) block.remove();
+                else refreshAgentRoundSummary(block);
+                return elapsed;
+            }
+        };
     }
 
     function updateAgentToolMessageUI(message) {
-        const row = document.querySelector(`[data-agent-tool-id="${CSS.escape(String(message.toolId || ""))}"]`);
-        if (!row) return appendAgentToolMessageToUI(message);
-        const failed = message.status === "error" || (message.status === "done" && message.result && message.result.success === false);
-        const toolRow = row.querySelector(".agent-tool-row");
-        if (toolRow) {
-            toolRow.classList.toggle("failed", failed);
-            toolRow.classList.toggle("running", message.status === "running");
-        }
-        const summary = row.querySelector(".agent-tool-summary-text");
-        const detail = row.querySelector(".agent-tool-detail");
-        if (summary) summary.textContent = formatAgentToolSummary(message);
-        if (detail) detail.textContent = formatAgentToolDetail(message);
-        const elapsed = row.querySelector(".agent-working-time");
-        if (elapsed && message.taskDurationMs) elapsed.textContent = formatAgentWorkingTime(message.taskDurationMs, true);
-        renderAgentToolPreview(row, message);
-        if (message.status === "running" && isAgentTaskRunning()) setAgentActiveStatusRow(row);
-        lucide.createIcons();
+        const block = liveToolBlocks.get(message);
+        if (!block?.isConnected) return;
+        refreshAgentRoundSummary(block);
+        if (!block._agentRoundRendered) return;
+        const row = block.querySelector(`[data-agent-tool-id="${CSS.escape(String(message.toolId))}"]`);
+        if (row) setAgentToolRow(row, message);
     }
 
     async function buildAgentMessages(chat, options = {}) {
         const latestUser = [...(chat.messages || [])].reverse().find(message => message?.role === "user" && message.hidden !== true);
         const compacted = buildCompactedChatMessages(chat);
-        if (!chat.agentFixedPrompt) {
+        if (!chat.agentFixedPrompt?.includes(AgentProtocol.CORE_AGENT_RULES)) {
             chat.agentSessionStartedAt = chat.agentSessionStartedAt || Date.now();
             chat.agentFixedPrompt = AgentProtocol.buildFixedAgentPrompt({
-                systemPrompt: chat.agentSystemPrompt || systemPrompt,
+                systemPrompt: chat.agentSystemPrompt ?? systemPrompt,
                 environment: [
                     chat.agentEnvironment || chat.agentWorkspace || "",
                     `Session started: ${AgentProtocol.formatCurrentTime(new Date(chat.agentSessionStartedAt))}`
@@ -1065,12 +1189,12 @@
             });
             if (options.estimateOnly !== true) persistAgentChats();
         }
-        if (!chat.agentFixedPrompt.includes('ask_user_question')) {
-            chat.agentFixedPrompt += '\n\nask_user_question\nArguments: {"questions":[{"id":"string","question":"string","options":[{"label":"string","description":"string"}],"allow_custom":true}]}\nPauses execution until the user answers. Use it when user input is required.\n';
-        }
+        const memoryContext = options.memoryAllowed === false ? "" : window.AIUIMemory?.getContext(chat, options);
         const result = [{
             role: "system",
-            content: chat.agentFixedPrompt
+            content: memoryContext ? [chat.agentFixedPrompt, memoryContext,
+                "The JSON-only Agent rules apply to workspace tools, with finish_task as the last workspace call. When the optional native manage_memory tool is available, it is the sole exception to those rules. Use it only after the complete user-facing answer, and keep its call out of prose and the Agent JSON protocol."
+            ].join("\n\n") : chat.agentFixedPrompt
         }];
         for (const message of compacted) {
             if (message?.agentDisplayOnly === true) continue;
@@ -1117,21 +1241,32 @@
         if (Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
             const queued = window.queuedAgentMessages.splice(0);
             let consumedUserMessages = 0;
+            let consumedGatewayMessage = false;
             queued.forEach(entry => {
                 // Remote additions stay bound to the chat that accepted them,
                 // including if the user stops the task before the next model turn.
                 if (entry && typeof entry === "object" && String(entry.gatewayChatId || "") !== String(chat.id)) return;
                 const content = entry && typeof entry === "object" ? entry.content : entry;
-                const message = { role: "user", content: String(content || ""), agentQueued: true };
+                const gateway = Boolean(entry && typeof entry === "object" && entry.gatewayChatId);
+                const message = { role: "user", content: String(content || ""), agentQueued: true,
+                    ...(gateway ? { agentGatewaySource: true } : {}) };
                 chat.messages.push(message);
+                consumedGatewayMessage ||= gateway;
                 consumedUserMessages += 1;
                 if (typeof appendMessageToUI === "function") appendMessageToUI("user", message.content, null, false, "", []);
             });
             if (typeof persistAgentChats === "function") persistAgentChats();
             if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
-            if (consumedUserMessages) options.onUserMessagesConsumed?.();
+            if (consumedUserMessages) options.onUserMessagesConsumed?.(consumedGatewayMessage);
         }
-        const messages = await buildAgentMessages(chat);
+        const memoryAllowed = options.memoryAllowed?.() !== false;
+        const transport = window.AIUIMemoryTransport;
+        const memoryEnabled = memoryAllowed && window.AIUIMemory?.isEnabled();
+        const memoryTool = memoryEnabled && transport && window.AIUIMemory.getTool();
+        const messages = await buildAgentMessages(chat, { memoryAllowed });
+        if (options.memoryFollowup?.()) messages.push({ role: "user",
+            content: "The previous response contained a housekeeping tool call but no complete answer. Provide the actual final answer now, then finish the Agent task. Do not repeat the housekeeping call."
+        });
         const promptCacheKey = typeof getPromptCacheKeyForChat === "function"
             ? getPromptCacheKeyForChat(chat)
             : String(localStorage.getItem("prompt_cache_key") || "").trim();
@@ -1151,24 +1286,34 @@
         let fallbackRow = null;
         appendLog("debug", "开始请求 Agent AI 接口");
         appendLog("trace", `Agent AI 请求 URL: ${getBaseURL()}${preferredEndpoint}`);
-        const { response, endpoint, requestBody } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal, {
+        const { response, endpoint, requestBody, requestDecorated } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal, {
+            redactDiagnostics: Boolean(memoryEnabled),
+            ...(memoryTool ? {
+                decorateRequest: (body, targetEndpoint) => transport.declareTool(body, targetEndpoint, memoryTool),
+                retryWithoutDecoration: transport.isUnsupportedToolError
+            } : {}),
             onFallback: info => {
                 fallbackRow = appendAgentEndpointFallbackRow(info);
                 if (typeof options.onFallback === "function") options.onFallback(info);
             }
         });
         completeAgentEndpointFallbackRow(fallbackRow, endpoint);
-        if (options.statusRow) setAgentActiveStatusRow(options.statusRow);
         lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
-        appendLog("trace", `Agent 请求体: ${JSON.stringify(requestBody)}`);
+        if (!memoryEnabled) appendLog("trace", `Agent 请求体: ${JSON.stringify(requestBody)}`);
         if (!response.ok) {
-            const detail = await response.text().catch(() => "");
+            const detail = memoryEnabled ? "" : await response.text().catch(() => "");
             appendLog("error", `Agent AI 接口响应错误: ${response.status} ${response.statusText || ""}${detail ? ` - ${detail.slice(0, 500)}` : ""}`);
             throw new Error(`Agent API error: ${response.status}${detail ? ` - ${detail.slice(0, 500)}` : ""}`);
         }
         appendLog("trace", `Agent AI 接口响应状态: ${response.status} ${response.statusText || ""}`);
+        const memoryCollector = memoryTool && requestDecorated ? transport.createCollector(endpoint) : null;
+        const rethrowPayloadError = error => {
+            if (memoryEnabled && error instanceof SyntaxError) throw new Error("Agent 模型返回了无效的响应格式");
+            throw error;
+        };
         if (!response.body || typeof response.body.getReader !== "function") {
-            const payload = await response.json();
+            const payload = await response.json().catch(rethrowPayloadError);
+            memoryCollector?.ingest(payload);
             const update = extractStreamingUpdate(payload, endpoint);
             if (requestMetrics) {
                 window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
@@ -1184,13 +1329,15 @@
                 reasoning,
                 responsesReasoning: AgentProtocol.createResponsesReasoningState(payload, { endpoint, model, baseURL: getBaseURL() }),
                 completion: collectAgentCompletionInfo(payload),
+                memoryCalls: memoryCollector?.finish() || [],
                 toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(payload))
             };
         }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         const debugStream = developerModeEnabled && (logLevel === "debug" || logLevel === "trace");
-        const traceStream = developerModeEnabled && logLevel === "trace";
+        const traceStream = developerModeEnabled && logLevel === "trace" && !memoryEnabled;
+        const ndjsonStream = typeof isOllamaEndpoint === "function" && isOllamaEndpoint(endpoint);
         let fullText = "";
         let reasoningText = "";
         const responsePayloads = [];
@@ -1199,12 +1346,16 @@
         let streamBytesReceived = 0;
         const seenStreamEvents = new Set();
         let completion = {};
+        const parsePayload = data => {
+            try { return JSON.parse(data); }
+            catch (error) { return rethrowPayloadError(error); }
+        };
         const consume = block => {
-            const event = parseSSEEventBlock(block);
+            const event = ndjsonStream ? { data: block.trim() } : parseSSEEventBlock(block);
             if (!event.data) return;
             sawSSE = true;
             if (event.data === "[DONE]") return;
-            const payload = JSON.parse(event.data);
+            const payload = parsePayload(event.data);
             const normalizedPayload = !payload.type && event.eventType ? { ...payload, type: event.eventType } : payload;
             const sequence = normalizedPayload.sequence_number;
             // Relays can reuse one SSE id for a response, including identical
@@ -1215,9 +1366,10 @@
             if (eventKey && seenStreamEvents.has(eventKey)) return;
             if (eventKey) seenStreamEvents.add(eventKey);
             responsePayloads.push(normalizedPayload);
+            memoryCollector?.ingest(normalizedPayload);
             completion = collectAgentCompletionInfo(normalizedPayload, completion);
             const streamError = getStreamingErrorMessage(normalizedPayload);
-            if (streamError) throw new Error(streamError);
+            if (streamError) throw new Error(memoryEnabled ? "Agent 模型请求返回错误" : streamError);
             const update = extractStreamingUpdate(normalizedPayload, endpoint);
             if (requestMetrics) {
                 window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
@@ -1244,7 +1396,7 @@
                 showVoiceNotification(`正在接收 Agent 流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
             }
             if (traceStream) appendLog("trace", `Agent 原始流内容: ${sseBuffer.replace(/\n/g, "\\n")}`);
-            const parts = sseBuffer.split(/\r?\n\r?\n/);
+            const parts = sseBuffer.split(ndjsonStream ? /\r?\n/ : /\r?\n\r?\n/);
             sseBuffer = parts.pop() || "";
             for (const part of parts) {
                 try {
@@ -1257,10 +1409,11 @@
         }
         sseBuffer += decoder.decode();
         if (sseBuffer.trim()) {
-            if (/^(?:event:|data:|id:)/m.test(sseBuffer)) consume(sseBuffer);
+            if (ndjsonStream || /^(?:event:|data:|id:)/m.test(sseBuffer)) consume(sseBuffer);
             else if (!sawSSE) {
-                const payload = JSON.parse(sseBuffer.trim());
+                const payload = parsePayload(sseBuffer.trim());
                 responsePayloads.push(payload);
+                memoryCollector?.ingest(payload);
                 completion = collectAgentCompletionInfo(payload, completion);
                 fullText = mergeStreamingText(fullText, "", extractNonStreamingResponseText(payload, endpoint));
                 const update = extractStreamingUpdate(payload, endpoint);
@@ -1285,6 +1438,7 @@
             reasoning: reasoningText,
             responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint, model, baseURL: getBaseURL() }),
             completion,
+            memoryCalls: memoryCollector?.finish() || [],
             toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(responsePayloads))
         };
     }
@@ -1325,6 +1479,21 @@
         return message;
     }
 
+    function isAgentMemoryCall(call) {
+        return /(?:^|\.)manage_memory$/i.test(String(call?.name || ""));
+    }
+
+    function stripAgentMemoryProtocol(text, options) {
+        if (!/\bmanage_memory\b/i.test(String(text || ""))) return text;
+        const parsed = ToolCallNormalizer.parseAgentResponse(text, [], options);
+        if (parsed.hasMalformedToolCall) return "";
+        if (!parsed.calls.some(isAgentMemoryCall)) return text;
+        return parsed.segments.filter(segment => !isAgentMemoryCall(segment.call)).map(segment => {
+            if (segment.type === "text") return segment.text;
+            return JSON.stringify({ tool_call: { name: segment.call.name, arguments: segment.call.arguments } });
+        }).join("\n\n");
+    }
+
     function completeAgentThinking(chat, model, row, result = {}) {
         if (!row) return null;
         const reasoning = ToolCallNormalizer.stripReasoningSections(String(result.reasoning || row.reasoningText || ""));
@@ -1339,7 +1508,7 @@
         });
     }
 
-    function appendAgentVisibleText(chat, text, model, reasoning = "", final = false) {
+    function appendAgentVisibleText(chat, text, model, reasoning = "", final = false, insertAt = null) {
         if (ToolCallNormalizer.hasMalformedToolCall && ToolCallNormalizer.hasMalformedToolCall(text)) return null;
         let content = AgentProtocol.stripToolCallsForDisplay(text);
         // Protocol-loop diagnostics are internal state, not user-facing正文.
@@ -1356,19 +1525,19 @@
             agentSegment: !final,
             agentFinal: final
         };
-        chat.messages.push(message);
-        appendMessageToUI("assistant", content, model, final, message.reasoning, [], [], "", {
-            completedAt: message.completedAt,
-            agentFinal: final,
-            agentSegment: !final,
-            agentMessage: true
-        });
+        if (insertAt !== null) {
+            chat.messages.splice(insertAt, 0, message);
+        } else {
+            chat.messages.push(message);
+            appendMessageToUI("assistant", content, model, final, message.reasoning, [], [], "", {
+                completedAt: message.completedAt,
+                agentFinal: final,
+                agentSegment: !final,
+                agentMessage: true
+            });
+        }
         chat.updatedAt = Date.now();
         persistAgentChats();
-        if (localStorage.getItem("agent_auto_scroll") !== "false") {
-            const wrapper = document.getElementById("messages-wrapper");
-            if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
-        }
         return message;
     }
 
@@ -1402,12 +1571,15 @@
         };
         if (call.name === "run_shell") message.executionId = `${chat.id}-${Date.now()}-${agentToolSequence += 1}`;
         chat.messages.push(message);
-        appendAgentToolMessageToUI(message);
+        appendLiveAgentActivity(message);
+        if (call.name === "ask_user_question") endAgentActivityBlock();
         persistAgentChats();
         return message;
     }
 
     async function resolveAgentToolResult(chat, call, message) {
+        activeToolMessages.add(message);
+        updateAgentToolMessageUI(message);
         if (call.name === 'ask_user_question') {
             const result = await requestAgentUserQuestion(call.arguments || {}, message);
             return agentStopRequested ? STOP_SENTINEL : result;
@@ -1419,16 +1591,18 @@
             const command = String(call.arguments?.command || "");
             if (!command.trim()) return { success: false, error: "command is required" };
             if (agentCommandMode !== "yolo") {
-                const policy = await window.electronAPI.checkAgentCommand(command);
+                const alwaysAsk = agentCommandMode === "ask";
+                const policy = alwaysAsk ? { allowed: false } : await window.electronAPI.checkAgentCommand(command);
+                if (agentStopRequested) return STOP_SENTINEL;
                 if (!policy.allowed) {
-                    const decision = await requestAgentCommandApproval(command, policy.suggestedPrefix);
+                    const decision = await requestAgentCommandApproval(command, message, alwaysAsk);
                     if (agentStopRequested) return STOP_SENTINEL;
                     if (decision === "reject") {
                         return { success: false, rejected: true, error: `[${command}]被用户拒绝，尝试更换方法。` };
                     }
-                    if (decision === "always") {
-                        const prefix = agentApprovalPrefix || policy.suggestedPrefix;
-                        if (prefix) await window.electronAPI.addAgentAllowedCommand(prefix);
+                    if (!alwaysAsk && decision === "always" && policy.suggestedPrefix) {
+                        await window.electronAPI.addAgentAllowedCommand(policy.suggestedPrefix);
+                        if (agentStopRequested) return STOP_SENTINEL;
                     }
                 }
             }
@@ -1480,53 +1654,151 @@
         });
     }
 
-    function requestAgentUserQuestion(args, message) {
-        const raw = Array.isArray(args.questions) ? args.questions : [{ question:args.question || args.prompt, options:args.options }];
-        const questions = raw.slice(0,6).filter(item => item && String(item.question || item.header || '').trim());
-        if (!questions.length) return Promise.resolve({ success:false,error:'questions must contain at least one question' });
-        const form = document.createElement('form'); form.className = 'agent-question';
-        const controls = [];
-        for (const [index,question] of questions.entries()) {
-            const field = document.createElement('fieldset'); const heading = document.createElement('h4'); heading.textContent = question.question || question.header; field.append(heading);
-            for (const item of (Array.isArray(question.options) ? question.options:[]).slice(0,12)) {
-                const radio = document.createElement('input'); radio.type = 'radio'; radio.name = `question-${index}`; radio.value = typeof item === 'string' ? item:String(item.label || ''); radio.hidden = true;
-                const option = document.createElement('button'); option.type = 'button'; option.className = 'agent-question-option'; option.setAttribute('aria-pressed','false');
-                const text = document.createElement('span'); text.textContent = radio.value; option.append(text);
-                if (item.description) { const small = document.createElement('small'); small.textContent = item.description; option.append(small); }
-                option.onclick = () => { radio.checked = true; radio.dispatchEvent(new Event('change')); };
-                field.append(radio,option);
-            }
-            const customOption = document.createElement('button'); customOption.type = 'button'; customOption.className = 'agent-question-option'; customOption.textContent = '手动输入'; customOption.setAttribute('aria-pressed','false'); field.append(customOption);
-            const custom = document.createElement('input'); custom.type = 'text'; custom.placeholder = '输入你的回答…'; custom.hidden = true; custom.setAttribute('aria-label',question.question || '回答'); field.append(custom); form.append(field);
-            const selectOption = selected => field.querySelectorAll('.agent-question-option').forEach(button => button.setAttribute('aria-pressed',String(button === selected)));
-            customOption.onclick = () => { field.querySelectorAll('input[type=radio]').forEach(input => { input.checked = false; }); selectOption(customOption); custom.hidden = false; custom.focus(); };
-            custom.oninput = () => { if (custom.value) { field.querySelectorAll('input[type=radio]').forEach(input => { input.checked = false; }); selectOption(customOption); } };
-            field.querySelectorAll('input[type=radio]').forEach(input => input.onchange = () => { custom.value = ''; custom.hidden = true; selectOption(input.nextElementSibling); });
-            controls.push({ id:String(question.id || index),field,custom });
+    function getAgentQuestions(args) {
+        const raw = Array.isArray(args.questions) ? args.questions : [{ question: args.question || args.prompt, options: args.options }];
+        return raw.slice(0, 6)
+            .filter(item => item && String(item.question || item.header || "").trim())
+            .map((item, index) => ({
+                id: String(item.id || index),
+                title: String(item.question || item.header).trim(),
+                options: (Array.isArray(item.options) ? item.options : []).slice(0, 12).map(option => ({
+                    label: typeof option === "string" ? option : String(option?.label || ""),
+                    description: typeof option?.description === "string" ? option.description : ""
+                })).filter(option => option.label.trim())
+            }));
+    }
+
+    function addAgentQuestionOption(field, name, { label, description }) {
+        const choice = document.createElement("div");
+        choice.className = "agent-question-choice";
+        const option = document.createElement("label");
+        option.className = "agent-question-option";
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = name;
+        radio.value = label;
+        const text = document.createElement("span");
+        text.textContent = label;
+        if (description) {
+            const detail = document.createElement("small");
+            detail.textContent = description;
+            text.append(detail);
         }
-        const error = document.createElement('p'); error.className = 'text-xs text-red-500';
-        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = '取消';
-        const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = '提交回答'; submit.style.color = 'var(--accent-strong)';
-        const actions = document.createElement('div'); actions.className = 'agent-question-actions'; actions.append(error,cancel,submit); form.append(actions);
-        const toolRow = document.querySelector(`[data-agent-tool-id="${CSS.escape(String(message.toolId))}"] .agent-tool-row`);
-        if (toolRow) { toolRow.querySelector('.agent-tool-preview')?.remove(); toolRow.querySelector('.agent-tool-detail')?.remove(); toolRow.append(form); }
-        else document.getElementById('messages-wrapper').append(form);
-        window.AIUIEnhancements?.notifyQuestion(questions[0].question);
-        form.querySelector('.agent-question-option')?.focus({ preventScroll:true });
-        requestAnimationFrame(() => form.scrollIntoView({ block:'end',behavior:'instant' }));
+        option.append(radio, text);
+        choice.append(option);
+        field.append(choice);
+        return { choice, radio };
+    }
+
+    function addAgentQuestionField(form, question, headingId) {
+        const field = document.createElement("fieldset");
+        const heading = document.createElement("h4");
+        heading.className = "agent-card-heading";
+        heading.id = headingId;
+        heading.textContent = question.title;
+        field.setAttribute("aria-labelledby", headingId);
+        field.append(heading);
+        form.append(field);
+
+        const custom = document.createElement("input");
+        custom.className = "agent-question-input";
+        custom.type = "text";
+        custom.placeholder = "输入你的回答…";
+        custom.setAttribute("aria-labelledby", headingId);
+        if (!question.options.length) {
+            field.append(custom);
+            return { field, custom, manual: null };
+        }
+
+        const radios = question.options.map(option => addAgentQuestionOption(field, headingId, option).radio);
+        radios[0].checked = true;
+        const { choice, radio: manual } = addAgentQuestionOption(field, headingId, { label: "手动输入" });
+        custom.hidden = true;
+        choice.append(custom);
+        field.addEventListener("change", event => {
+            if (event.target.type === "radio") custom.hidden = !manual.checked;
+        });
+        manual.addEventListener("click", event => {
+            if (event.detail > 0 && manual.checked) {
+                custom.hidden = false;
+                custom.focus();
+            }
+        });
+        return { field, custom, manual };
+    }
+
+    function createAgentQuestionAnswerRow(questions, result) {
+        if (result?.success === false || (!result?.cancelled && !result?.answers)) return null;
+        const row = document.createElement("div");
+        row.className = "chat-row agent-question-row";
+        const card = document.createElement("div");
+        card.className = "detail-surface agent-interaction-card agent-question-answer";
+        for (const question of questions) {
+            const entry = document.createElement("div");
+            const heading = document.createElement("h4");
+            heading.textContent = question.title;
+            const answer = document.createElement("p");
+            answer.textContent = result.cancelled ? "已取消" : (result.answers[question.id] ?? "");
+            entry.append(heading, answer);
+            card.append(entry);
+        }
+        row.append(card);
+        return row;
+    }
+
+    function appendAgentQuestionAnswerToUI(message, wrapper) {
+        const questions = getAgentQuestions(toolArguments(message));
+        const row = questions.length ? createAgentQuestionAnswerRow(questions, message.result) : null;
+        if (row) wrapper.append(row);
+    }
+
+    function requestAgentUserQuestion(args, message) {
+        const questions = getAgentQuestions(args);
+        if (!questions.length) return Promise.resolve({ success: false, error: "questions must contain at least one question" });
+        const form = document.createElement("form");
+        form.className = "detail-surface agent-interaction-card agent-question";
+        const controls = questions.map((question, index) => addAgentQuestionField(form, question, `agent-question-${message.toolId}-${index}`));
+        const error = document.createElement("p");
+        error.className = "agent-question-error";
+        error.setAttribute("role", "alert");
+        const actions = document.createElement("div");
+        actions.className = "agent-card-actions agent-question-actions";
+        actions.innerHTML = '<button type="button">取消</button><button type="submit" class="agent-card-primary">提交答案</button>';
+        const [cancel, submit] = actions.children;
+        form.append(error, actions);
+        bindAgentCardSubmitShortcut(form, submit);
+        const questionRow = document.createElement("div");
+        questionRow.className = "chat-row agent-question-row";
+        questionRow.append(form);
+        const block = liveToolBlocks.get(message);
+        if (block?.isConnected) block.after(questionRow);
+        else document.getElementById("messages-wrapper").append(questionRow);
+        placeAgentTaskFooter();
+        window.AIUIEnhancements?.notifyQuestion(questions[0].title);
+        revealAgentCard(form, form.querySelector("input:checked, input[type=text]:not([hidden])"));
         return new Promise(resolve => {
             agentQuestionResolver = result => {
-                agentQuestionResolver = null; form.querySelectorAll('input,button').forEach(node => { node.disabled = true; }); resolve(result);
+                agentQuestionResolver = null;
+                if (agentStopRequested) questionRow.remove();
+                else questionRow.replaceWith(createAgentQuestionAnswerRow(questions, result));
+                resolve(result);
             };
-            cancel.onclick = () => agentQuestionResolver?.({ success:true,cancelled:true,answers:{} });
+            cancel.onclick = () => agentQuestionResolver?.({ success: true, cancelled: true, answers: {} });
+            form.oninput = () => { error.textContent = ""; };
             form.onsubmit = event => {
-                event.preventDefault(); const answers = {};
-                for (const control of controls) {
-                    const value = control.custom.value.trim() || control.field.querySelector('input:checked')?.value;
-                    if (!value) { error.textContent = '请回答每个问题，或取消本次询问。'; return; }
-                    answers[control.id] = value;
+                event.preventDefault();
+                const answers = [];
+                for (const [index, { field, custom, manual }] of controls.entries()) {
+                    const checked = field.querySelector("input:checked");
+                    const value = !manual || checked === manual ? custom.value.trim() : checked?.value;
+                    if (!value) {
+                        error.textContent = "请回答每个问题，或取消本次询问。";
+                        (custom.hidden ? field.querySelector("input") : custom).focus();
+                        return;
+                    }
+                    answers.push([questions[index].id, value]);
                 }
-                agentQuestionResolver?.({ success:true,answers });
+                agentQuestionResolver?.({ success: true, answers: Object.fromEntries(answers) });
             };
         });
     }
@@ -1766,13 +2038,27 @@
         let planOnlyResponses = 0;
         let finishBatchFailures = 0;
         let answerFloorIndex = 0;
-        const resetUserTurn = () => {
+        let memoryAllowed = !chat.messages.findLast(message => message?.role === "user")?.agentGatewaySource;
+        let pendingMemoryCalls = [];
+        let memoryFollowup = false;
+        const resetUserTurn = gatewayInput => {
+            if (gatewayInput) memoryAllowed = false;
+            pendingMemoryCalls = [];
+            memoryFollowup = false;
             invalidResponses = 0;
             emptyResponses = 0;
             missingFinalResponses = 0;
             planOnlyResponses = 0;
             finishBatchFailures = 0;
             answerFloorIndex = chat.messages.reduce((latest, message, index) => message?.role === "user" ? index + 1 : latest, 0);
+        };
+        const commitMemory = answer => {
+            if (!memoryAllowed || agentStopRequested || !pendingMemoryCalls.length || !window.AIUIMemory?.isEnabled()) return;
+            try {
+                const results = window.AIUIMemory.applyCalls(pendingMemoryCalls);
+                const activity = window.AIUIMemory.summarizeResults(results);
+                if (activity) answer.memoryActivity = activity;
+            } catch (_) { appendLog("warn", "无法保存本轮 Agent 记忆"); }
         };
         const latestVisibleAnswer = () => {
             for (let index = chat.messages.length - 1; index >= answerFloorIndex; index -= 1) {
@@ -1805,9 +2091,10 @@
                 for (let attempt = 1; attempt <= 6; attempt += 1) {
                     try {
                         result = await requestAgentModel(chat, model, {
-                    statusRow: thinkingRow,
-                    onUserMessagesConsumed: resetUserTurn,
-                    onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
+                            onUserMessagesConsumed: resetUserTurn,
+                            memoryAllowed: () => memoryAllowed,
+                            memoryFollowup: () => memoryFollowup,
+                            onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
                         });
                         window.agentReconnectNotice = "";
                         if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
@@ -1827,12 +2114,15 @@
                     }
                 }
                 hideVoiceNotification();
+                const parseOptions = {
+                    enhanced: localStorage.getItem('developer_mode') === 'true' && localStorage.getItem('enhanced_tool_parser') === 'true'
+                };
+                result.text = stripAgentMemoryProtocol(result.text, parseOptions);
                 completeAgentThinking(chat, model, thinkingRow, result);
                 thinkingRow = null;
                 if (agentStopRequested) break;
-                const rawParsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls, {
-                    enhanced: localStorage.getItem('developer_mode') === 'true' && localStorage.getItem('enhanced_tool_parser') === 'true'
-                });
+                const nativeMemoryCalls = result.memoryCalls.filter(isAgentMemoryCall);
+                const rawParsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls.filter(call => !isAgentMemoryCall(call)), parseOptions);
                 const parsed = {
                     ...rawParsed,
                     calls: ToolCallNormalizer.canonicalizeToolCalls(rawParsed.calls),
@@ -1842,6 +2132,14 @@
                 };
                 if (parsed.calls.length > MAX_TOOL_CALLS_PER_RESPONSE) {
                     throw new Error(`单次模型回复包含 ${parsed.calls.length} 个工具调用，超过 30 个上限，Agent 已终止`);
+                }
+                if (nativeMemoryCalls.length && !parsed.hasMalformedToolCall && !result.completion?.tokenLimited) {
+                    pendingMemoryCalls.push(...nativeMemoryCalls.slice(0, MAX_TOOL_CALLS_PER_RESPONSE - pendingMemoryCalls.length));
+                    if (!parsed.text && !parsed.calls.length && !memoryFollowup) {
+                        memoryFollowup = true;
+                        thinkingRow = appendAgentThinkingRow();
+                        continue;
+                    }
                 }
                 if (!parsed.calls.length || parsed.hasMalformedToolCall) {
                     planOnlyResponses = 0;
@@ -1863,6 +2161,7 @@
                         };
                         chat.messages.push(finishMessage);
                         await persistAgentToolMessage(chat, finishMessage);
+                        commitMemory(visibleResponse);
                         break;
                     }
                     const isEmptyResponse = !parsed.hasMalformedToolCall && (!visibleResponse || result.completion?.tokenLimited);
@@ -1908,7 +2207,7 @@
                 let retryMissingFinal = false;
                 const deferredAnswerSegments = [];
                 const deferAnswer = finishSegmentIndex >= 0 && parsed.segments.slice(0, finishSegmentIndex)
-                    .some(segment => segment.type === "tool_call" && segment.call?.name !== "finish_task");
+                    .some(segment => segment.type === "tool_call");
                 // Tool rows are rendered immediately in segment order so the transcript
                 // stays readable, then executed as one batch (reads in parallel).
                 const pendingToolItems = [];
@@ -1918,7 +2217,8 @@
                         const nextSegment = parsed.segments[index + 1];
                         const isFinalText = !trailingFinalText && nextSegment?.type === "tool_call" && nextSegment.call?.name === "finish_task";
                         if (deferAnswer) {
-                            deferredAnswerSegments.push({ text: segment.text, final: isFinalText });
+                            deferredAnswerSegments.push({ text: segment.text, final: isFinalText, position: chat.messages.length });
+                            endAgentActivityBlock();
                             continue;
                         }
                         const displayed = appendAgentVisibleText(chat, segment.text, model, "", isFinalText);
@@ -1934,6 +2234,7 @@
                         const failedTools = pendingToolItems.filter(item => item.message.status === "error" || item.message.result?.success === false);
                         pendingToolItems.length = 0;
                         if (failedTools.length) {
+                            pendingMemoryCalls = [];
                             finishBatchFailures += 1;
                             const failedNames = [...new Set(failedTools.map(item => item.call.name))].join("、");
                             const rejectedFinish = prepareAgentToolMessage(chat, call);
@@ -1952,9 +2253,13 @@
                             retryMissingFinal = true;
                             break;
                         }
+                        let inserted = 0;
                         for (const segment of deferredAnswerSegments) {
-                            const displayed = appendAgentVisibleText(chat, segment.text, model, "", segment.final);
-                            if (displayed) lastVisibleText = displayed;
+                            const displayed = appendAgentVisibleText(chat, segment.text, model, "", segment.final, segment.position + inserted);
+                            if (displayed) {
+                                lastVisibleText = displayed;
+                                inserted += 1;
+                            }
                             if (segment.final && displayed) finalTextAdded = true;
                         }
                         if (trailingFinalText) {
@@ -1996,8 +2301,8 @@
                         };
                         finishMessage.taskDurationMs = finishAgentTaskTimer(chat, finishMessage);
                         chat.messages.push(finishMessage);
-                        appendFinishTaskToFinalRow(finishMessage);
                         await persistAgentToolMessage(chat, finishMessage);
+                        commitMemory(existingAnswer);
                         chat.updatedAt = Date.now();
                         persistAgentChats();
                         renderChatHistory();
@@ -2032,7 +2337,6 @@
             }
         } finally {
             if (thinkingRow) completeAgentThinking(chat, model, thinkingRow, { reasoning: thinkingRow.reasoningText });
-            if (agentTaskStartedAt) finishAgentTaskTimer(chat);
             hideVoiceNotification();
             if (window.agentReconnectNotice !== '连接已断开') {
                 window.agentReconnectNotice = "";
@@ -2042,10 +2346,12 @@
                 chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentFinal: true });
                 persistAgentChats();
             }
+            if (agentTaskStartedAt) finishAgentTaskTimer(chat);
             abortController = null;
             isGenerating = false;
             agentTaskChatId = null;
             agentTaskPreparing = false;
+            liveToolBlocks.clear();
             window.AIUIEnhancements?.taskEnd(chat);
             persistAgentChats();
             if (typeof updateSettingsLocks === "function") updateSettingsLocks();
@@ -2233,9 +2539,15 @@
     window.resolveAgentWorkspaceTrust = resolveAgentWorkspaceTrust;
     window.resolveAgentYoloWarning = resolveAgentYoloWarning;
     window.appendAgentToolMessageToUI = appendAgentToolMessageToUI;
-    window.summarizeAgentRound = summarizeAgentRound;
+    window.appendAgentQuestionAnswerToUI = appendAgentQuestionAnswerToUI;
+    window.captureAgentActivityView = captureAgentActivityView;
+    window.endAgentActivityBlock = endAgentActivityBlock;
+    window.appendAgentFinishStatus = appendFinishTaskToFinalRow;
+    window.appendResponseActivity = appendResponseActivity;
+    window.appendResponseDuration = appendResponseDuration;
+    window.appendAgentTaskDuration = appendAgentTaskDuration;
+    window.placeAgentTaskFooter = placeAgentTaskFooter;
     window.appendAgentRoundSummaryUI = appendAgentRoundSummaryUI;
-    window.expandAgentRoundSummary = expandAgentRoundSummary;
     window.appendAgentThinkingMessageToUI = appendAgentThinkingMessageToUI;
     window.populateAgentSettings = populateAgentSettings;
     window.saveAgentCommandSettings = saveAgentCommandSettings;
