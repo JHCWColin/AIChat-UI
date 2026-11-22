@@ -41,6 +41,9 @@
         let complete = false;
         let replay = [];
         let chatMessage;
+        let chatFinishReason;
+        let legacyFunction;
+        let nativeCalls = false;
         let streamedReasoning = '';
         const fragments = [];
         const blocks = [];
@@ -103,8 +106,16 @@
             if (choice.message) chatMessage = choice.message;
             if (typeof choice.delta?.reasoning_content === 'string') streamedReasoning += choice.delta.reasoning_content;
             if (choice.delta?.tool_calls) fragments.push({ tool_calls: choice.delta.tool_calls });
-            if (choice.finish_reason) complete = ['tool_calls', 'function_call', 'stop'].includes(choice.finish_reason);
-            else if (choice.message) complete = true;
+            const legacyDelta = choice.delta?.function_call;
+            if (legacyDelta) {
+                legacyFunction ||= { name: '', arguments: '' };
+                if (typeof legacyDelta.name === 'string') legacyFunction.name += legacyDelta.name;
+                if (typeof legacyDelta.arguments === 'string') legacyFunction.arguments += legacyDelta.arguments;
+            }
+            if (choice.finish_reason) {
+                chatFinishReason = choice.finish_reason;
+                complete = ['tool_calls', 'function_call', 'stop'].includes(chatFinishReason);
+            } else if (choice.message && !chatFinishReason) complete = true;
         }
 
         function ingestOllama(payload) {
@@ -126,8 +137,11 @@
             }
         }
 
-        function finish() {
-            if (!complete) return [];
+        function endStream() {
+            if (protocol === 'chat' && !chatFinishReason) complete = true;
+        }
+
+        function collectNativeCalls() {
             if (protocol === 'ollama') {
                 const calls = fragments.flatMap(frame => normalizer.normalizeToolCalls(frame));
                 return [...new Map(calls.map(call => [JSON.stringify(call), call])).values()];
@@ -137,13 +151,23 @@
                 case 'responses': values = { output: replay }; break;
                 case 'anthropic': values = { content: replay }; break;
                 case 'gemini': values = { candidates: [{ content: { parts: geminiParts } }] }; break;
-                default: values = chatMessage?.tool_calls?.length ? chatMessage : fragments;
+                default: values = chatMessage?.tool_calls?.length || chatMessage?.function_call ? chatMessage
+                    : fragments.length ? fragments : { function_call: legacyFunction };
             }
             return normalizer.normalizeToolCalls(values);
         }
 
+        function finish(text = '', accept = () => true) {
+            if (!complete) return [];
+            const calls = collectNativeCalls().filter(accept);
+            nativeCalls = Boolean(calls.length);
+            // Some relays expose native or DSML calls in the assistant text.
+            // Prefer the native payload when the relay sends both copies.
+            return nativeCalls ? calls : normalizer.parseVisibleReply(text).calls.filter(accept);
+        }
+
         function continuation(body, calls, results, reasoning = '') {
-            if (protocol !== protocolFor(endpoint)) return null;
+            if (!nativeCalls || protocol !== protocolFor(endpoint)) return null;
             const output = index => JSON.stringify(results[index]?.result ?? { ok: false });
             // A continuation happens only when the first reply has no answer.
             // Replay signed/opaque reasoning and the actual tool-use frames.
@@ -187,19 +211,27 @@
                         ...(thinking ? { thinking } : {}) }, ...outputs] };
                 }
                 default: {
-                    if (!calls.every(call => call.id)) return null;
-                    const tool_calls = calls.map(call => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } }));
-                    const outputs = calls.map((call, index) => ({ role: 'tool', tool_call_id: call.id, content: output(index) }));
                     const thinking = chatMessage?.reasoning_content || reasoning || streamedReasoning;
-                    const assistant = { role: 'assistant', content: null, tool_calls };
+                    const assistant = { role: 'assistant', content: null };
+                    let outputs;
+                    if (calls.every(call => call.id)) {
+                        assistant.tool_calls = calls.map(call => ({ id: call.id, type: 'function',
+                            function: { name: call.name, arguments: JSON.stringify(call.arguments) } }));
+                        outputs = calls.map((call, index) => ({ role: 'tool', tool_call_id: call.id, content: output(index) }));
+                    } else if (calls.length === 1 && (chatMessage?.function_call || legacyFunction)) {
+                        const [call] = calls;
+                        assistant.function_call = { name: call.name, arguments: JSON.stringify(call.arguments) };
+                        outputs = [{ role: 'function', name: call.name, content: output(0) }];
+                    } else return null;
                     if (/deepseek/i.test(body.model) && thinking) assistant.reasoning_content = thinking;
                     return { ...body, messages: [...body.messages, assistant, ...outputs], tool_choice: 'none' };
                 }
             }
         }
 
-        return { ingest, finish, continuation };
+        return { ingest, endStream, finish, continuation };
     }
 
-    return { declareTool, createCollector, isUnsupportedToolError };
+    const visibleText = (text, options) => normalizer.parseVisibleReply(text, options).text;
+    return { declareTool, createCollector, isUnsupportedToolError, visibleText };
 });

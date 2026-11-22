@@ -113,7 +113,7 @@ jobs:
 
       - name: Setup Capacitor (web-to-mobile)
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
+          npm install @capacitor/core@7.6.10 @capacitor/cli@7.6.10 @capacitor/android@7.6.10 --save-dev
 
       - name: Prepare web assets for mobile
         run: |
@@ -178,6 +178,10 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            android/build.gradle
+            android/gradle/wrapper/gradle-wrapper.properties
 
       # 签名证书随仓库公开（android-release.p12，alias=aiui，口令 12345678）。
       # 仅用于分发本应用的正式构建，不含任何第三方敏感信息。
@@ -187,14 +191,31 @@ jobs:
           echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/android/app/release.p12" >> "$GITHUB_ENV"
 
       - name: Build Release APK (signed)
+        shell: bash
         run: |
           cd android
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="$KEYSTORE_FILE" \
-            -Pandroid.injected.signing.store.type=PKCS12 \
-            -Pandroid.injected.signing.store.password="12345678" \
-            -Pandroid.injected.signing.key.alias="aiui" \
-            -Pandroid.injected.signing.key.password="12345678"
+          build_release() {
+            ./gradlew assembleRelease \
+              -Pandroid.injected.signing.store.file="$KEYSTORE_FILE" \
+              -Pandroid.injected.signing.store.type=PKCS12 \
+              -Pandroid.injected.signing.store.password="12345678" \
+              -Pandroid.injected.signing.key.alias="aiui" \
+              -Pandroid.injected.signing.key.password="12345678"
+          }
+
+          gradle_log=$(mktemp)
+          trap 'rm -f "$gradle_log"' EXIT
+          if build_release 2>&1 | tee "$gradle_log"; then
+            exit 0
+          fi
+          if ! grep -qE 'repo\.maven\.apache\.org/.*Received status code 429' "$gradle_log"; then
+            exit 1
+          fi
+
+          echo '::warning::Maven Central returned HTTP 429. Retrying through the Google-hosted Central mirror.'
+          find . ../node_modules/@capacitor/android -type f -name '*.gradle' -exec \
+            sed -i 's|mavenCentral()|maven { url = uri("https://maven-central.storage-download.googleapis.com/maven2/") }|' {} +
+          build_release
 
       - name: Rename APK
         run: |
@@ -250,7 +271,7 @@ jobs:
 
       - name: Setup Capacitor (web-to-mobile) for iOS
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/ios --save-dev
+          npm install @capacitor/core@7.6.10 @capacitor/cli@7.6.10 @capacitor/ios@7.6.10 --save-dev
 
       - name: Prepare web assets for mobile
         run: |

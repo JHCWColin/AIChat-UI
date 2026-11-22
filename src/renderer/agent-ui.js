@@ -1253,7 +1253,10 @@
                 chat.messages.push(message);
                 consumedGatewayMessage ||= gateway;
                 consumedUserMessages += 1;
-                if (typeof appendMessageToUI === "function") appendMessageToUI("user", message.content, null, false, "", []);
+                if (typeof appendMessageToUI === "function") appendMessageToUI("user", message.content, null, false, "", [], [], "", {
+                    voiceMessage: message,
+                    voiceMessageKey: window.getTextVoiceMessageKey?.(chat.id, chat.messages.length - 1)
+                });
             });
             if (typeof persistAgentChats === "function") persistAgentChats();
             if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
@@ -1533,7 +1536,9 @@
                 completedAt: message.completedAt,
                 agentFinal: final,
                 agentSegment: !final,
-                agentMessage: true
+                agentMessage: true,
+                voiceMessage: message,
+                voiceMessageKey: window.getTextVoiceMessageKey?.(chat.id, chat.messages.length - 1)
             });
         }
         chat.updatedAt = Date.now();
@@ -2041,8 +2046,11 @@
         let memoryAllowed = !chat.messages.findLast(message => message?.role === "user")?.agentGatewaySource;
         let pendingMemoryCalls = [];
         let memoryFollowup = false;
+        let autoRead;
         const resetUserTurn = gatewayInput => {
             if (gatewayInput) memoryAllowed = false;
+            autoRead?.finish(true);
+            autoRead = window.beginAutoReadTurn?.(chat);
             pendingMemoryCalls = [];
             memoryFollowup = false;
             invalidResponses = 0;
@@ -2075,6 +2083,13 @@
                     && AgentProtocol.stripToolCallsForDisplay(message.content)) return message;
             }
             return null;
+        };
+        const appendSpokenAgentText = (text, final, insertAt = null) => {
+            const message = appendAgentVisibleText(chat, text, model, "", final, insertAt);
+            if (message && autoRead) {
+                autoRead.update(message, window.getTextVoiceMessageKey(chat.id, insertAt ?? (chat.messages.length - 1)));
+            }
+            return message;
         };
         resetUserTurn();
         let compactionCheckedAt = 0;
@@ -2147,7 +2162,7 @@
                         ? ""
                         : String(parsed.text || "").trim();
                     const visibleResponse = responseText && !parsed.hasMalformedToolCall
-                        ? appendAgentVisibleText(chat, responseText, model, "", !result.completion?.tokenLimited) : null;
+                        ? appendSpokenAgentText(responseText, !result.completion?.tokenLimited) : null;
                     if (visibleResponse && !result.completion?.tokenLimited) {
                         const finishMessage = {
                             role: "tool",
@@ -2221,7 +2236,7 @@
                             endAgentActivityBlock();
                             continue;
                         }
-                        const displayed = appendAgentVisibleText(chat, segment.text, model, "", isFinalText);
+                        const displayed = appendSpokenAgentText(segment.text, isFinalText);
                         if (displayed) lastVisibleText = displayed;
                         if (isFinalText && displayed) finalTextAdded = true;
                         continue;
@@ -2255,7 +2270,7 @@
                         }
                         let inserted = 0;
                         for (const segment of deferredAnswerSegments) {
-                            const displayed = appendAgentVisibleText(chat, segment.text, model, "", segment.final, segment.position + inserted);
+                            const displayed = appendSpokenAgentText(segment.text, segment.final, segment.position + inserted);
                             if (displayed) {
                                 lastVisibleText = displayed;
                                 inserted += 1;
@@ -2263,7 +2278,7 @@
                             if (segment.final && displayed) finalTextAdded = true;
                         }
                         if (trailingFinalText) {
-                            const displayed = appendAgentVisibleText(chat, trailingFinalText, model, "", true);
+                            const displayed = appendSpokenAgentText(trailingFinalText, true);
                             if (displayed) { lastVisibleText = displayed; finalTextAdded = true; }
                         }
                         const existingAnswer = lastVisibleText || latestVisibleAnswer();
@@ -2329,6 +2344,7 @@
                 persistAgentChats();
             }
         } catch (error) {
+            autoRead?.finish(true);
             if (error?.name !== "AbortError" && !agentStopRequested) {
                 window.AIUIEnhancements?.failed(chat);
                 appendLog("error", `Agent Loop 出错：${error.message}`);
@@ -2336,6 +2352,7 @@
                 persistAgentChats();
             }
         } finally {
+            autoRead?.finish(agentStopRequested);
             if (thinkingRow) completeAgentThinking(chat, model, thinkingRow, { reasoning: thinkingRow.reasoningText });
             hideVoiceNotification();
             if (window.agentReconnectNotice !== '连接已断开') {

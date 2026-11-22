@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { declareTool, createCollector, isUnsupportedToolError } = require('../renderer/memory-transport');
+const { declareTool, createCollector, isUnsupportedToolError, visibleText } = require('../renderer/memory-transport');
 const { createStore } = require('../renderer/user-memory');
 
 const tool = createStore({}).getTool();
@@ -35,6 +35,97 @@ test('Chat Completions only accepts completed fragmented function calls', () => 
     const replay = collector.continuation({ messages: [] }, [call], [result]);
     assert.deepEqual(replay.messages[1], { role: 'tool', tool_call_id: call.id, content: '{"ok":true}' });
     assert.equal(replay.tool_choice, 'none');
+});
+
+test('legacy OpenAI function_call deltas keep their original continuation format', () => {
+    const collector = createCollector('/chat/completions');
+    const wire = JSON.stringify(args);
+    collector.ingest({ choices: [{ delta: { function_call: { name, arguments: wire.slice(0, 13) } } }] });
+    collector.ingest({ choices: [{ delta: { function_call: { arguments: wire.slice(13) } }, finish_reason: 'function_call' }] });
+    const calls = collector.finish();
+    assert.deepEqual(calls, [{ name, arguments: args }]);
+    const replay = collector.continuation({ messages: [] }, calls, [result]);
+    assert.deepEqual(replay.messages, [
+        { role: 'assistant', content: null, function_call: { name, arguments: wire } },
+        { role: 'function', name, content: '{"ok":true}' }
+    ]);
+});
+
+const dsmlArgs = { action: 'update', id: 'm42', text: '【测试记录·已修改】内容被成功更新，用于验证记忆修改功能。' };
+const closeDsml = tag => '\\</｜｜DSML｜｜ ' + tag + '>';
+const dsml = [
+    '<｜｜DSML｜｜ calls>',
+    '<｜｜DSML｜｜ invoke name="manage_memory">',
+    ...Object.entries(dsmlArgs).map(([key, value]) =>
+        '<｜｜DSML｜｜ parameter name="' + key + '" string="true">' + value + closeDsml('parameter')),
+    closeDsml('invoke'),
+    closeDsml('calls')
+].join(' ');
+
+test('a completed DeepSeek DSML reply repairs escaped closing tags and keeps memory private', () => {
+    const collector = createCollector('/chat/completions');
+    const reply = '已收到。\n\n' + dsml;
+    collector.ingest({ choices: [{ delta: { content: reply } }] });
+    assert.deepEqual(collector.finish(reply), []);
+    collector.ingest({ choices: [{ finish_reason: 'stop' }] });
+    const calls = collector.finish(reply);
+    assert.deepEqual(calls, [{ name, arguments: dsmlArgs }]);
+    assert.equal(collector.continuation({ messages: [] }, calls, [result]), null);
+    assert.equal(visibleText(reply).trim(), '已收到。');
+    assert.deepEqual(collector.finish(reply.slice(0, -closeDsml('calls').length)), []);
+});
+
+test('Chat SSE DONE can complete a text call unless a finish reason already rejected it', () => {
+    const done = createCollector('/chat/completions');
+    done.endStream();
+    assert.deepEqual(done.finish(dsml), [{ name, arguments: dsmlArgs }]);
+
+    const truncated = createCollector('/chat/completions');
+    truncated.ingest({ choices: [{ finish_reason: 'length' }] });
+    truncated.endStream();
+    assert.deepEqual(truncated.finish(dsml), []);
+});
+
+test('serialized OpenAI, Gemini and Anthropic frames can accompany normal prose', () => {
+    const frames = [
+        { tool_calls: [{ id: call.id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] },
+        { type: 'function_call', call_id: call.id, name, arguments: JSON.stringify(args) },
+        { functionCall: { id: call.id, name, args } },
+        { type: 'tool_use', id: call.id, name, input: args }
+    ];
+    for (const frame of frames) {
+        const collector = createCollector('/chat/completions');
+        collector.ingest({ choices: [{ finish_reason: 'stop' }] });
+        const reply = '**已收到。**\n\n' + JSON.stringify(frame);
+        assert.deepEqual(collector.finish(reply), [call]);
+        assert.equal(visibleText(reply).trim(), '**已收到。**');
+    }
+});
+
+test('native and text copies of a call are applied once', () => {
+    const collector = createCollector('/chat/completions');
+    collector.ingest({
+        choices: [{ message: { tool_calls: [{ id: call.id, function: { name, arguments: args } }] }, finish_reason: 'tool_calls' }]
+    });
+    assert.deepEqual(collector.finish(dsml), [call]);
+});
+
+test('streaming visible prose never includes prefixes or arguments of private envelopes', () => {
+    const answer = '第一句。第二句。';
+    const examples = [
+        dsml,
+        JSON.stringify({ functionCall: { name, args } }),
+        JSON.stringify({ type: 'tool_result', tool_use_id: 'secret', content: '私人结果。' }),
+        '<tool_result>私人结果。</tool_result>',
+        '<think>这个是思考内容。</think>'
+    ];
+    for (const wire of examples) {
+        for (let end = 1; end <= wire.length; end += 1) {
+            assert.equal(visibleText(answer + '\n' + wire.slice(0, end), { streaming: true }).trim(), answer);
+        }
+    }
+    const ordinary = '\n  **Markdown**\n\n\x60\x60\x60json\n{"example":1}\n\x60\x60\x60\n';
+    assert.equal(visibleText(ordinary), ordinary);
 });
 
 test('Responses replays opaque reasoning and the matching function output for tool-only replies', () => {

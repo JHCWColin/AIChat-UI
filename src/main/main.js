@@ -574,11 +574,12 @@ function presetDirectoryKey({ apiBase, voiceId, endpoint, model }) {
     return crypto.createHash("sha256").update(`${apiBase}|${voiceId}|${endpoint}|${model}`).digest("hex").slice(0, 24);
 }
 
-async function requestFishAudio(text, config) {
+async function requestFishAudio(text, config, cancelSignal) {
     const { url, headers, body } = FishAudio.buildRequest(text, config);
     let lastError = null;
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
+        cancelSignal?.throwIfAborted();
         console.info(`[FishAudio][TTS] request attempt=${attempt + 1} url=${url} chars=${String(text || '').length}`);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 90000);
@@ -588,7 +589,7 @@ async function requestFishAudio(text, config) {
                 method: "POST",
                 headers,
                 body,
-                signal: controller.signal
+                signal: cancelSignal ? AbortSignal.any([cancelSignal, controller.signal]) : controller.signal
             });
             console.info(`[FishAudio][TTS] response status=${response.status} attempt=${attempt + 1}`);
             if (response.ok) {
@@ -604,6 +605,7 @@ async function requestFishAudio(text, config) {
             lastError.retryable = false;
             throw lastError;
         } catch (error) {
+            cancelSignal?.throwIfAborted();
             lastError = error?.name === "AbortError"
                 ? new Error("Fish Audio 请求超时")
                 : error;
@@ -1285,6 +1287,36 @@ ipcMain.handle("desktop-work:tts", async (event, request) => {
     const source = request && typeof request === "object" ? request : {};
     const audio = await requestFishAudio(String(source.text || "").slice(0, 1000), source);
     return audio.toString("base64");
+});
+
+const textSpeechRequests = new Map();
+
+function isTextSpeechSender(event) {
+    return isMainSender(event) && event.senderFrame && event.senderFrame === event.sender.mainFrame
+        && event.senderFrame.url.split(/[?#]/, 1)[0] === pathToFileURL(path.join(__dirname, "..", "index.html")).href;
+}
+
+ipcMain.handle("text-speech:tts", async (event, request) => {
+    if (!isTextSpeechSender(event)) throw new Error("非法的 Fish Audio 请求");
+    const { id, text } = request || {};
+    if (typeof id !== "string" || !id || textSpeechRequests.has(id) || typeof text !== "string" || !text.trim() || text.length > 1000) {
+        throw new Error("无效的朗读请求");
+    }
+    const controller = new AbortController();
+    const onDestroy = () => controller.abort();
+    textSpeechRequests.set(id, controller);
+    event.sender.once("destroyed", onDestroy);
+    try {
+        const audio = await requestFishAudio(text, request, controller.signal);
+        return audio.toString("base64");
+    } finally {
+        textSpeechRequests.delete(id);
+        if (!event.sender.isDestroyed()) event.sender.removeListener("destroyed", onDestroy);
+    }
+});
+
+ipcMain.handle("text-speech:cancel", (event, id) => {
+    if (isTextSpeechSender(event)) textSpeechRequests.get(id)?.abort();
 });
 
 ipcMain.handle("desktop-work:set-interactive", async (event, value) => {

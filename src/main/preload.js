@@ -82,6 +82,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     getDesktopVoicePreset: (config) => ipcRenderer.invoke("desktop-work:get-preset", config),
     requestFishSpeech: (request) => ipcRenderer.invoke("audio-chat:tts", request),
     requestDesktopFishSpeech: (request) => ipcRenderer.invoke("desktop-work:tts", request),
+    requestTextFishSpeech: (request) => ipcRenderer.invoke("text-speech:tts", request),
+    cancelTextFishSpeech: (id) => ipcRenderer.invoke("text-speech:cancel", id),
     setDesktopWorkInteractive: (interactive) => ipcRenderer.invoke("desktop-work:set-interactive", interactive),
     onDesktopScreenshotCaptured: (callback) => {
         const listener = (_event, payload) => callback(payload);

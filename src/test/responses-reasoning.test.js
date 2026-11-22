@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const AgentProtocol = require("../renderer/agent-protocol");
+const AIUIMemoryTransport = require("../renderer/memory-transport");
 const html = fs.readFileSync(path.join(__dirname, "../index.html"), "utf8");
 const item = (id = "rs_1", encrypted = "OPAQUE_COMPLETE") => ({ type: "reasoning", id,
     summary: [{ type: "summary_text", text: "safe summary" }], encrypted_content: encrypted });
@@ -23,7 +24,7 @@ function fixture(response) {
         classList: { add() {}, remove() {} }, querySelector: () => node(), querySelectorAll: () => [] });
     const chat = { id: "chat", messages: [{ role: "user", content: "问题" }] };
     const requests = [];
-    const context = { AgentProtocol, TextEncoder, TextDecoder, AbortController, console,
+    const context = { AgentProtocol, AIUIMemoryTransport, TextEncoder, TextDecoder, AbortController, console,
         chats: [chat], activeChatId: chat.id, isGenerating: false, abortController: null, systemPrompt: "system",
         processedReplaceCount: 0, sessionReplaceBlocks: [], streamBytesReceived: 0, currentTemp: 0.7, maxTokensLimit: 0,
         developerModeEnabled: false, logLevel: "info", lastPromptCacheDebug: null,
@@ -33,6 +34,7 @@ function fixture(response) {
         buildCompactedChatMessages: value => value.messages, getPromptCacheKeyForChat: () => "",
         appendMessageToUI: node, setCanvasEditable() {}, logPromptCacheDebug() {}, appendLog() {},
         renderAssistantMarkdown: value => value, renderMathFormulas() {}, scrollChatToBottom() {},
+        beginAutoReadTurn() {}, getTextVoiceMessageKey: (chatId, index) => `text:${chatId}:${index}`, addTextVoiceButton() {},
         hideVoiceNotification() {}, showVoiceNotification() {}, renderChatHistory() {}, lucide: { createIcons() {} },
         sanitizeHtml: String,
         fetchEndpointWithFallback: async base => { requests.push(same(base)); return { response, endpoint: options.endpoint,

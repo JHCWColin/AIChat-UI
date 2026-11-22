@@ -430,6 +430,7 @@
     function refreshPreferences() {
         setTheme(localStorage.getItem('theme') || 'light',false); setAccentColor(localStorage.getItem('accent_color') || 'green',false);
         appearance();
+        window.stopDisabledAutoRead?.();
         if (isGenerating || contextCompactionRunning || window._audioChatRunning || window._desktopWorkRunning) { settingsPending = true; return; }
         settingsPending = false;
         systemPrompt = localStorage.getItem('sys_prompt') || '';
@@ -501,6 +502,7 @@
             'voice-xf-key-input':'voice_xf_key', 'voice-xf-secret-input':'voice_xf_secret',
             'voice-preset-probability':'voice_preset_probability',
             'voice-tts-ignore-parentheses':'voice_tts_ignore_parentheses',
+            'voice-auto-read':'voice_auto_read',
             'desktop-shortcut-input':'desktop_shortcut', 'desktop-image-quality-input':'desktop_image_quality',
             'desktop-skip-b-preset-input':'desktop_skip_b_preset', 'desktop-auto-screenshot-input':'desktop_auto_screenshot',
             'math-render-toggle':'math_rendering_enabled', 'auto-update-toggle':'auto_update_enabled',
@@ -518,6 +520,7 @@
                 const value = input.type === 'checkbox' ? String(input.checked) : input.id === 'input-max-lines'
                     ? String(Math.max(1,Math.min(30,Math.round(Number(input.value) || 6)))) : input.value;
                 localStorage.setItem(key,value);
+                if (key === 'voice_auto_read') window.stopDisabledAutoRead?.();
                 if (input.id === 'sys-prompt') systemPrompt = input.value;
             }
             if (input.name === 'auto-summary-interval') onContextSettingChange();

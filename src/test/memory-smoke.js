@@ -41,7 +41,7 @@ function completion(body) {
     if (user === audioQuestion) return { text: voiceAnswer, memory: audioMemory };
     if (user === desktopQuestion) return { text: voiceAnswer, memory: desktopMemory };
     if (user === disabledQuestion) return { text: "记忆已关闭。", memory: ignoredMemory };
-    if (user === updateQuestion) return { text: "我会采用新偏好。", operation: { action: "update", previous_text: ordinaryMemory, text: revisedMemory } };
+    if (user === updateQuestion) return { text: "我会采用新偏好。", operation: { action: "update", previous_text: ordinaryMemory, text: revisedMemory }, dsml: true };
     if (user === deleteQuestion) return { text: "明白了。", operation: { action: "delete", previous_text: audioMemory } };
     return { text: "已收到。" };
 }
@@ -69,19 +69,26 @@ const server = http.createServer(async (request, response) => {
         }
         const body = JSON.parse(source);
         requests.push(body);
-        const { text, memory, operation = memory ? { action: "add", text: memory } : null } = completion(body);
+        const { text, memory, operation = memory ? { action: "add", text: memory } : null, dsml } = completion(body);
         response.writeHead(200, { ...headers, "Content-Type": "text/event-stream" });
         const emit = (delta, finish_reason = null) => {
             response.write(`data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
         };
         if (text) emit({ content: text });
-        if (operation) {
+        if (dsml) {
+            emit({ content: "\n<｜｜DSML｜｜ calls> <｜｜DSML｜｜ invoke name=\"manage_memory\">" });
+            for (const [key, value] of Object.entries(operation)) {
+                emit({ content: '<｜｜DSML｜｜ parameter name="' + key + '" string="true">' + value + '\\' });
+                emit({ content: '</｜｜DSML｜｜ parameter> ' });
+            }
+            emit({ content: "\\</｜｜DSML｜｜ invoke> \\</｜｜DSML｜｜ calls>" });
+        } else if (operation) {
             const args = JSON.stringify(operation);
             emit({ tool_calls: [{ index: 0, id: `memory-${requests.length}`, type: "function",
                 function: { name: memoryTool, arguments: args.slice(0, 13) } }] });
             emit({ tool_calls: [{ index: 0, function: { arguments: args.slice(13) } }] });
         }
-        emit({}, operation ? "tool_calls" : "stop");
+        emit({}, operation && !dsml ? "tool_calls" : "stop");
         response.end("data: [DONE]\n\n");
     } catch (error) {
         response.destroy(error);

@@ -258,6 +258,13 @@ body:is(.theme-light,.theme-dark) .msg-bubble.user-bubble {
 pre:hover > .copy-icon-btn,
 .message-icon-btn:is(:focus-visible,[data-copy-state]) { opacity:1; }
 .message-icon-btn:hover { background:var(--control-hover-glass); color:var(--conversation-text); }
+.message-icon-btn[data-voice-source] { border-radius:50%; }
+.message-icon-btn[data-voice-source]:focus-visible { outline:2px solid var(--accent-primary); outline-offset:2px; }
+.message-icon-btn.is-playing .voice-icon-play,
+.message-icon-btn:not(.is-playing) .voice-icon-pause { display:none; }
+@media (hover:none) {
+    .message-icon-btn[data-voice-source] { opacity:1; }
+}
 .copy-icon-btn[data-copy-state="success"] { color:var(--activity-added); }
 .copy-icon-btn[data-copy-state="error"] { color:var(--activity-removed); }
 .user-message-clip { --user-message-preview-lines:9; }

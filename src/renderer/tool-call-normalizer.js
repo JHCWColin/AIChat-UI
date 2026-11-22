@@ -46,7 +46,7 @@
     // Relays emit both <｜DSML｜invoke> and <｜｜DSML｜｜ invoke>.
     // Keep a dedicated tag prefix so ordinary HTML is never a tool protocol.
     function canonicalizeDsmlMarkers(value) {
-        const source = String(value || "").replace(/(?:<|&lt;)\s*(\/?)\s*[|｜]+\s*DSML\s*[|｜]+\s*([\w.-]*)([\s\S]*?)(?:>|&gt;|$)/gi,
+        const source = String(value || "").replace(/(?:\\(?=(?:<|&lt;)\s*\/))?(?:<|&lt;)\s*(\/?)\s*[|｜]+\s*DSML\s*[|｜]+\s*([\w.-]*)([\s\S]*?)(?:>|&gt;|$)/gi,
             (_, close, name, attrs) => `<${close}dsml${name ? `_${name.toLowerCase()}` : ""}${attrs}>`);
         return source.replace(/(<dsml_parameter\b[^>]*\bstring\s*=\s*["']?false["']?[^>]*>)([\s\S]*?)<\/dsml>(?=\s*(?:<dsml_parameter\b|<\/dsml_invoke\b))/gi,
             (whole, open, body) => {
@@ -166,7 +166,7 @@
         try { return JSON.parse(text); } catch (_) { return text; }
     }
 
-    function scanJsonValues(text) {
+    function scanJsonValues(text, includePartial = false) {
         const source = String(text || "");
         const values = [];
         let start = -1;
@@ -195,6 +195,7 @@
                 }
             }
         }
+        if (includePartial && start >= 0) values.push({ start, end: source.length, raw: source.slice(start), partial: true });
         return values;
     }
 
@@ -434,7 +435,7 @@
             .trim();
     }
 
-    function maskToolCallFences(source, calls) {
+    function toolCallFenceRanges(source, calls) {
         const ranges = [];
         const fences = /```(?:json)?[ \t]*(?:\r?\n)?([\s\S]*?)```/gi;
         let match;
@@ -449,13 +450,73 @@
             if (!enclosed.length || remainder.trim()) continue;
             ranges.push({ start: match.index, end: bodyStart }, { start: bodyEnd, end: fences.lastIndex });
         }
+        return ranges;
+    }
+
+    function maskToolCallFences(source, calls) {
         let cursor = 0;
         let result = "";
-        for (const range of ranges) {
+        for (const range of toolCallFenceRanges(source, calls)) {
             result += source.slice(cursor, range.start) + source.slice(range.start, range.end).replace(/[^\r\n]/g, " ");
             cursor = range.end;
         }
         return result + source.slice(cursor);
+    }
+
+    function hasToolJsonMarker(value) {
+        return /["“＂](?:tool_calls?|function_call|functionCall|tool_result|function_call_output|functionResponse)["”＂]\s*[:：]|"type"\s*:\s*"(?:tool_use|tool_result|function_call|function_call_output)"/i.test(value);
+    }
+
+    function isToolResultJson(value) {
+        if (Array.isArray(value)) return value.length > 0 && value.every(isToolResultJson);
+        return isRecord(value) && (value.role === "tool" || value.tool_result !== undefined ||
+            ["tool_result", "function_call_output", "custom_tool_call_output"].includes(value.type) ||
+            isRecord(value.functionResponse));
+    }
+
+    function removeReplyProtocol(source, spans, streaming) {
+        const envelopes = [
+            /<(tool_call|tool_result|function_response|function_call_output)(?=\s|>|$)[^>]*(?:>[\s\S]*?(?:<\/\1\s*>|$)|$)/gi,
+            /<(function|tool|recipient)\s*=[^>]*(?:>[\s\S]*?(?:<\/\1\s*>|$)|$)/gi
+        ];
+        for (const pattern of envelopes) {
+            for (const match of source.matchAll(pattern)) spans.push({ start: match.index, end: match.index + match[0].length });
+        }
+        const textResult = /(?:^|\n)[ \t]*(?:user\s*:\s*)?(?:\[\s*Tool\s+Result\s*:|ToolResult\s*:)[\s\S]*$/i.exec(source);
+        if (textResult) spans.push({ start: textResult.index, end: source.length });
+        if (streaming) {
+            const tag = /(?:\\)?(?:<|&lt;)[^<>\r\n]*$/i.exec(source);
+            const prefix = tag?.[0].replace(/^\\?(?:<|&lt;)\s*\/?\s*/i, "").toLowerCase();
+            if (tag && (/^[|｜]/.test(prefix) ||
+                ["think", "thinking", "analysis", "reasoning", "reflection", "scratchpad", "tool_call", "tool_result",
+                    "function_response", "function_call_output", "function=", "tool=", "recipient="].some(name => name.startsWith(prefix)))) {
+                spans.push({ start: tag.index, end: source.length });
+            }
+            // Do not emit a JSON fence while a potential call is still arriving.
+            const fence = /(?:^|\n)[ \t]*(?:\x60{1,2}|\x60{3}(?:j(?:s(?:o(?:n)?)?)?)?)\s*$/i.exec(source);
+            if (fence) spans.push({ start: fence.index, end: source.length });
+        }
+        const ordered = spans.sort((a, b) => a.start - b.start);
+        const merged = [];
+        for (const span of ordered) {
+            const previous = merged[merged.length - 1];
+            if (previous && span.start <= previous.end) previous.end = Math.max(previous.end, span.end);
+            else merged.push({ start: span.start, end: span.end });
+        }
+        const fences = toolCallFenceRanges(source, merged);
+        const hiddenTail = streaming && merged[merged.length - 1]?.end === source.length && merged[merged.length - 1];
+        if (hiddenTail) {
+            const openFence = /(?:^|\n)[ \t]*\x60{3}(?:json)?[ \t]*\r?\n\s*$/i.exec(source.slice(0, hiddenTail.start));
+            if (openFence) fences.push({ start: openFence.index, end: hiddenTail.start });
+        }
+        let text = "";
+        let cursor = 0;
+        for (const span of [...merged, ...fences].sort((a, b) => a.start - b.start)) {
+            if (span.start > cursor) text += source.slice(cursor, span.start);
+            cursor = Math.max(cursor, span.end);
+        }
+        text += source.slice(cursor);
+        return text.trim() ? text : "";
     }
 
     // Reasoning/scratchpad channels are never executable output.  Some relays
@@ -521,29 +582,42 @@
         return { issue, location, suggestion, evidence, sourceLength: source.length };
     }
 
-    function parseText(text) {
+    function parseText(text, replyOptions) {
         const source = canonicalizeDsmlMarkers(stripReasoningSections(text));
         if (/^\s*"(?:\\.|[^"\\])*"\s*$/.test(source)) {
             try {
                 const decoded = parseJsonValue(source);
                 if (decoded === null) throw new Error("invalid JSON");
-                if (typeof decoded === "string" && decoded !== source) return parseText(decoded);
+                if (typeof decoded === "string" && decoded !== source) {
+                    const parsed = parseText(decoded, replyOptions);
+                    if (!replyOptions || parsed.text !== decoded || parsed.calls.length) return parsed;
+                }
             } catch (_) { /* continue with the original text */ }
         }
         const found = [];
         const add = (call, start, end) => { if (call) found.push({ call, start, end }); };
-        const displaySource = stripDsmlProtocol(source, true);
         const dsmlRanges = dsmlProtocolRanges(source);
+        const privateSpans = [...dsmlRanges];
         const insideDsml = candidate => dsmlRanges.some(range => candidate.start < range.end && candidate.end > range.start);
         let match;
 
         let structuredPriority = Infinity;
-        for (const candidate of scanJsonValues(source)) {
+        const jsonSource = replyOptions && dsmlRanges.length ? stripDsmlProtocol(source, true) : source;
+        for (const candidate of scanJsonValues(jsonSource, Boolean(replyOptions))) {
             if (insideDsml(candidate)) continue;
+            if (candidate.partial) {
+                const resemblesJson = /^[{\[｛［]\s*(?:["“＂{\[｛［]|$)/.test(candidate.raw);
+                if ((replyOptions.streaming && resemblesJson) || hasToolJsonMarker(candidate.raw)) privateSpans.push(candidate);
+                continue;
+            }
             let parsed;
             parsed = parseJsonValue(candidate.raw);
-            if (parsed === null) continue;
+            if (parsed === null) {
+                if (replyOptions && hasToolJsonMarker(candidate.raw)) privateSpans.push(candidate);
+                continue;
+            }
             const classified = classifyStructured(parsed);
+            if (replyOptions && isToolResultJson(parsed)) privateSpans.push(candidate);
             if (!classified.calls.length) continue;
             structuredPriority = Math.min(structuredPriority, classified.priority);
             let start = candidate.start;
@@ -621,6 +695,16 @@
         const action = /(?:^|\n)\s*Action\s*:\s*([^\r\n]+)\s*\r?\n\s*Action\s*Input\s*:\s*([\s\S]*?)(?=\r?\n\s*(?:Action\s*:|$)|$)/gi;
         while ((match = action.exec(source))) add({ ...makeCall(match[1], match[2]), _priority: 6 }, match.index, action.lastIndex);
 
+        if (replyOptions) {
+            const malformedDsml = hasMalformedDsmlProtocol(source, acceptedDsmlCalls);
+            const calls = found
+                .filter(item => !malformedDsml || !insideDsml(item))
+                .sort((a, b) => a.start - b.start)
+                .map(({ call: { _priority, ...call } }) => call);
+            return { calls: replyOptions.streaming ? [] : dedupe(calls),
+                text: removeReplyProtocol(source, privateSpans.concat(found), replyOptions.streaming) };
+        }
+
         if (structuredPriority < Infinity) {
             for (let index = found.length - 1; index >= 0; index -= 1) {
                 if (found[index].call._priority !== structuredPriority) found.splice(index, 1);
@@ -639,7 +723,7 @@
             const key = `${item.start}:${item.end}:${item.call.name}:${JSON.stringify(item.call.arguments)}`;
             if (!keys.has(key)) { keys.add(key); unique.push(item); }
         }
-        const proseSource = maskToolCallFences(displaySource, unique);
+        const proseSource = maskToolCallFences(stripDsmlProtocol(source, true), unique);
         const segments = [];
         const emittedCalls = [];
         let cursor = 0;
@@ -962,6 +1046,7 @@
         normalizeToolCall: input => normalize(input)[0] || null,
         normalizeToolCalls: normalize,
         parseText,
+        parseVisibleReply: (text, options = {}) => parseText(text, options),
         parseAgentResponse,
         normalizeEnhancedFormat,
         parseArguments,

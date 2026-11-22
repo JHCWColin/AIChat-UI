@@ -373,23 +373,23 @@
                 await turn.response.text().catch(() => '');
             }
         }
-        const collector = turn.body ? transport.createCollector(endpoint) : null;
+        const collector = tool ? transport.createCollector(endpoint) : null;
         const readOptions = { ...options, privateProtocol: Boolean(tool) };
         const read = (response, privateCollector) => readTextResponse(response, endpoint, readOptions, privateCollector).catch(error => {
             if (tool && error instanceof SyntaxError) throw new Error('模型返回了无效的响应格式');
             throw error;
         });
-        const text = await read(turn.response, collector);
+        const { text, wireText } = await read(turn.response, collector);
         if (!collector || options.signal?.aborted) return { text, endpoint };
-        const calls = collector.finish().filter(memory.isCall);
+        const calls = collector.finish(wireText, memory.isCall);
         if (!calls.length) return { text, endpoint };
         const results = memory.applyCalls(calls);
         const activity = memory.summarizeResults(results);
         if (activity) options.onMemoryActivity?.(activity);
-        if (text.trim()) return { text, endpoint };
+        if (text.trim() || !turn.body) return { text, endpoint };
         const followUp = collector.continuation(turn.body, calls, results);
         if (!followUp) return { text, endpoint };
-        return { text: await read(await send(endpoint, followUp)), endpoint };
+        return { text: (await read(await send(endpoint, followUp))).text, endpoint };
     }
 
     async function readTextResponse(response, endpoint, options, collector) {
@@ -399,21 +399,28 @@
         }
 
         const reader = response.body?.getReader();
+        let wireText = '';
+        let text = '';
+        const publish = (streaming = false) => {
+            const visible = window.AIUIMemoryTransport.visibleText(wireText, { streaming });
+            if (visible === text) return;
+            text = visible;
+            options.onText?.(text);
+        };
         if (!reader) {
             const payload = await response.json();
             collector?.ingest(payload);
-            const text = endpoint === '/chat/completions'
+            wireText = endpoint === '/chat/completions'
                 ? extractText(payload?.choices?.[0]?.message?.content)
                 : endpoint === '/gemini' ? extractGeminiOutput(payload)
                     : endpoint === '/ollama' ? extractText(payload?.message?.content)
                         : (endpoint === '/v1/messages' ? extractMessagesOutput(payload) : extractResponsesOutput(payload));
-            if (typeof options.onText === 'function') options.onText(text);
-            return text;
+            publish();
+            return { text, wireText };
         }
 
         const decoder = new TextDecoder();
         let buffer = '';
-        let fullText = '';
         let sawEvent = false;
         const applyPayload = payload => {
             const errorMessage = payload?.error?.message || payload?.response?.error?.message;
@@ -422,10 +429,10 @@
             }
             collector?.ingest(payload);
             const update = extractUpdate(payload, endpoint);
-            const next = mergeText(fullText, update.delta, update.snapshot);
-            if (next !== fullText) {
-                fullText = next;
-                if (typeof options.onText === 'function') options.onText(fullText);
+            const next = mergeText(wireText, update.delta, update.snapshot);
+            if (next !== wireText) {
+                wireText = next;
+                publish(true);
             }
         };
         const ndjsonStream = endpoint === '/ollama';
@@ -437,7 +444,11 @@
         };
         const consumeEvent = block => {
             const event = parseEvent(block);
-            if (!event.data || event.data === '[DONE]') return;
+            if (!event.data) return;
+            if (event.data === '[DONE]') {
+                collector?.endStream();
+                return;
+            }
             sawEvent = true;
             const payload = JSON.parse(event.data);
             if (!payload.type && event.eventType) payload.type = event.eventType;
@@ -463,15 +474,15 @@
                     applyPayload(JSON.parse(buffer));
                 } catch (error) {
                     if (error instanceof SyntaxError && !options.privateProtocol) {
-                        fullText = buffer.trim();
-                        if (typeof options.onText === 'function') options.onText(fullText);
+                        wireText = buffer.trim();
                     } else {
                         throw error;
                     }
                 }
             }
         }
-        return fullText;
+        publish();
+        return { text, wireText };
     }
 
     window.VoiceChatAPI = { buildPayload, streamText };
