@@ -291,6 +291,11 @@ app.whenReady().then(async () => {
         assert.ok(await evaluate(prefs,"document.getElementById('api-settings-actions').getClientRects().length>0"));
         assert.equal(await evaluate(prefs,"[...document.querySelectorAll('#settings-modal button')].filter(button=>['取消','保存设置'].includes(button.textContent.trim())).every(button=>button.closest('.settings-content-section').id==='section-api')"),true);
         assert.deepEqual(await evaluate(prefs,"(() => { const c=getComputedStyle(document.getElementById('base-url-input')); return [c.backgroundColor,c.color]; })()"),['rgb(240, 240, 245)','rgb(36, 36, 36)']);
+        assert.deepEqual(await evaluate(prefs, `(() => {
+            const slider = document.querySelector('#record-logs-toggle + .slider');
+            const buttons = document.querySelectorAll('#log-actions button');
+            return [getComputedStyle(slider).backgroundColor, ...Array.from(buttons, button => getComputedStyle(button).color)];
+        })()`), ['rgb(129, 129, 129)', 'rgb(28, 100, 203)', 'rgb(39, 38, 36)']);
         await sleep(250); await fs.writeFile(path.join(artifacts,'preferences-light.png'),(await prefs.webContents.capturePage()).toPNG());
         await evaluate(prefs,"setTheme('dark');");
         await evaluate(prefs,"switchSettingsSection('guide', document.querySelector('[data-section=guide]')); document.getElementById('open-setup-guide').click()");
@@ -304,6 +309,14 @@ app.whenReady().then(async () => {
         await until(() => evaluate(gateway,"document.documentElement.dataset.theme === 'dark'"),'gateway appearance');
         assert.equal(await evaluate(gateway,"getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()"),'#e11d48');
         await fs.writeFile(path.join(artifacts,'gateway-themed.png'),(await gateway.webContents.capturePage()).toPNG());
+        await evaluate(main,"setTheme('light')");
+        await until(() => evaluate(gateway,"document.documentElement.dataset.theme === 'light' && getComputedStyle(document.getElementById('save-network')).backgroundColor === 'rgb(246, 246, 246)'"),'light gateway appearance');
+        assert.deepEqual(await evaluate(gateway, `(() => {
+            const controls = ['#port', '#read-code', '#save-network', '#allow-write'];
+            return controls.map(selector => getComputedStyle(document.querySelector(selector)).backgroundColor);
+        })()`), ['rgb(246, 246, 246)', 'rgba(0, 0, 0, 0)', 'rgb(246, 246, 246)', 'rgb(133, 133, 133)']);
+        assert.equal(await evaluate(main,"getComputedStyle(document.querySelector('#agent-yolo-warning-modal p')).color"),'rgb(104, 102, 96)');
+        await evaluate(main,"setTheme('dark')");
         let modelCalls = 0;
         let modelListAvailable = true;
         let countAvailable = false;
@@ -385,7 +398,8 @@ app.whenReady().then(async () => {
             const transcript = document.getElementById('messages-wrapper');
             const thinking = transcript.querySelector('.agent-round-summary.running');
             const duration = transcript.lastElementChild?.querySelector('.response-worked-duration');
-            if (thinking?.textContent !== 'Thinking' || !duration?.textContent.startsWith('Worked for ')) return null;
+            if (thinking?.textContent !== 'Thinking' || !duration?.textContent.startsWith('Worked for ') ||
+                transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight > 2) return null;
             const viewport = transcript.getBoundingClientRect();
             const fullyVisible = node => {
                 const row = node.getBoundingClientRect();
@@ -642,10 +656,21 @@ app.whenReady().then(async () => {
         },'explicit jump reaches the bottom and hides its button');
         await scrollToHistory();
         await evaluate(main,`(() => {
+            const transcript = document.getElementById('messages-wrapper');
+            const round = transcript.querySelector('.agent-round-summary[aria-expanded="false"]');
+            round.click();
+            const detail = round.nextElementSibling.querySelector('.agent-tool-summary[aria-expanded="false"]');
+            detail?.click();
             const bubble = [...document.querySelectorAll('#messages-wrapper .ai-bubble p')].at(-1);
-            bubble.firstChild.data = '收到新的回复。';
+            bubble.firstChild.data = '编辑历史消息。';
         })()`);
-        await waitForTranscriptBottom(main,'an in-place text update follows the latest content');
+        await sleep(450);
+        assert.ok((await transcriptBottomState(main)).remaining > 2, 'expanding or editing history preserves the reading position');
+        const [width, height] = main.getSize();
+        main.setSize(width, height - 50);
+        await sleep(450);
+        assert.ok((await transcriptBottomState(main)).remaining > 2, 'resizing preserves the reading position');
+        main.setSize(width, height);
         ordinaryStream = true;
         await evaluate(main,"(() => {const chat=chats.find(c=>c.id===activeChatId); chat.agentEnabled=false; chat.messages.push({role:'user',content:'普通聊天测试'}); updateAgentUIForChat(chat); window.testOrdinary=requestAI('普通聊天测试','gpt-6.1-sol',chat,[]); return true;})()");
         await until(() => evaluate(main,"document.querySelector('.response-activity .agent-round-summary.running')?.textContent === 'Thinking'"),'ordinary live activity');
@@ -671,6 +696,7 @@ app.whenReady().then(async () => {
         await until(() => evaluate(main,'!isGenerating'),'retry completion');
         await sleep(250);
         await evaluate(main,"scrollChatToBottom()");
+        await waitForTranscriptBottom(main,'scrolling settles before capturing activity');
         await fs.writeFile(path.join(artifacts,'ordinary-activity.png'),(await main.webContents.capturePage()).toPNG());
         await evaluate(main,"document.getElementById('messages-wrapper').scrollTo({ top:0, behavior:'instant' })");
         await until(async () => {

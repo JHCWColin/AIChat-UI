@@ -98,6 +98,21 @@ body.preferences-window #settings-modal :is(.text-gray-200,.text-gray-300) { col
 body.preferences-window #settings-modal :is(.text-gray-400,.text-gray-500) { color:var(--settings-muted)!important; }
 body.preferences-window #settings-modal :is(input,textarea,select):focus-visible { outline:1px solid var(--accent-strong); outline-offset:1px; }
 body.preferences-window #settings-modal :disabled { opacity:.55; }
+#log-actions .log-action {
+    padding:8px 16px;
+    border:1px solid var(--composer-border);
+    border-radius:12px;
+    background:var(--conversation-line);
+    color:var(--conversation-text);
+    font-size:.875rem;
+}
+#log-actions .log-action-primary {
+    background:color-mix(in srgb,var(--composer-check) 10%,transparent);
+    color:var(--composer-check);
+}
+#log-actions .log-action:hover { background:var(--composer-hover); }
+.theme-light #record-logs-toggle:not(:checked) + .slider { background-color:#818181; }
+#record-logs-toggle:focus-visible + .slider { outline:2px solid var(--composer-check); outline-offset:2px; }
 body.preferences-window #settings-modal:not(.portrait-layout) .settings-sidebar { width:164px; }
 .settings-sidebar nav button { display:flex; align-items:center; gap:9px; }
 .settings-sidebar nav button svg { width:16px; height:16px; flex-shrink:0; }
@@ -120,7 +135,7 @@ body:not(.preferences-window) *::after { box-shadow:none!important; text-shadow:
 body:not(.preferences-window) :is(button,select,.action-btn,.delete-chat-btn):hover { filter:none!important; }
 body:not(.preferences-window) .attachment-card::before { display:none; }
 body:not(.preferences-window) .attachment-remove { background:#dc2626; }
-body:not(.preferences-window) .agent-reconnect-status { background:none; animation:none; }
+body:not(.preferences-window) .agent-reconnect-status { background:none; animation:none; color:var(--activity-removed); }
 
 /* Preserve .chat-row's original 1000px limit, centering, and left padding. */
 .agent-tool-row { min-width:0; }
@@ -139,6 +154,7 @@ body {
     --activity-shine:#ececec;
     --activity-added:#35d567;
     --activity-removed:#ff687a;
+    --activity-warning:#fbbf24;
 }
 body.theme-light {
     --conversation-text:#272624;
@@ -152,6 +168,7 @@ body.theme-light {
     --activity-shine:#292722;
     --activity-added:#147c37;
     --activity-removed:#bc3046;
+    --activity-warning:#8e5100;
 }
 
 #chat-column {
@@ -536,6 +553,9 @@ body:is(.theme-dark,.theme-light) .agent-round-detail .agent-tool-summary {
 .agent-tool-preview-line { min-height:1.55em; }
 .agent-tool-preview-line.add { color:var(--activity-added); }
 .agent-tool-preview-line:is(.delete,.error) { color:var(--activity-removed); }
+.theme-light :is(.agent-tool-preview-content,.agent-tool-preview-line.omitted,.thinking-text) { color:var(--conversation-muted); }
+.theme-light .agent-tool-row.warning :is(.agent-tool-summary,.agent-tool-summary svg) { color:var(--activity-warning); }
+.theme-light .agent-tool-row.failed :is(.agent-step-status,.agent-tool-summary svg:not(.agent-tool-toggle)) { color:var(--activity-removed); }
 .agent-preview-meta { margin-top:6px; }
 .agent-full-output { margin-top:8px; }
 .agent-full-output summary { width:fit-content; cursor:pointer; }
@@ -768,6 +788,9 @@ body :is(#agent-workspace-trust-modal,#agent-yolo-warning-modal) > div {
     border-radius:14px;
     backdrop-filter:blur(16px);
 }
+.theme-light :is(#agent-workspace-trust-modal,#agent-yolo-warning-modal,#agent-auto-compaction-modal) h3,
+.theme-light :is(#agent-workspace-trust-files,#settings-lock-agent) { color:var(--activity-removed); }
+.theme-light :is(#agent-workspace-trust-path,#agent-auto-compaction-current,#agent-yolo-warning-modal p) { color:var(--conversation-muted); }
 
 @media (prefers-reduced-motion:no-preference) {
     :is(.agent-round-summary,.agent-tool-row).running .agent-tool-summary-text {
@@ -826,8 +849,8 @@ body :is(#agent-workspace-trust-modal,#agent-yolo-warning-modal) > div {
     font-weight: 700;
     font-size: 15px;
 }
-.agent-sidebar-diff-value .diff-add { color: #34d399; }
-.agent-sidebar-diff-value .diff-remove { color: #f87171; }
+.agent-sidebar-diff-value .diff-add { color:var(--activity-added); }
+.agent-sidebar-diff-value .diff-remove { color:var(--activity-removed); }
 @media (prefers-reduced-motion: reduce) {
     .agent-sidebar-metric.is-bumping .agent-sidebar-metric-value { animation: none; }
     .metric-roll-tape { transition: none !important; }

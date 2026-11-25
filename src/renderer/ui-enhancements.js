@@ -451,7 +451,6 @@
         const transcript = $('messages-wrapper');
         const button = $('scroll-to-bottom');
         let pendingFrame = false;
-        let contentChanged = false;
         function updateButton() {
             const hasMoreBelow = transcript.clientHeight > 0 &&
                 transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop > 2;
@@ -459,39 +458,27 @@
             if (!hasMoreBelow && document.activeElement === button) transcript.focus({ preventScroll:true });
             button.inert = !hasMoreBelow;
         }
-        function scheduleUpdate(followContent = false) {
-            contentChanged ||= followContent;
+        function scheduleUpdate() {
             if (pendingFrame) return;
             pendingFrame = true;
             requestAnimationFrame(() => {
                 pendingFrame = false;
-                if (contentChanged) scrollChatToBottom();
-                contentChanged = false;
                 updateButton();
             });
         }
-        const sizes = new ResizeObserver(() => {
-            scrollChatToBottom();
-            updateButton();
-        });
+        const sizes = new ResizeObserver(scheduleUpdate);
         sizes.observe(transcript);
         for (const child of transcript.children) sizes.observe(child);
         new MutationObserver(records => {
-            for (const { target,removedNodes,addedNodes } of records) {
-                if (target !== transcript) continue;
+            for (const { removedNodes,addedNodes } of records) {
                 for (const node of removedNodes) if (node.nodeType === Node.ELEMENT_NODE) sizes.unobserve(node);
                 for (const node of addedNodes) if (node.nodeType === Node.ELEMENT_NODE) sizes.observe(node);
             }
-            // Transcript scroll state and playback indicators update independently of message content.
-            if (records.some(({ target,type }) => type !== 'attributes' ||
-                (target !== transcript && !target.matches('.message-icon-btn[data-voice-source]')))) scheduleUpdate(true);
-        }).observe(transcript,{ childList:true,subtree:true,characterData:true,attributes:true });
-        transcript.addEventListener('scroll',() => scheduleUpdate(),{ passive:true });
-        button.addEventListener('click',() => {
-            const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
-            transcript.scrollTo({ top:transcript.scrollHeight,behavior });
-        });
-        scheduleUpdate(true);
+            scheduleUpdate();
+        }).observe(transcript,{ childList:true });
+        transcript.addEventListener('scroll',scheduleUpdate,{ passive:true });
+        button.addEventListener('click',scrollChatToBottom);
+        scheduleUpdate();
     }
     function initializeSettings() {
         addSetting('section-ai-chat','input-max-lines','输入框最大行数','number',Number(localStorage.getItem('input_max_lines')) || 6,'超过此行数后在输入框内滚动。');

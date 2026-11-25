@@ -528,6 +528,10 @@
                 row.dataset.detailInitialized = "true";
             }
             summary.setAttribute("aria-expanded", String(hasReasoning && !toolRow.classList.contains("collapsed")));
+            const detail = row.parentElement?.closest(".agent-round-detail");
+            if (running && row.isConnected && detail && !detail.inert && !toolRow.classList.contains("collapsed")) {
+                scrollChatToBottom();
+            }
         };
         row.finishThinking = durationMs => {
             if (agentLiveThinkingRow === row) agentLiveThinkingRow = null;
@@ -1172,7 +1176,10 @@
         refreshAgentRoundSummary(block);
         if (!block._agentRoundRendered) return;
         const row = block.querySelector(`[data-agent-tool-id="${CSS.escape(String(message.toolId))}"]`);
-        if (row) setAgentToolRow(row, message);
+        if (row) {
+            setAgentToolRow(row, message);
+            if (!block.querySelector(".agent-round-detail").inert) scrollChatToBottom();
+        }
     }
 
     async function buildAgentMessages(chat, options = {}) {
