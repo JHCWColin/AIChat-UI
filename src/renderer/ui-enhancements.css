@@ -560,6 +560,16 @@ body:is(.theme-dark,.theme-light) .agent-round-detail .agent-tool-summary {
 .agent-full-output { margin-top:8px; }
 .agent-full-output summary { width:fit-content; cursor:pointer; }
 .show-full-output .agent-tool-preview-content > .agent-preview-output { display:none; }
+.agent-shell-output { white-space:pre-wrap; overflow-wrap:anywhere; }
+.agent-shell-output-pages { display:flex; align-items:center; gap:8px; margin-top:6px; }
+.agent-shell-output-pages button {
+    padding:2px 8px;
+    border:1px solid var(--conversation-line);
+    border-radius:6px;
+    color:var(--conversation-text);
+    font:inherit;
+}
+.agent-shell-output-pages button:disabled { opacity:.5; }
 .agent-tool-preview-image { max-width:100%; max-height:360px; border-radius:8px; }
 .agent-interaction-card {
     --agent-card-header:color-mix(in srgb,var(--detail-text) 5%,transparent);

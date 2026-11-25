@@ -23,10 +23,9 @@ const WebSocket = require("ws");
 const FishAudio = require("../shared/fish-audio");
 const { createDiskMemoryStore } = require("./user-memory-store");
 const { normalizeActivity: normalizeMemoryActivity } = require("../renderer/user-memory");
+const { AgentShellClient } = require("./agent-shell-client");
 const {
     AgentWorkspaceStore,
-    AgentShellRunner,
-    AgentBackgroundShellManager,
     readFileRange,
     writeFile: writeAgentFile,
     editFile: editAgentFile,
@@ -70,8 +69,10 @@ let currentVersionConfirmedLatest = false;
 let updateDownloadRequested = false;
 let agentWorkspaceStore = null;
 const pendingAgentWorkspaceSelections = new Map();
-const agentShellRunner = new AgentShellRunner();
-const agentBackgroundShells = new AgentBackgroundShellManager();
+const agentShell = new AgentShellClient();
+const pendingAgentShells = new Map();
+let agentBackgroundStartGeneration = 0;
+let agentShellShutdown;
 let rendererRuntimeState = {};
 let userMemoryStore;
 const desktopEnhancements = require('./desktop-enhancements').registerDesktopEnhancements({
@@ -1122,6 +1123,32 @@ ipcMain.handle("agent:check-command", async (event, command) => {
     };
 });
 
+async function executeAgentShell(sender, source, args) {
+    const executionId = String(source.executionId || "").trim();
+    const failure = stderr => ({ stdout: "", stderr, exitCode: 1, success: false });
+    if (!executionId) return failure("executionId is required");
+    if (pendingAgentShells.has(executionId)) return failure(`execution id already in use: ${executionId}`);
+    const pending = { cancelled: false, dispatched: false };
+    pendingAgentShells.set(executionId, pending);
+    try {
+        const binding = await getAgentWorkspaceStore().get(source.chatId);
+        if (pending.cancelled || isQuitting) return { stdout: "", stderr: "", exitCode: 1, cancelled: true };
+        if (!binding.bound || !binding.exists) return { success: false, error: "bound workspace is unavailable" };
+        const requestedTimeoutMs = Number(source.timeoutMs);
+        const timeoutMs = Number.isFinite(requestedTimeoutMs)
+            ? Math.min(Math.max(Math.round(requestedTimeoutMs), 5000), 3600000)
+            : undefined;
+        pending.dispatched = true;
+        return await agentShell.call("run", [{ executionId, command: args.command, cwd: binding.realPath || binding.path, timeoutMs }], progress => {
+            if (!sender.isDestroyed()) sender.send("agent:shell-progress", progress);
+        });
+    } catch (error) {
+        return failure(error.message);
+    } finally {
+        pendingAgentShells.delete(executionId);
+    }
+}
+
 ipcMain.handle("agent:execute-tool", async (event, request) => {
     if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
     const source = request && typeof request === "object" ? request : {};
@@ -1142,20 +1169,27 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
             return { success: false, url, error: `抓取失败：${error.message}` };
         }
     }
-    // Background-process tools are session-scoped, not workspace-scoped: a server
-    // is started with its cwd in the workspace but must remain pollable afterwards.
-    if (name === "start_process") {
-        const binding = await getAgentWorkspaceStore().get(source.chatId);
-        if (!binding.bound || !binding.exists) return { success: false, error: "bound workspace is unavailable" };
-        return agentBackgroundShells.start({
-            command: args.command,
-            processId: args.process_id,
-            cwd: binding.realPath || binding.path
-        });
+    if (name === "run_shell") return executeAgentShell(event.sender, source, args);
+    try {
+        // A background process starts in its bound workspace and stays pollable
+        // for the rest of the session, even after switching chats.
+        if (name === "start_process") {
+            const generation = agentBackgroundStartGeneration;
+            const binding = await getAgentWorkspaceStore().get(source.chatId);
+            if (generation !== agentBackgroundStartGeneration || isQuitting) return { success: false, cancelled: true };
+            if (!binding.bound || !binding.exists) return { success: false, error: "bound workspace is unavailable" };
+            return await agentShell.call("start", [{
+                command: args.command,
+                processId: args.process_id,
+                cwd: binding.realPath || binding.path
+            }]);
+        }
+        if (name === "read_process_output") return await agentShell.call("read", [args.process_id, { tail_bytes: args.tail_bytes }]);
+        if (name === "list_processes") return await agentShell.call("list");
+        if (name === "stop_process") return await agentShell.call("stop", [args.process_id]);
+    } catch (error) {
+        return { success: false, error: error.message };
     }
-    if (name === "read_process_output") return agentBackgroundShells.read(args.process_id, args);
-    if (name === "list_processes") return agentBackgroundShells.list();
-    if (name === "stop_process") return agentBackgroundShells.stopAndWait(args.process_id);
     const binding = await getAgentWorkspaceStore().get(source.chatId);
     if (!binding.bound || !binding.exists) {
         return { success: false, error: "bound workspace is unavailable" };
@@ -1190,42 +1224,28 @@ ipcMain.handle("agent:execute-tool", async (event, request) => {
         } catch (_) { /* preserve original result if resize is unavailable */ }
         return result;
     }
-    if (name === "run_shell") {
-        const executionId = String(source.executionId || "").trim();
-        const requestedTimeoutMs = Number(source.timeoutMs);
-        const timeoutMs = Number.isFinite(requestedTimeoutMs)
-            ? Math.min(Math.max(Math.round(requestedTimeoutMs), 5000), 3600000)
-            : undefined;
-        try {
-            return await agentShellRunner.run({
-                executionId,
-                command: args.command,
-                cwd: binding.realPath || binding.path,
-                timeoutMs,
-                onProgress: progress => {
-                    if (!event.sender.isDestroyed()) event.sender.send("agent:shell-progress", progress);
-                }
-            });
-        } catch (error) {
-            return { stdout: "", stderr: error.message, exitCode: 1, success: false };
-        }
-    }
     return { success: false, error: `unknown tool: ${name}` };
 });
 
 ipcMain.handle("agent:cancel-execution", async (event, executionId) => {
     if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
-    return { canceled: agentShellRunner.cancel(executionId) };
+    const id = String(executionId || "").trim();
+    const pending = pendingAgentShells.get(id);
+    if (!pending) return { canceled: false };
+    if (pending.dispatched) return { canceled: await agentShell.call("cancel", [id]) };
+    pending.cancelled = true;
+    return { canceled: true };
 });
 
 ipcMain.handle("agent:list-processes", async (event) => {
     if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
-    return agentBackgroundShells.list();
+    return agentShell.call("list");
 });
 
 ipcMain.handle("agent:stop-all-processes", async (event) => {
     if (!isMainSender(event)) throw new Error("非法的 Agent 工具请求");
-    return { stopped: await agentBackgroundShells.stopAllAndWait() };
+    agentBackgroundStartGeneration++;
+    return { stopped: await agentShell.call("stopAll") };
 });
 
 ipcMain.handle("audio-chat:checkpoint", async (event, turns) => {
@@ -1449,8 +1469,19 @@ app.on("before-quit", () => {
     isQuitting = true;
     agentGateway.dispose();
     clearDesktopShortcut();
-    // Background shells (dev servers, watchers) must not outlive the app.
-    agentBackgroundShells.stopAll();
+});
+
+app.on("will-quit", event => {
+    if (agentShellShutdown === null) return;
+    if (!agentShellShutdown) {
+        agentShellShutdown = agentShell.shutdown();
+        if (!agentShellShutdown) return;
+        agentShellShutdown.finally(() => {
+            agentShellShutdown = null;
+            app.quit();
+        });
+    }
+    event.preventDefault();
 });
 
 app.on("window-all-closed", () => {});

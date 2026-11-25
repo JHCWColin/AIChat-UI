@@ -4,6 +4,8 @@
     const MAX_CONSECUTIVE_INVALID_RESPONSES = 3;
     const DEFAULT_AGENT_DIFF_MAX_LINES = 10;
     const DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS = 120;
+    const SHELL_OUTPUT_PAGE_SIZE = 8192;
+    const SHELL_OUTPUT_TOOLS = new Set(["run_shell", "start_process", "read_process_output", "stop_process"]);
     const TOOL_ICONS = {
         ask_user_question: 'message-circle-question',
         read_file_range: "file-search",
@@ -58,7 +60,6 @@
     let agentCommandMode = "safe";
     let agentCommandModeChatId = null;
     let agentToolSequence = 0;
-    let agentCurrentExecutionId = "";
     let agentShellProgressUnsubscribe = null;
     let agentTaskStartedAt = 0;
     let agentTaskTimer = null;
@@ -81,15 +82,15 @@
 
     function persistAgentChats() {
         const serializable = chats.map(chat => {
-            if (!chat?.agentEnabled) return chat;
-            const copy = JSON.parse(JSON.stringify(chat));
-            if (Array.isArray(copy.messages)) {
-                copy.messages = copy.messages.map(message => {
+            if (!chat?.agentEnabled || !Array.isArray(chat.messages)) return chat;
+            return {
+                ...chat,
+                messages: chat.messages.map(message => {
                     if (message?.role !== "tool" || !message.contentRef || typeof message.content !== "string") return message;
+                    if (!Object.prototype.propertyIsEnumerable.call(message, "content")) return message;
                     return { ...message, content: "" };
-                });
-            }
-            return copy;
+                })
+            };
         });
         try {
             localStorage.setItem("ai_chats", JSON.stringify(serializable));
@@ -685,13 +686,6 @@
         if (message.toolName === "read_file_range" && message.result.success) {
             return splitAgentDisplayLines(message.result.content).map(text => ({ type: "output", text }));
         }
-        if (["run_shell", "start_process", "read_process_output", "stop_process"].includes(message.toolName)) {
-            const output = [
-                ...splitAgentDisplayLines(message.result.stdout).map(text => ({ type: "output", text })),
-                ...splitAgentDisplayLines(message.result.stderr).map(text => ({ type: "error", text }))
-            ];
-            return output;
-        }
         if (message.toolName === "list_dir" && message.result?.success) {
             const entries = Array.isArray(message.result.entries) ? message.result.entries : [];
             const lines = entries.map(entry => ({
@@ -770,6 +764,100 @@
         lucide.createIcons();
     }
 
+    function appendAgentFullOutput(toolRow, container, fullWasOpen, title, buildOutput) {
+        const full = document.createElement("details");
+        full.className = "agent-full-output";
+        const label = document.createElement("summary");
+        full.append(label);
+        function updateFullOutput() {
+            toolRow.classList.toggle("show-full-output", full.open);
+            label.textContent = full.open ? "Show preview" : title;
+            if (full.open && full.children.length === 1) full.append(buildOutput());
+        }
+        full.addEventListener("toggle", updateFullOutput);
+        full.open = Boolean(fullWasOpen);
+        container.append(full);
+        updateFullOutput();
+    }
+
+    function renderAgentShellOutput(toolRow, container, result, fullWasOpen) {
+        const stdout = String(result.stdout || "");
+        const stderr = String(result.stderr || "");
+        if (!stdout && !stderr) return false;
+
+        // Keep CRLF and surrogate pairs together when a page ends through one.
+        const boundary = (text, index) => {
+            if (index <= 0 || index >= text.length) return Math.max(index, 0);
+            const code = text.charCodeAt(index);
+            return (code >= 0xDC00 && code <= 0xDFFF) || (code === 10 && text.charCodeAt(index - 1) === 13)
+                ? index + 1 : index;
+        };
+        const pageItems = page => {
+            const start = page * SHELL_OUTPUT_PAGE_SIZE;
+            const end = start + SHELL_OUTPUT_PAGE_SIZE;
+            return [
+                { type: "output", text: stdout.slice(boundary(stdout, start), boundary(stdout, end)) },
+                { type: "error", text: stderr.slice(boundary(stderr, start - stdout.length), boundary(stderr, end - stdout.length)) }
+            ].filter(item => item.text);
+        };
+        const makeOutput = items => {
+            const output = document.createElement("div");
+            output.className = "agent-preview-output agent-shell-output";
+            let previous;
+            for (const { type, text } of items) {
+                if (previous && previous.classList.contains(type)) {
+                    previous.textContent += "\n" + text;
+                } else {
+                    previous = document.createElement("div");
+                    previous.className = `agent-tool-preview-line ${type}`;
+                    previous.textContent = text;
+                    output.append(previous);
+                }
+            }
+            return output;
+        };
+        const firstPage = pageItems(0);
+        let pageCount = Math.ceil((stdout.length + stderr.length) / SHELL_OUTPUT_PAGE_SIZE);
+        if (pageCount > 1 && !pageItems(pageCount - 1).length) pageCount--;
+        const lines = getAgentDiffMaxLines() ? firstPage.flatMap(({ type, text }) =>
+            splitAgentDisplayLines(text).map(text => ({ type, text }))) : null;
+        const preview = lines ? truncateAgentDisplayLines(lines) : firstPage;
+        container.append(makeOutput(preview === lines ? firstPage : preview));
+        if (pageCount === 1 && (!lines || preview === lines)) return true;
+
+        const title = pageCount === 1 ? `Show all ${lines.length} lines` : "Show all output";
+        appendAgentFullOutput(toolRow, container, fullWasOpen, title, () => {
+            if (pageCount === 1) return makeOutput(firstPage);
+            const body = document.createElement("div");
+            const navigation = document.createElement("div");
+            navigation.className = "agent-shell-output-pages";
+            const previous = document.createElement("button");
+            const next = document.createElement("button");
+            for (const button of [previous, next]) button.type = "button";
+            previous.textContent = "上一页";
+            next.textContent = "下一页";
+            const label = document.createElement("span");
+            label.setAttribute("aria-live", "polite");
+            navigation.append(previous, label, next);
+            let output = document.createElement("div");
+            body.append(output, navigation);
+            let page = 0;
+            function showPage() {
+                const updated = makeOutput(pageItems(page));
+                output.replaceWith(updated);
+                output = updated;
+                label.textContent = `${page + 1} / ${pageCount}`;
+                previous.disabled = page === 0;
+                next.disabled = page === pageCount - 1;
+            }
+            previous.addEventListener("click", () => { page--; showPage(); });
+            next.addEventListener("click", () => { page++; showPage(); });
+            showPage();
+            return body;
+        });
+        return true;
+    }
+
     function renderAgentToolPreview(row, message) {
         const toolRow = row?.querySelector(".agent-tool-row");
         const summary = row?.querySelector(".agent-tool-summary");
@@ -780,6 +868,7 @@
         const wasCollapsed = toolRow.classList.contains("collapsed");
         const fullWasOpen = previewContent.querySelector(".agent-full-output")?.open;
         previewContent.replaceChildren();
+        toolRow.classList.remove("show-full-output");
         const command = ["run_shell", "start_process"].includes(message.toolName) && toolArguments(message).command;
         if (command) {
             const code = document.createElement("pre");
@@ -810,30 +899,20 @@
             const preview = truncateAgentDisplayLines(lines);
             previewContent.append(makeOutput(preview));
             if (preview !== lines) {
-                const full = document.createElement("details");
-                full.className = "agent-full-output";
-                const label = document.createElement("summary");
-                label.textContent = `Show all ${lines.length} lines`;
-                full.append(label);
-                function updateFullOutput() {
-                    toolRow.classList.toggle("show-full-output", full.open);
-                    label.textContent = full.open ? "Show preview" : `Show all ${lines.length} lines`;
-                    if (full.open && full.children.length === 1) full.append(makeOutput(lines));
-                }
-                full.addEventListener("toggle", updateFullOutput);
-                full.open = Boolean(fullWasOpen);
-                previewContent.append(full);
-                updateFullOutput();
+                appendAgentFullOutput(toolRow, previewContent, fullWasOpen, `Show all ${lines.length} lines`, () => makeOutput(lines));
             }
         }
+        const shellOutput = SHELL_OUTPUT_TOOLS.has(message.toolName) && message.result && message.status !== "running" &&
+            renderAgentShellOutput(toolRow, previewContent, message.result, fullWasOpen);
         const detail = formatAgentToolDetail(message);
-        if (detail) {
+        if (detail || (message.toolName === "run_shell" && message.status === "running")) {
             const info = document.createElement("div");
             info.className = "agent-preview-meta";
             info.textContent = detail;
+            info.hidden = !detail;
             previewContent.append(info);
         }
-        const canToggle = Boolean(command || image || detail || lines.length);
+        const canToggle = Boolean(command || image || detail || lines.length || shellOutput);
         toolRow.classList.toggle("has-preview", canToggle);
         const shouldCollapse = canToggle && (hadPreview ? wasCollapsed :
             Boolean(row.closest(".agent-round-detail")) || getAgentDetailDefaultBehavior() === "collapsed");
@@ -1180,6 +1259,15 @@
             setAgentToolRow(row, message);
             if (!block.querySelector(".agent-round-detail").inert) scrollChatToBottom();
         }
+    }
+
+    function updateAgentShellProgressUI(message) {
+        const block = liveToolBlocks.get(message);
+        if (!block?.isConnected || !block._agentRoundRendered || block.querySelector(".agent-round-detail").inert) return;
+        const info = block.querySelector(`[data-agent-tool-id="${CSS.escape(String(message.toolId))}"] .agent-preview-meta`);
+        if (!info) return;
+        info.textContent = formatAgentToolDetail(message);
+        info.hidden = false;
     }
 
     async function buildAgentMessages(chat, options = {}) {
@@ -1619,12 +1707,12 @@
                 }
             }
             if (call.name === 'start_process') return window.electronAPI.executeAgentTool({ chatId:chat.id,name:call.name,arguments:call.arguments || {} });
-            agentCurrentExecutionId = message.executionId;
             const startedAt = Date.now();
+            const progress = { stdoutBytes: 0, stderrBytes: 0, elapsedMs: 0 };
+            agentShellProgressByExecution.set(message.executionId, progress);
             const progressTimer = setInterval(() => {
-                const current = agentShellProgressByExecution.get(message.executionId) || { stdoutBytes: 0, stderrBytes: 0 };
-                agentShellProgressByExecution.set(message.executionId, { ...current, elapsedMs: Date.now() - startedAt });
-                updateAgentToolMessageUI(message);
+                progress.elapsedMs = Date.now() - startedAt;
+                updateAgentShellProgressUI(message);
             }, 250);
             try {
                 return await window.electronAPI.executeAgentTool({
@@ -1636,7 +1724,7 @@
                 });
             } finally {
                 clearInterval(progressTimer);
-                agentCurrentExecutionId = "";
+                agentShellProgressByExecution.delete(message.executionId);
             }
         }
         if (call.name === "_claude_insert_text") return handleClaudeInsertText(chat, call.arguments || {});
@@ -2466,7 +2554,6 @@
             }
         }
         if (abortController) abortController.abort();
-        if (agentCurrentExecutionId) window.electronAPI?.cancelAgentExecution?.(agentCurrentExecutionId).catch(() => {});
         for (const executionId of agentShellProgressByExecution.keys()) {
             window.electronAPI?.cancelAgentExecution?.(executionId).catch(() => {});
         }
@@ -2528,12 +2615,10 @@
     function initializeAgentUI() {
         if (window.electronAPI?.onAgentShellProgress) {
             agentShellProgressUnsubscribe = window.electronAPI.onAgentShellProgress(progress => {
-                if (progress?.executionId) {
-                    agentShellProgressByExecution.set(progress.executionId, progress);
-                    const chat = agentTaskChatId ? chats.find(item => item.id === agentTaskChatId) : null;
-                    const message = chat?.messages?.find(item => item.executionId === progress.executionId);
-                    if (message) updateAgentToolMessageUI(message);
-                }
+                const current = agentShellProgressByExecution.get(progress?.executionId);
+                if (!current) return;
+                current.stdoutBytes = progress.stdoutBytes;
+                current.stderrBytes = progress.stderrBytes;
             });
         }
         hydrateAgentToolResults().then(() => {

@@ -711,14 +711,72 @@ class AgentWorkspaceStore {
 }
 
 function killProcessTree(child) {
-    if (!child || child.killed) return;
-    if (process.platform === "win32" && child.pid) {
+    if (!child?.pid) return;
+    const killShell = () => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        try { child.kill("SIGKILL"); } catch {}
+    };
+    if (process.platform === "win32") {
         const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+        killer.once("error", killShell);
+        killer.once("exit", code => { if (code !== 0) killShell(); });
         killer.unref();
     } else {
         try {
-            child.kill("SIGKILL");
-        } catch {}
+            process.kill(-child.pid, "SIGKILL");
+        } catch {
+            killShell();
+        }
+    }
+}
+
+function waitForShellClose(child, timeoutMs = 5000) {
+    return new Promise(resolve => {
+        const done = () => {
+            clearTimeout(timer);
+            child.removeListener("close", done);
+            resolve();
+        };
+        const timer = setTimeout(done, timeoutMs);
+        timer.unref();
+        child.once("close", done);
+    });
+}
+
+class ShellOutputTail {
+    constructor() {
+        this.buffer = Buffer.alloc(0);
+        this.bytes = 0;
+    }
+
+    push(chunk) {
+        const capacity = BACKGROUND_SHELL_BUFFER_BYTES;
+        const needed = Math.min(capacity, this.bytes + chunk.length);
+        if (needed > this.buffer.length) {
+            const next = Buffer.allocUnsafe(Math.min(capacity, Math.max(4096, needed, this.buffer.length * 2)));
+            // Until the buffer reaches capacity it has never wrapped.
+            this.buffer.copy(next, 0, 0, this.bytes);
+            this.buffer = next;
+        }
+        const tail = chunk.length > capacity ? chunk.subarray(-capacity) : chunk;
+        const offset = (this.bytes + chunk.length - tail.length) % this.buffer.length;
+        const first = tail.copy(this.buffer, offset);
+        if (first < tail.length) tail.copy(this.buffer, 0, first);
+        this.bytes += chunk.length;
+    }
+
+    read(tailBytes) {
+        const size = Math.min(this.bytes, this.buffer.length, tailBytes || Infinity);
+        if (!size) return "";
+        const start = (this.bytes - size) % this.buffer.length;
+        const end = start + size;
+        const buffer = end <= this.buffer.length
+            ? this.buffer.subarray(start, end)
+            : Buffer.concat([this.buffer.subarray(start), this.buffer.subarray(0, end - this.buffer.length)], size);
+        // A byte-limited tail may start or end in the middle of a UTF-8 character.
+        let offset = 0;
+        while (offset < buffer.length && (buffer[offset] & 0xC0) === 0x80) offset++;
+        return new StringDecoder("utf8").write(buffer.subarray(offset));
     }
 }
 
@@ -730,15 +788,24 @@ class AgentShellRunner {
     cancel(executionId) {
         const state = this.running.get(String(executionId || ""));
         if (!state) return false;
+        if (!state.cancelled && !state.timedOut) killProcessTree(state.child);
         state.cancelled = true;
-        killProcessTree(state.child);
         return true;
+    }
+
+    async cancelAllAndWait() {
+        await Promise.all([...this.running].map(([id, state]) => {
+            const closed = waitForShellClose(state.child);
+            this.cancel(id);
+            return closed;
+        }));
     }
 
     async run(options = {}) {
         const executionId = String(options.executionId || "").trim();
         const command = String(options.command || "");
         if (!executionId) throw new Error("executionId is required");
+        if (this.running.has(executionId)) throw new Error(`execution id already in use: ${executionId}`);
         if (!command.trim()) return { stdout: "", stderr: "command is required", exitCode: 1 };
         const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : DEFAULT_SHELL_TIMEOUT_MS;
         const maxOutputBytes = Number(options.maxOutputBytes) > 0 ? Number(options.maxOutputBytes) : DEFAULT_MAX_OUTPUT_BYTES;
@@ -752,6 +819,7 @@ class AgentShellRunner {
             const child = spawn(shellCommand, shellArgs, {
                 cwd: options.cwd,
                 windowsHide: true,
+                detached: process.platform !== "win32",
                 env: process.env
             });
             const state = { child, cancelled: false, timedOut: false };
@@ -760,39 +828,47 @@ class AgentShellRunner {
             const stderr = [];
             let stdoutBytes = 0;
             let stderrBytes = 0;
-            let stdoutTruncated = false;
-            let stderrTruncated = false;
             const startedAt = Date.now();
-            let timer = null;
+            let progressTimer;
+            let progressDirty = false;
+            const reportProgress = () => {
+                progressDirty = false;
+                options.onProgress({ executionId, stdoutBytes, stderrBytes, elapsedMs: Date.now() - startedAt });
+                progressTimer = setTimeout(() => {
+                    progressTimer = undefined;
+                    if (progressDirty) reportProgress();
+                }, 250);
+            };
 
-            const appendChunk = (target, chunk, streamName) => {
-                const buffer = Buffer.from(chunk);
-                if (streamName === "stdout") stdoutBytes += buffer.length;
-                else stderrBytes += buffer.length;
-                const currentBytes = target.reduce((sum, item) => sum + item.length, 0);
-                if (currentBytes < maxOutputBytes) target.push(buffer.subarray(0, maxOutputBytes - currentBytes));
-                if (currentBytes + buffer.length > maxOutputBytes) {
-                    if (streamName === "stdout") stdoutTruncated = true;
-                    else stderrTruncated = true;
-                }
+            const appendChunk = (target, retainedBefore, chunk) => {
+                if (retainedBefore < maxOutputBytes) target.push(chunk.subarray(0, maxOutputBytes - retainedBefore));
                 if (typeof options.onProgress === "function") {
-                    options.onProgress({ executionId, stdoutBytes, stderrBytes, elapsedMs: Date.now() - startedAt });
+                    progressDirty = true;
+                    if (!progressTimer) reportProgress();
                 }
             };
 
-            child.stdout.on("data", chunk => appendChunk(stdout, chunk, "stdout"));
-            child.stderr.on("data", chunk => appendChunk(stderr, chunk, "stderr"));
+            child.stdout.on("data", chunk => {
+                stdoutBytes += chunk.length;
+                appendChunk(stdout, stdoutBytes - chunk.length, chunk);
+            });
+            child.stderr.on("data", chunk => {
+                stderrBytes += chunk.length;
+                appendChunk(stderr, stderrBytes - chunk.length, chunk);
+            });
             child.on("error", error => {
-                this.running.delete(executionId);
                 clearTimeout(timer);
+                clearTimeout(progressTimer);
                 reject(error);
             });
-            timer = setTimeout(() => {
+            const timer = setTimeout(() => {
+                if (state.cancelled) return;
                 state.timedOut = true;
                 killProcessTree(child);
             }, timeoutMs);
             child.on("close", code => {
                 clearTimeout(timer);
+                clearTimeout(progressTimer);
                 this.running.delete(executionId);
                 resolve({
                     stdout: new StringDecoder("utf8").write(Buffer.concat(stdout)),
@@ -800,8 +876,8 @@ class AgentShellRunner {
                     exitCode: Number.isInteger(code) ? code : (state.cancelled || state.timedOut ? 1 : -1),
                     stdoutBytes,
                     stderrBytes,
-                    stdoutTruncated,
-                    stderrTruncated,
+                    stdoutTruncated: stdoutBytes > maxOutputBytes,
+                    stderrTruncated: stderrBytes > maxOutputBytes,
                     cancelled: state.cancelled,
                     timedOut: state.timedOut,
                     durationMs: Date.now() - startedAt
@@ -819,6 +895,7 @@ class AgentShellRunner {
 class AgentBackgroundShellManager {
     constructor(options = {}) {
         this.processes = new Map();
+        this.stopping = new Set();
         this.sequence = 0;
         this.maxLifetimeMs = Number(options.maxLifetimeMs) > 0 ? Number(options.maxLifetimeMs) : BACKGROUND_SHELL_MAX_LIFETIME_MS;
     }
@@ -847,6 +924,7 @@ class AgentBackgroundShellManager {
             child = spawn(executable, args, {
                 cwd: options.cwd,
                 windowsHide: true,
+                detached: process.platform !== "win32",
                 env: process.env
             });
         } catch (error) {
@@ -856,33 +934,15 @@ class AgentBackgroundShellManager {
             processId,
             command,
             child,
-            stdoutBytes: 0,
-            stderrBytes: 0,
-            stdoutTruncated: false,
-            stderrTruncated: false,
-            stdoutChunks: [],
-            stderrChunks: [],
+            stdout: new ShellOutputTail(),
+            stderr: new ShellOutputTail(),
             startedAt: Date.now(),
             exitCode: null,
             exited: false,
-            cancelled: false,
             timer: null
         };
-        const appendChunk = (chunk, target, streamName) => {
-            const buffer = Buffer.from(chunk);
-            if (streamName === "stdout") state.stdoutBytes += buffer.length;
-            else state.stderrBytes += buffer.length;
-            target.push(buffer);
-            let total = target.reduce((sum, item) => sum + item.length, 0);
-            while (total > BACKGROUND_SHELL_BUFFER_BYTES && target.length > 1) {
-                const removed = target.shift();
-                total -= removed.length;
-                if (streamName === "stdout") state.stdoutTruncated = true;
-                else state.stderrTruncated = true;
-            }
-        };
-        child.stdout?.on("data", chunk => appendChunk(chunk, state.stdoutChunks, "stdout"));
-        child.stderr?.on("data", chunk => appendChunk(chunk, state.stderrChunks, "stderr"));
+        child.stdout.on("data", chunk => state.stdout.push(chunk));
+        child.stderr.on("data", chunk => state.stderr.push(chunk));
         child.on("error", error => {
             state.exited = true;
             state.exitCode = -1;
@@ -913,16 +973,7 @@ class AgentBackgroundShellManager {
     read(processId, options = {}) {
         const state = this.processes.get(String(processId || "").trim());
         if (!state) return { success: false, error: `unknown process id: ${processId}` };
-        const tailBytes = Number(options.tail_bytes) > 0 ? Math.min(Number(options.tail_bytes), BACKGROUND_SHELL_BUFFER_BYTES) : 0;
-        const collect = chunks => {
-            let buffer = Buffer.concat(chunks);
-            if (tailBytes > 0 && buffer.length > tailBytes) buffer = buffer.subarray(-tailBytes);
-            // Tail limits are bytes. Drop a partial leading UTF-8 character so
-            // polling a Chinese/emoji log never injects replacement glyphs.
-            let start = 0;
-            while (start < buffer.length && (buffer[start] & 0xC0) === 0x80) start++;
-            return new StringDecoder("utf8").write(buffer.subarray(start));
-        };
+        const tailBytes = Math.trunc(Number(options.tail_bytes));
         return {
             success: true,
             processId: state.processId,
@@ -930,12 +981,12 @@ class AgentBackgroundShellManager {
             running: !state.exited,
             exitCode: state.exitCode,
             elapsedMs: Date.now() - state.startedAt,
-            stdout: collect(state.stdoutChunks),
-            stderr: collect(state.stderrChunks),
-            stdoutBytes: state.stdoutBytes,
-            stderrBytes: state.stderrBytes,
-            stdoutTruncated: state.stdoutTruncated,
-            stderrTruncated: state.stderrTruncated,
+            stdout: state.stdout.read(tailBytes > 0 ? tailBytes : 0),
+            stderr: state.stderr.read(tailBytes > 0 ? tailBytes : 0),
+            stdoutBytes: state.stdout.bytes,
+            stderrBytes: state.stderr.bytes,
+            stdoutTruncated: state.stdout.bytes > BACKGROUND_SHELL_BUFFER_BYTES,
+            stderrTruncated: state.stderr.bytes > BACKGROUND_SHELL_BUFFER_BYTES,
             timedOut: state.timedOut === true,
             hint: state.exited
                 ? "process has exited; the buffer above is its complete retained output"
@@ -952,21 +1003,29 @@ class AgentBackgroundShellManager {
                 running: !state.exited,
                 exitCode: state.exitCode,
                 elapsedMs: Date.now() - state.startedAt,
-                stdoutBytes: state.stdoutBytes,
-                stderrBytes: state.stderrBytes
+                stdoutBytes: state.stdout.bytes,
+                stderrBytes: state.stderr.bytes
             }))
         };
+    }
+
+    removeProcess(state, timeoutMs) {
+        this.processes.delete(state.processId);
+        clearTimeout(state.timer);
+        if (state.exited) return;
+        const closed = waitForShellClose(state.child, timeoutMs);
+        this.stopping.add(closed);
+        closed.then(() => this.stopping.delete(closed));
+        if (!state.timedOut) killProcessTree(state.child);
+        return closed;
     }
 
     stop(processId) {
         const key = String(processId || "").trim();
         const state = this.processes.get(key);
         if (!state) return { success: false, error: `unknown process id: ${processId}` };
-        state.cancelled = true;
-        if (!state.exited) killProcessTree(state.child);
         const result = this.read(key);
-        this.processes.delete(key);
-        if (state.timer) clearTimeout(state.timer);
+        this.removeProcess(state);
         return {
             ...result,
             running: false,
@@ -985,27 +1044,26 @@ class AgentBackgroundShellManager {
         const key = String(processId || "").trim();
         const state = this.processes.get(key);
         if (!state) return { success: false, error: `unknown process id: ${processId}` };
-        if (state.exited) return this.stop(key);
-        const exited = new Promise(resolve => {
-            if (state.exited) { resolve(); return; }
-            state.child.once("close", resolve);
-            // A process that ignores termination must not hang the caller forever.
-            setTimeout(resolve, timeoutMs).unref?.();
-        });
-        const result = this.stop(key);
-        await exited;
-        return result;
+        const result = this.read(key);
+        await this.removeProcess(state, timeoutMs);
+        return {
+            ...result,
+            running: false,
+            stopped: true,
+            finalStdout: result.stdout,
+            finalStderr: result.stderr
+        };
     }
 
     async stopAllAndWait(timeoutMs = 5000) {
-        const ids = [...this.processes.keys()];
-        await Promise.all(ids.map(id => this.stopAndWait(id, timeoutMs)));
+        const ids = this.stopAll(timeoutMs);
+        await Promise.all(this.stopping);
         return ids;
     }
 
-    stopAll() {
+    stopAll(timeoutMs) {
         const ids = [...this.processes.keys()];
-        ids.forEach(id => this.stop(id));
+        for (const state of this.processes.values()) this.removeProcess(state, timeoutMs);
         return ids;
     }
 }

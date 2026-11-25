@@ -1,6 +1,6 @@
 {
   "name": "aiui",
-  "version": "10.2.1",
+  "version": "10.2.2",
   "description": "AIUI Desktop Application",
   "author": "JHCWColin",
   "main": "src/main/main.js",
@@ -13,7 +13,8 @@
     "test:api-profiles": "electron src/test/api-profiles-smoke.js",
     "test:gateway-ui": "electron src/test/gateway-electron-smoke.js",
     "test:tokenizer-ui": "electron src/test/tokenizer-rules-smoke.js",
-    "test:agent-live": "electron src/test/agent-live-smoke.js"
+    "test:agent-live": "electron src/test/agent-live-smoke.js",
+    "test:agent-shell": "electron src/test/agent-shell-electron-smoke.js"
   },
   "devDependencies": {
     "@anthropic-ai/tokenizer": "^0.0.4",
