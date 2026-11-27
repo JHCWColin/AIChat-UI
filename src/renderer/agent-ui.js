@@ -2,6 +2,9 @@
     const MAX_TOOL_CALLS_PER_RESPONSE = 30;
     const MAX_CONSECUTIVE_EMPTY_RESPONSES = 3;
     const MAX_CONSECUTIVE_INVALID_RESPONSES = 3;
+    const MAX_BACKEND_RETRIES = 6;
+    const BACKEND_RETRY_DELAY_MS = 5000;
+    const BACKEND_IDLE_TIMEOUT_MS = 120000;
     const DEFAULT_AGENT_DIFF_MAX_LINES = 10;
     const DEFAULT_AGENT_SHELL_TIMEOUT_SECONDS = 120;
     const SHELL_OUTPUT_PAGE_SIZE = 8192;
@@ -49,6 +52,7 @@
 
     let agentTaskChatId = null;
     let agentTaskPreparing = false;
+    let agentModelController = null;
     let agentLiveThinkingRow = null;
     let agentThinkingSequence = 0;
     let agentStopRequested = false;
@@ -65,6 +69,7 @@
     let agentTaskTimer = null;
     let agentTaskFooter = null;
     let liveActivityBlock = null;
+    const queuedMessageRows = new Map();
     const liveToolBlocks = new Map();
     const activeToolMessages = new WeakSet();
     const agentShellProgressByExecution = new Map();
@@ -78,6 +83,44 @@
     function isAgentTaskRunning(chatId) {
         if (!agentTaskChatId) return false;
         return chatId === undefined ? true : String(chatId) === String(agentTaskChatId);
+    }
+
+    function getQueuedAgentMessages(chatId) {
+        return window.queuedAgentMessages.filter(entry =>
+            typeof entry === "string" || (entry && String(entry.chatId ?? entry.gatewayChatId) === String(chatId)));
+    }
+
+    function queueAgentMessage(chat, content, attachments = [], gateway = false) {
+        window.queuedAgentMessages.push({ chatId: String(chat.id), content, attachments,
+            ...(gateway ? { gatewayChatId: String(chat.id) } : {}) });
+        placeAgentTaskFooter();
+        scrollChatToBottom();
+        if (getAgentMessageInsertion() === "interrupt") agentModelController?.abort();
+    }
+
+    function consumeAgentMessages(chat) {
+        if (!window.queuedAgentMessages.length) return { count: 0, gatewayInput: false };
+        const queued = getQueuedAgentMessages(chat.id);
+        window.queuedAgentMessages.length = 0;
+        placeAgentTaskFooter();
+        let gatewayInput = false;
+        for (const entry of queued) {
+            const gateway = Boolean(entry.gatewayChatId);
+            const message = { role: "user", content: entry.content ?? entry, agentQueued: true,
+                ...(entry.attachments?.length ? { attachments: entry.attachments } : {}),
+                ...(gateway ? { agentGatewaySource: true } : {}) };
+            chat.messages.push(message);
+            gatewayInput ||= gateway;
+            appendMessageToUI("user", message.content, null, false, "", message.attachments || [], [], "", {
+                voiceMessage: message,
+                voiceMessageKey: window.getTextVoiceMessageKey?.(chat.id, chat.messages.length - 1)
+            });
+        }
+        if (queued.length) {
+            chat.updatedAt = Date.now();
+            persistAgentChats();
+        }
+        return { count: queued.length, gatewayInput };
     }
 
     function persistAgentChats() {
@@ -461,9 +504,26 @@
     }
 
     function placeAgentTaskFooter() {
-        if (!agentTaskStartedAt || !agentTaskFooter || String(agentTaskChatId) !== String(activeChatId)) return;
         const wrapper = document.getElementById("messages-wrapper");
-        if (wrapper && wrapper.lastElementChild !== agentTaskFooter) wrapper.append(agentTaskFooter);
+        if (!wrapper) return;
+        const pending = getQueuedAgentMessages(activeChatId);
+        for (const [entry, row] of queuedMessageRows) {
+            if (pending.includes(entry)) continue;
+            row.remove();
+            queuedMessageRows.delete(entry);
+        }
+        const footer = String(agentTaskChatId) === String(activeChatId) ? agentTaskFooter : null;
+        if (footer && wrapper.lastElementChild !== footer) wrapper.append(footer);
+        let next = footer;
+        for (const entry of pending.slice().reverse()) {
+            let row = queuedMessageRows.get(entry);
+            if (!row?.isConnected) {
+                row = appendMessageToUI("user", entry.content ?? entry, null, false, "", entry.attachments || [], [], "", { container: wrapper });
+                queuedMessageRows.set(entry, row);
+            }
+            if (row.nextElementSibling !== next) wrapper.insertBefore(row, next);
+            next = row;
+        }
     }
 
     function createAgentTaskFooter() {
@@ -623,6 +683,10 @@
 
     function getAgentSearchEngine() {
         return localStorage.getItem("agent_search_engine") === "duckduckgo" ? "duckduckgo" : "bing";
+    }
+
+    function getAgentMessageInsertion() {
+        return localStorage.getItem("agent_message_insertion") === "interrupt" ? "interrupt" : "queue";
     }
 
     /**
@@ -1327,42 +1391,18 @@
         // The live plan changes every few turns, so it goes after the cached history
         // prefix rather than inside the fixed prompt or reordering prior turns.
         const planContext = formatAgentPlanForContext(chat);
-        if (planContext) result.push({ role: "user", content: planContext });
+        if (planContext) result.splice(result.length - (options.queuedCount || 0), 0, { role: "user", content: planContext });
         return result;
     }
 
-    async function requestAgentModel(chat, model, options = {}) {
+    async function requestAgentModel(chat, model, signal, options) {
         const requestMetrics = window.AIUIRequestMetrics?.create();
-        if (Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
-            const queued = window.queuedAgentMessages.splice(0);
-            let consumedUserMessages = 0;
-            let consumedGatewayMessage = false;
-            queued.forEach(entry => {
-                // Remote additions stay bound to the chat that accepted them,
-                // including if the user stops the task before the next model turn.
-                if (entry && typeof entry === "object" && String(entry.gatewayChatId || "") !== String(chat.id)) return;
-                const content = entry && typeof entry === "object" ? entry.content : entry;
-                const gateway = Boolean(entry && typeof entry === "object" && entry.gatewayChatId);
-                const message = { role: "user", content: String(content || ""), agentQueued: true,
-                    ...(gateway ? { agentGatewaySource: true } : {}) };
-                chat.messages.push(message);
-                consumedGatewayMessage ||= gateway;
-                consumedUserMessages += 1;
-                if (typeof appendMessageToUI === "function") appendMessageToUI("user", message.content, null, false, "", [], [], "", {
-                    voiceMessage: message,
-                    voiceMessageKey: window.getTextVoiceMessageKey?.(chat.id, chat.messages.length - 1)
-                });
-            });
-            if (typeof persistAgentChats === "function") persistAgentChats();
-            if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
-            if (consumedUserMessages) options.onUserMessagesConsumed?.(consumedGatewayMessage);
-        }
-        const memoryAllowed = options.memoryAllowed?.() !== false;
+        const { memoryAllowed, memoryFollowup, onText, onReasoning, onBackendProgress } = options;
         const transport = window.AIUIMemoryTransport;
         const memoryEnabled = memoryAllowed && window.AIUIMemory?.isEnabled();
         const memoryTool = memoryEnabled && transport && window.AIUIMemory.getTool();
-        const messages = await buildAgentMessages(chat, { memoryAllowed });
-        if (options.memoryFollowup?.()) messages.push({ role: "user",
+        const messages = await buildAgentMessages(chat, { memoryAllowed, queuedCount: options.queuedCount });
+        if (memoryFollowup) messages.push({ role: "user",
             content: "The previous response contained a housekeeping tool call but no complete answer. Provide the actual final answer now, then finish the Agent task. Do not repeat the housekeeping call."
         });
         const promptCacheKey = typeof getPromptCacheKeyForChat === "function"
@@ -1380,165 +1420,290 @@
             ...(cacheControl ? { cache_control: cacheControl } : {})
         };
         const preferredEndpoint = getRequestEndpoint();
-        abortController = new AbortController();
-        let fallbackRow = null;
+        signal.throwIfAborted();
+        onBackendProgress();
         appendLog("debug", "开始请求 Agent AI 接口");
         appendLog("trace", `Agent AI 请求 URL: ${getBaseURL()}${preferredEndpoint}`);
-        const { response, endpoint, requestBody, requestDecorated } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, abortController.signal, {
+        let fallbackRow;
+        const { response, endpoint, requestBody, requestDecorated } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, {
             redactDiagnostics: Boolean(memoryEnabled),
             ...(memoryTool ? {
                 decorateRequest: (body, targetEndpoint) => transport.declareTool(body, targetEndpoint, memoryTool),
                 retryWithoutDecoration: transport.isUnsupportedToolError
             } : {}),
             onFallback: info => {
+                signal.throwIfAborted();
+                fallbackRow?.remove();
                 fallbackRow = appendAgentEndpointFallbackRow(info);
-                if (typeof options.onFallback === "function") options.onFallback(info);
             }
+        }).catch(error => {
+            fallbackRow?.remove();
+            throw error;
         });
-        completeAgentEndpointFallbackRow(fallbackRow, endpoint);
+        signal.throwIfAborted();
+        if (response.ok) completeAgentEndpointFallbackRow(fallbackRow, endpoint);
+        else fallbackRow?.remove();
         lastPromptCacheDebug = logPromptCacheDebug(requestBody, lastPromptCacheDebug);
         if (!memoryEnabled) appendLog("trace", `Agent 请求体: ${JSON.stringify(requestBody)}`);
         if (!response.ok) {
-            const detail = memoryEnabled ? "" : await response.text().catch(() => "");
-            appendLog("error", `Agent AI 接口响应错误: ${response.status} ${response.statusText || ""}${detail ? ` - ${detail.slice(0, 500)}` : ""}`);
-            throw new Error(`Agent API error: ${response.status}${detail ? ` - ${detail.slice(0, 500)}` : ""}`);
+            void response.body?.cancel?.().catch(() => {});
+            throw new Error(getAgentHttpErrorReason(response.status, response.statusText));
         }
         appendLog("trace", `Agent AI 接口响应状态: ${response.status} ${response.statusText || ""}`);
         const memoryCollector = memoryTool && requestDecorated ? transport.createCollector(endpoint) : null;
-        const rethrowPayloadError = error => {
-            if (memoryEnabled && error instanceof SyntaxError) throw new Error("Agent 模型返回了无效的响应格式");
-            throw error;
-        };
-        if (!response.body || typeof response.body.getReader !== "function") {
-            const payload = await response.json().catch(rethrowPayloadError);
-            memoryCollector?.ingest(payload);
-            const update = extractStreamingUpdate(payload, endpoint);
-            if (requestMetrics) {
-                window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
-                let count = 0;
-                if ((!requestMetrics.hasOutputUsage || (requestMetrics.reasoningText && !requestMetrics.hasReasoningUsage)) && requestMetrics.text) try { count = await window.electronAPI.countContextTokens(requestMetrics.text, model); } catch (_) {}
-                window.AIUIEnhancements?.requestMetrics(chat, requestMetrics, true, count);
-            }
-            window.AIUIEnhancements?.requestContextRefresh();
-            const reasoning = String(update.reasoningSnapshot || update.reasoningDelta || "");
-            if (reasoning && typeof options.onReasoning === "function") options.onReasoning(reasoning);
-            return {
-                text: extractNonStreamingResponseText(payload, endpoint),
-                reasoning,
-                responsesReasoning: AgentProtocol.createResponsesReasoningState(payload, { endpoint, model, baseURL: getBaseURL() }),
-                completion: collectAgentCompletionInfo(payload),
-                memoryCalls: memoryCollector?.finish() || [],
-                toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(payload))
-            };
-        }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
         const debugStream = developerModeEnabled && (logLevel === "debug" || logLevel === "trace");
         const traceStream = developerModeEnabled && logLevel === "trace" && !memoryEnabled;
         const ndjsonStream = typeof isOllamaEndpoint === "function" && isOllamaEndpoint(endpoint);
         let fullText = "";
         let reasoningText = "";
         const responsePayloads = [];
-        let sseBuffer = "";
-        let sawSSE = false;
-        let streamBytesReceived = 0;
         const seenStreamEvents = new Set();
         let completion = {};
-        const parsePayload = data => {
-            try { return JSON.parse(data); }
-            catch (error) { return rethrowPayloadError(error); }
-        };
-        const consume = block => {
-            const event = ndjsonStream ? { data: block.trim() } : parseSSEEventBlock(block);
-            if (!event.data) return;
-            sawSSE = true;
-            if (event.data === "[DONE]") return;
-            const payload = parsePayload(event.data);
-            const normalizedPayload = !payload.type && event.eventType ? { ...payload, type: event.eventType } : payload;
-            const sequence = normalizedPayload.sequence_number;
+        let sawCompletion = false;
+        let sawStreamEvent = false;
+        let sawDoneMarker = false;
+        let lastOutputComplete = false;
+        const applyPayload = (payload, streaming, eventType = "") => {
+            if (!payload || typeof payload !== "object") throw new Error("模型返回了无效的响应格式");
+            if (!payload.type && eventType) payload = { ...payload, type: eventType };
+            const streamError = getStreamingErrorMessage(payload);
+            if (streamError || payload.status === "failed") {
+                throw new Error(memoryEnabled ? "模型接口返回错误" : streamError || "模型接口返回失败状态");
+            }
+            const sequence = payload.sequence_number;
             // Relays can reuse one SSE id for a response, including identical
             // consecutive token deltas. Only a protocol sequence number can
             // distinguish a replay from an intentional repeated token.
             const eventKey = Number.isSafeInteger(sequence) && sequence >= 0
-                ? `${normalizedPayload.type || endpoint}:${sequence}:${event.data}` : "";
+                ? `${payload.type || endpoint}:${sequence}:${JSON.stringify(payload)}` : "";
             if (eventKey && seenStreamEvents.has(eventKey)) return;
             if (eventKey) seenStreamEvents.add(eventKey);
-            responsePayloads.push(normalizedPayload);
-            memoryCollector?.ingest(normalizedPayload);
-            completion = collectAgentCompletionInfo(normalizedPayload, completion);
-            const streamError = getStreamingErrorMessage(normalizedPayload);
-            if (streamError) throw new Error(memoryEnabled ? "Agent 模型请求返回错误" : streamError);
-            const update = extractStreamingUpdate(normalizedPayload, endpoint);
+            responsePayloads.push(payload);
+            onBackendProgress();
+            memoryCollector?.ingest(payload);
+            completion = collectAgentCompletionInfo(payload, completion);
+            sawCompletion ||= !streaming || isAgentStreamEnd(payload, completion);
+            lastOutputComplete = ["response.output_item.done", "response.output_text.done", "response.content_part.done"].includes(payload.type)
+                || Boolean(payload.choices?.[0]?.message);
+            const update = extractStreamingUpdate(payload, endpoint);
             if (requestMetrics) {
-                window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
+                window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
                 window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
             }
-            fullText = mergeStreamingText(fullText, update.contentDelta, update.contentSnapshot);
+            const nextText = streaming
+                ? mergeStreamingText(fullText, update.contentDelta, update.contentSnapshot)
+                : extractNonStreamingResponseText(payload, endpoint);
+            if (nextText !== fullText) {
+                fullText = nextText;
+                if (streaming) onText(fullText);
+            }
             const nextReasoning = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
             if (nextReasoning !== reasoningText) {
                 reasoningText = nextReasoning;
-                if (typeof options.onReasoning === "function") options.onReasoning(reasoningText);
+                onReasoning(reasoningText);
             }
         };
-        if (debugStream) {
-            appendLog("debug", "Agent 流式输出接收开始");
-            showVoiceNotification("正在接收 Agent 流数据 已接收数据量：0 字节", false, 0, true);
-        }
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            streamBytesReceived += value ? value.length : 0;
-            sseBuffer += decoder.decode(value, { stream: true });
-            if (debugStream) {
-                appendLog("debug", `收到 Agent 流数据块: ${value ? value.length : 0} 字节，累计 ${streamBytesReceived} 字节`);
-                showVoiceNotification(`正在接收 Agent 流数据 已接收数据量：${streamBytesReceived} 字节`, false, 0, true);
-            }
-            if (traceStream) appendLog("trace", `Agent 原始流内容: ${sseBuffer.replace(/\n/g, "\\n")}`);
-            const parts = sseBuffer.split(ndjsonStream ? /\r?\n/ : /\r?\n\r?\n/);
-            sseBuffer = parts.pop() || "";
-            for (const part of parts) {
-                try {
-                    consume(part);
-                } catch (error) {
-                    appendLog("debug", `解析 Agent 流数据失败: ${error.message}`);
-                    throw error;
+        const consume = block => {
+            const event = ndjsonStream ? { data: block.trim() } : parseSSEEventBlock(block);
+            if (!event.data) return;
+            sawStreamEvent = true;
+            if (event.data === "[DONE]") { sawDoneMarker = true; return; }
+            applyPayload(JSON.parse(event.data), true, event.eventType);
+        };
+        if (!response.body?.getReader || /\bapplication\/(?:json|[\w.+-]+\+json)\b/i.test(response.headers?.get("content-type") || "")) {
+            applyPayload(await response.json(), false);
+        } else {
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let bytes = 0;
+            let reachedEOF = false;
+            try {
+                while (!sawDoneMarker) {
+                    const { done, value } = await reader.read();
+                    signal.throwIfAborted();
+                    reachedEOF = done;
+                    if (done) break;
+                    bytes += value.byteLength;
+                    buffer += decoder.decode(value, { stream: true });
+                    if (debugStream) appendLog("debug", `收到 Agent 流数据块，累计 ${bytes} 字节`);
+                    if (traceStream) appendLog("trace", `Agent 原始流内容: ${buffer.replace(/\n/g, "\\n")}`);
+                    const parts = buffer.split(ndjsonStream ? /\r?\n/ : /\r?\n\r?\n/);
+                    buffer = parts.pop() || "";
+                    for (const part of parts) {
+                        consume(part);
+                        if (sawDoneMarker) break;
+                    }
                 }
+                buffer += decoder.decode();
+                if (!sawDoneMarker && buffer.trim()) {
+                    if (ndjsonStream || /^(?:event:|data:|id:)/m.test(buffer)) consume(buffer);
+                    else if (!sawStreamEvent) applyPayload(JSON.parse(buffer), false);
+                }
+            } finally {
+                if (!reachedEOF) void reader.cancel?.().catch(() => {});
+                reader.releaseLock?.();
             }
+            appendLog("debug", `Agent 流式输出接收完毕，累计 ${bytes} 字节`);
         }
-        sseBuffer += decoder.decode();
-        if (sseBuffer.trim()) {
-            if (ndjsonStream || /^(?:event:|data:|id:)/m.test(sseBuffer)) consume(sseBuffer);
-            else if (!sawSSE) {
-                const payload = parsePayload(sseBuffer.trim());
-                responsePayloads.push(payload);
-                memoryCollector?.ingest(payload);
-                completion = collectAgentCompletionInfo(payload, completion);
-                fullText = mergeStreamingText(fullText, "", extractNonStreamingResponseText(payload, endpoint));
-                const update = extractStreamingUpdate(payload, endpoint);
-                if (requestMetrics) window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
-                reasoningText = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
-                if (reasoningText && typeof options.onReasoning === "function") options.onReasoning(reasoningText);
-            }
+        signal.throwIfAborted();
+        const memoryCalls = memoryCollector?.finish() || [];
+        const toolCalls = ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(responsePayloads));
+        if (!fullText.trim() && !reasoningText.trim() && !toolCalls.length && !memoryCalls.length && !completion.tokenLimited) {
+            throw new Error("后端返回空响应");
         }
-        appendLog("debug", "Agent 流式输出接收完毕");
-        if (debugStream) {
-            hideVoiceNotification();
-            showVoiceNotification(`Agent 流式接收完成，总计：${streamBytesReceived} 字节`, false, 2000, false);
-        }
+        if (!sawCompletion && !sawDoneMarker && !lastOutputComplete) throw new Error("回复流提前中断");
+        onBackendProgress(false);
         if (requestMetrics) {
             let count = 0;
             if ((!requestMetrics.hasOutputUsage || (requestMetrics.reasoningText && !requestMetrics.hasReasoningUsage)) && fullText) try { count = await window.electronAPI.countContextTokens(fullText, model); } catch (_) {}
             window.AIUIEnhancements?.requestMetrics(chat, requestMetrics, true, count);
         }
+        signal.throwIfAborted();
         if (typeof updateTokenEstimate === 'function') updateTokenEstimate();
         return {
             text: fullText,
             reasoning: reasoningText,
             responsesReasoning: AgentProtocol.createResponsesReasoningState(responsePayloads, { endpoint, model, baseURL: getBaseURL() }),
             completion,
-            memoryCalls: memoryCollector?.finish() || [],
-            toolCalls: ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(responsePayloads))
+            memoryCalls,
+            toolCalls
         };
+    }
+
+    function isAgentStreamEnd(payload, completion) {
+        return Boolean(completion.finishReason || ["completed", "incomplete"].includes(completion.status)
+            || payload.done === true || payload.candidates?.[0]?.finishReason
+            || ["message_stop", "response.completed", "response.done", "response.incomplete"].includes(payload.type));
+    }
+
+    function getAgentHttpErrorReason(status, statusText) {
+        const descriptions = {
+            400: "请求无效", 401: "身份验证失败", 403: "访问被拒绝", 404: "未找到接口或模型", 408: "请求超时",
+            429: "请求过于频繁", 500: "服务器内部错误", 501: "接口不受支持", 502: "网关错误", 503: "服务暂不可用", 504: "网关超时"
+        };
+        return [`HTTP ${status}`, descriptions[status] || statusText].filter(Boolean).join(" ");
+    }
+
+    function getAgentBackendErrorReason(error) {
+        if (error?.name === "SyntaxError") return "模型返回了无效的响应格式";
+        const message = String(error?.message || "未知错误").replace(/\s+/g, " ").trim();
+        if (/failed to fetch|network(?:error| error)|load failed/i.test(message)) return "网络连接失败或中断";
+        return message.length > 120 ? message.slice(0, 119) + "…" : message;
+    }
+
+    function showAgentBackendRetry(row, reason, attempt) {
+        const wrapper = document.getElementById("messages-wrapper");
+        if (!row) {
+            row = document.createElement("div");
+            row.className = "chat-row agent-round-summary-wrapper agent-backend-retry-row";
+            row.innerHTML = '<div class="agent-retry-summary running" role="status"><span class="agent-tool-summary-text"></span></div>';
+            wrapper.append(row);
+        }
+        window.agentReconnectNotice = `后端错误：${reason} 正在重试 （${attempt}/${MAX_BACKEND_RETRIES}）`;
+        row.querySelector(".agent-tool-summary-text").textContent = window.agentReconnectNotice;
+        placeAgentTaskFooter();
+        scrollChatToBottom();
+        return row;
+    }
+
+    function waitForAgentRetry(signal) {
+        return new Promise(resolve => {
+            const finish = () => {
+                clearTimeout(timer);
+                signal.removeEventListener("abort", finish);
+                resolve();
+            };
+            const timer = setTimeout(finish, BACKEND_RETRY_DELAY_MS);
+            signal.addEventListener("abort", finish, { once: true });
+        });
+    }
+
+    function createAgentTextPreview(model) {
+        let row;
+        let frame;
+        let pending = "";
+        let displayed = "";
+        return {
+            update(text) {
+                pending = text;
+                if (frame !== undefined) return;
+                frame = requestAnimationFrame(() => {
+                    frame = undefined;
+                    const prose = ToolCallNormalizer.getAgentStreamingText(pending);
+                    if (prose === displayed) return;
+                    displayed = prose;
+                    if (!prose) { row?.remove(); row = null; return; }
+                    if (!row) {
+                        row = appendMessageToUI("assistant", "", model, false, "", [], [], "", {
+                            agentSegment: true, agentMessage: true, container: document.getElementById("messages-wrapper")
+                        });
+                        row.classList.add("agent-streaming-row");
+                        placeAgentTaskFooter();
+                    }
+                    row.querySelector(".ai-content-area").innerHTML = renderAssistantMarkdown(prose);
+                    scrollChatToBottom();
+                });
+            },
+            clear() {
+                if (frame !== undefined) cancelAnimationFrame(frame);
+                frame = undefined;
+                row?.remove();
+                row = null;
+                displayed = "";
+            }
+        };
+    }
+
+    async function requestAgentModelWithRetry(chat, model, options) {
+        agentModelController = new AbortController();
+        const { signal } = agentModelController;
+        const preview = createAgentTextPreview(model);
+        let retryRow;
+        let thinkingRow = appendAgentThinkingRow();
+        try {
+            for (let retries = 0; ; retries += 1) {
+                const attempt = new AbortController();
+                const attemptSignal = AbortSignal.any([signal, attempt.signal]);
+                let idleTimer;
+                const onBackendProgress = (waiting = true) => {
+                    clearTimeout(idleTimer);
+                    if (waiting) idleTimer = setTimeout(() => attempt.abort(new Error("等待后端回复超时")), BACKEND_IDLE_TIMEOUT_MS);
+                };
+                try {
+                    const result = await requestAgentModel(chat, model, attemptSignal, { ...options, onBackendProgress,
+                        onText: preview.update,
+                        onReasoning: text => {
+                            thinkingRow ||= appendAgentThinkingRow();
+                            thinkingRow.updateReasoning(ToolCallNormalizer.stripReasoningSections(text));
+                        }
+                    });
+                    thinkingRow ||= appendAgentThinkingRow();
+                    return { result, thinkingRow };
+                } catch (error) {
+                    onBackendProgress(false);
+                    preview.clear();
+                    if (thinkingRow) {
+                        thinkingRow.updateReasoning("");
+                        thinkingRow.finishThinking();
+                        thinkingRow = null;
+                    }
+                    endAgentActivityBlock();
+                    if (signal.aborted) return null;
+                    const reason = getAgentBackendErrorReason(attemptSignal.reason || error);
+                    appendLog("warn", `Agent 后端请求失败：${reason}`);
+                    if (retries === MAX_BACKEND_RETRIES) throw new Error(`后端错误：${reason}，已重试 ${MAX_BACKEND_RETRIES} 次`);
+                    retryRow = showAgentBackendRetry(retryRow, reason, retries + 1);
+                    await waitForAgentRetry(signal);
+                    if (signal.aborted) return null;
+                }
+            }
+        } finally {
+            agentModelController = null;
+            preview.clear();
+            retryRow?.remove();
+            window.agentReconnectNotice = "";
+        }
     }
 
     function collectAgentCompletionInfo(payload, previous = {}) {
@@ -1648,7 +1813,7 @@
             agentRecovery: true, agentSegment: !failed, agentFinal: failed, ...(failed ? { failed: true } : {}) };
         chat.messages.push(message);
         appendMessageToUI("assistant", text, model, failed, "", [], [], "", {
-            agentFinal: failed, agentSegment: !failed, agentMessage: true
+            agentFinal: failed, agentSegment: !failed, agentMessage: true, failed
         });
         chat.updatedAt = Date.now();
         persistAgentChats();
@@ -2112,6 +2277,7 @@
         try { workspaceReady = await refreshAgentWorkspace(chat); }
         catch (error) { appendLog("error", `Agent 工作区检查失败：${error.message}`); }
         if (!workspaceReady || agentStopRequested || currentAgentChat() !== chat) {
+            if (currentAgentChat() === chat) consumeAgentMessages(chat);
             agentTaskChatId = null;
             agentTaskPreparing = false;
             isGenerating = false;
@@ -2129,9 +2295,7 @@
         startAgentTaskTimer();
         chat.agentModel = model;
         window.AIUIEnhancements?.taskStart(chat);
-        document.getElementById("send-btn")?.classList.add("hidden");
         document.getElementById("stop-btn")?.classList.remove("hidden");
-        let thinkingRow = appendAgentThinkingRow();
         let invalidResponses = 0;
         let emptyResponses = 0;
         let missingFinalResponses = 0;
@@ -2188,6 +2352,7 @@
         };
         resetUserTurn();
         let compactionCheckedAt = 0;
+        let queuedCount = 0;
         try {
             while (!agentStopRequested) {
                 // Check the context budget once per user-visible turn boundary rather
@@ -2197,40 +2362,18 @@
                     await compactAgentContextIfNeeded(chat);
                     if (agentStopRequested) break;
                 }
-                let result;
-                for (let attempt = 1; attempt <= 6; attempt += 1) {
-                    try {
-                        result = await requestAgentModel(chat, model, {
-                            onUserMessagesConsumed: resetUserTurn,
-                            memoryAllowed: () => memoryAllowed,
-                            memoryFollowup: () => memoryFollowup,
-                            onReasoning: reasoning => thinkingRow?.updateReasoning?.(ToolCallNormalizer.stripReasoningSections(reasoning))
-                        });
-                        window.agentReconnectNotice = "";
-                        if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
-                        break;
-                    } catch (error) {
-                        if (!/network|failed to fetch|fetch/i.test(String(error?.message || ''))) throw error;
-                        if (attempt >= 6) {
-                            window.agentReconnectNotice = '连接已断开';
-                            showVoiceNotification(window.agentReconnectNotice, true, 0, true);
-                            if (typeof window.renderQueuedAgentMessages === 'function') window.renderQueuedAgentMessages();
-                            throw new Error('连接已断开');
-                        }
-                        window.agentReconnectNotice = `尝试重新连接……${attempt}/6`;
-                        showVoiceNotification(window.agentReconnectNotice, true, 0, true);
-                        if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
-                        await new Promise(resolve => setTimeout(resolve, 5000));
-                    }
-                }
-                hideVoiceNotification();
+                const queued = consumeAgentMessages(chat);
+                if (queued.count) resetUserTurn(queued.gatewayInput);
+                queuedCount += queued.count;
+                const reply = await requestAgentModelWithRetry(chat, model, { memoryAllowed, memoryFollowup, queuedCount });
+                if (!reply || agentStopRequested) continue;
+                queuedCount = 0;
+                const { result, thinkingRow } = reply;
                 const parseOptions = {
                     enhanced: localStorage.getItem('developer_mode') === 'true' && localStorage.getItem('enhanced_tool_parser') === 'true'
                 };
                 result.text = stripAgentMemoryProtocol(result.text, parseOptions);
                 completeAgentThinking(chat, model, thinkingRow, result);
-                thinkingRow = null;
-                if (agentStopRequested) break;
                 const nativeMemoryCalls = result.memoryCalls.filter(isAgentMemoryCall);
                 const rawParsed = ToolCallNormalizer.parseAgentResponse(result.text, result.toolCalls.filter(call => !isAgentMemoryCall(call)), parseOptions);
                 const parsed = {
@@ -2247,7 +2390,6 @@
                     pendingMemoryCalls.push(...nativeMemoryCalls.slice(0, MAX_TOOL_CALLS_PER_RESPONSE - pendingMemoryCalls.length));
                     if (!parsed.text && !parsed.calls.length && !memoryFollowup) {
                         memoryFollowup = true;
-                        thinkingRow = appendAgentThinkingRow();
                         continue;
                     }
                 }
@@ -2300,7 +2442,6 @@
                         reasoningOnly: Boolean(result.reasoning) && !ToolCallNormalizer.stripReasoningSections(String(result.text || "")).trim(),
                         tokenLimited: result.completion?.tokenLimited
                     });
-                    thinkingRow = appendAgentThinkingRow();
                     continue;
                 }
                 invalidResponses = 0;
@@ -2359,7 +2500,6 @@
                             answerFloorIndex = chat.messages.length;
                             if (exhausted) return;
                             await requestAgentProtocolCorrection(chat, model, result.text, { toolFailure: failedNames });
-                            thinkingRow = appendAgentThinkingRow();
                             retryMissingFinal = true;
                             break;
                         }
@@ -2395,7 +2535,6 @@
                             await requestAgentProtocolCorrection(chat, model, result.text, { missingFinal: true,
                                 reasoningOnly: Boolean(result.reasoning) && !ToolCallNormalizer.stripReasoningSections(String(result.text || "")).trim(),
                                 tokenLimited: result.completion?.tokenLimited });
-                            thinkingRow = appendAgentThinkingRow();
                             retryMissingFinal = true;
                             break;
                         }
@@ -2415,8 +2554,6 @@
                         commitMemory(existingAnswer);
                         chat.updatedAt = Date.now();
                         persistAgentChats();
-                        renderChatHistory();
-                        await renderMessagesWithResolvedRefs(chat.messages);
                         return;
                     }
                     pendingToolItems.push({ call, message: prepareAgentToolMessage(chat, call) });
@@ -2432,11 +2569,6 @@
                     }
                     if (planOnlyResponses >= 2) await requestAgentProtocolCorrection(chat, model, result.text, { planOnly: true });
                 } else planOnlyResponses = 0;
-                thinkingRow = appendAgentThinkingRow();
-            }
-            if (agentStopRequested) {
-                chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentFinal: true });
-                persistAgentChats();
             }
         } catch (error) {
             autoRead?.finish(true);
@@ -2448,17 +2580,13 @@
             }
         } finally {
             autoRead?.finish(agentStopRequested);
-            if (thinkingRow) completeAgentThinking(chat, model, thinkingRow, { reasoning: thinkingRow.reasoningText });
             hideVoiceNotification();
-            if (window.agentReconnectNotice !== '连接已断开') {
-                window.agentReconnectNotice = "";
-                if (typeof window.renderQueuedAgentMessages === "function") window.renderQueuedAgentMessages();
-            }
-            if (agentStopRequested && !chat.messages.some((message, index) => index === chat.messages.length - 1 && message?.role === "assistant" && message?.agentFinal)) {
-                chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentFinal: true });
+            if (agentStopRequested && !chat.messages.at(-1)?.agentFinal) {
+                chat.messages.push({ role: "assistant", content: "Agent 已停止。", model, agentDisplayOnly: true, agentRecovery: true, agentSegment: true });
                 persistAgentChats();
             }
             if (agentTaskStartedAt) finishAgentTaskTimer(chat);
+            if (agentStopRequested) consumeAgentMessages(chat);
             abortController = null;
             isGenerating = false;
             agentTaskChatId = null;
@@ -2472,8 +2600,10 @@
             renderChatHistory();
             await renderMessagesWithResolvedRefs(chat.messages);
             updateAgentUIForChat(chat);
-            if (!agentStopRequested && Array.isArray(window.queuedAgentMessages) && window.queuedAgentMessages.length) {
-                setTimeout(() => requestAgentLoop(model, chat), 0);
+            if (!agentStopRequested && getQueuedAgentMessages(chat.id).length) {
+                setTimeout(() => {
+                    if (currentAgentChat() === chat && !isGenerating) void requestAgentLoop(model, chat);
+                }, 0);
             }
         }
     }
@@ -2495,24 +2625,16 @@
         if (agentTaskPreparing || (isGenerating && !isAgentTaskRunning(chat.id))) {
             return reject("电脑端正在准备任务，请稍后重试");
         }
-        if (Array.isArray(window.queuedAgentMessages)) {
-            for (let index = window.queuedAgentMessages.length - 1; index >= 0; index -= 1) {
-                const entry = window.queuedAgentMessages[index];
-                if (entry && typeof entry === "object" && String(entry.gatewayChatId || "") !== String(chat.id)) {
-                    window.queuedAgentMessages.splice(index, 1);
-                }
-            }
-        }
-        if (!Array.isArray(window.queuedAgentMessages) || window.queuedAgentMessages.length >= 20) {
+        if (agentStopRequested && isAgentTaskRunning(chat.id)) return reject("Agent 正在停止，请稍后重试");
+        if (window.queuedAgentMessages.length >= 20) {
             return reject("待处理消息已达上限，请等待 Agent 处理");
         }
         const queueText = () => {
-            window.queuedAgentMessages.push({ content: text, gatewayChatId: String(chat.id) });
+            queueAgentMessage(chat, text, [], true);
             if (!chat.messages.length) {
                 chat.title = text.slice(0, 20);
                 setActiveChatTitle(chat);
             }
-            if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
         };
         if (isAgentTaskRunning(chat.id)) {
             if (expired()) return reject("消息投递已超时，请刷新后重试");
@@ -2549,10 +2671,11 @@
                 }
             }
             if (cancelled) {
-                if (typeof renderQueuedAgentMessages === "function") renderQueuedAgentMessages();
+                placeAgentTaskFooter();
                 showVoiceNotification(`已取消 ${cancelled} 条待处理远程消息`, false, 3000);
             }
         }
+        agentModelController?.abort();
         if (abortController) abortController.abort();
         for (const executionId of agentShellProgressByExecution.keys()) {
             window.electronAPI?.cancelAgentExecution?.(executionId).catch(() => {});
@@ -2570,11 +2693,13 @@
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
         const imageDetail = document.getElementById("agent-view-image-detail");
         const searchEngine = document.getElementById("agent-search-engine");
+        const messageInsertion = document.getElementById("agent-message-insertion");
         if (diffMaxLines) diffMaxLines.value = String(getAgentDiffMaxLines());
         if (detailBehavior) detailBehavior.value = getAgentDetailDefaultBehavior();
         if (shellTimeout) shellTimeout.value = String(Math.round(getAgentShellTimeoutMs() / 1000));
         if (imageDetail) imageDetail.value = localStorage.getItem("agent_view_image_detail") || "medium";
         if (searchEngine) searchEngine.value = getAgentSearchEngine();
+        if (messageInsertion) messageInsertion.value = getAgentMessageInsertion();
         if (!window.electronAPI?.getAgentCommandSettings) return;
         try {
             const settings = await window.electronAPI.getAgentCommandSettings();
@@ -2593,6 +2718,7 @@
         const shellTimeout = document.getElementById("agent-shell-timeout-seconds");
         const imageDetail = document.getElementById("agent-view-image-detail");
         const searchEngine = document.getElementById("agent-search-engine");
+        const messageInsertion = document.getElementById("agent-message-insertion");
         const selectedDiffLimit = Number(diffMaxLines?.value);
         localStorage.setItem("agent_diff_max_lines", String([10, 20, 50, 0].includes(selectedDiffLimit) ? selectedDiffLimit : DEFAULT_AGENT_DIFF_MAX_LINES));
         localStorage.setItem("agent_detail_default_behavior", detailBehavior?.value === "collapsed" ? "collapsed" : "expanded");
@@ -2603,6 +2729,7 @@
         localStorage.setItem("agent_shell_timeout_seconds", String(timeoutSeconds));
         localStorage.setItem("agent_view_image_detail", ["low", "medium", "high", "original"].includes(imageDetail?.value) ? imageDetail.value : "medium");
         localStorage.setItem("agent_search_engine", searchEngine?.value === "duckduckgo" ? "duckduckgo" : "bing");
+        if (messageInsertion) localStorage.setItem("agent_message_insertion", messageInsertion.value === "interrupt" ? "interrupt" : "queue");
         if (!window.electronAPI?.saveAgentCommandAdditions) return;
         const additions = document.getElementById("agent-command-additions")?.value || "";
         try {
@@ -2661,6 +2788,12 @@
     window.populateAgentSettings = populateAgentSettings;
     window.saveAgentCommandSettings = saveAgentCommandSettings;
     window.requestAgentLoop = requestAgentLoop;
+    window.getQueuedAgentMessageCount = chatId => getQueuedAgentMessages(chatId).length;
+    window.queueAgentUserMessage = (chat, content, attachments) => {
+        if (!chat || !isAgentTaskRunning(chat.id) || agentStopRequested) return false;
+        queueAgentMessage(chat, content, attachments);
+        return true;
+    };
     window.buildAgentMessagesForContextEstimate = chat => buildAgentMessages(chat, { estimateOnly: true });
     window.submitGatewayAgentMessage = submitGatewayAgentMessage;
     window.getAgentStoredResult = key => agentResultStore.get(key);

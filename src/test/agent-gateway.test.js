@@ -27,9 +27,9 @@ async function fixture(t, onMessage) {
     await gateway.start();
     t.after(async () => { await gateway.stop(); await fs.rm(directory, { recursive: true, force: true }); });
     const origin = `http://127.0.0.1:${gateway.config.port}`;
-    const request = (route, { method = "GET", body, headers = {}, cookie = "", csrfToken = "" } = {}) => new Promise((resolve, reject) => {
+    const request = (route, { method = "GET", body, headers = {}, cookie = "", csrfToken = "", agent } = {}) => new Promise((resolve, reject) => {
         const data = method !== "POST" || body === undefined ? undefined : JSON.stringify(body);
-        const req = http.request(origin + route, { method, headers: { ...(method === "POST" ? { Origin: origin, "Content-Type": "application/json" } : {}), ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}), ...(cookie ? { Cookie: cookie } : {}), ...(csrfToken ? { "X-Gateway-CSRF": csrfToken } : {}), ...headers } }, res => {
+        const req = http.request(origin + route, { method, agent, headers: { ...(method === "POST" ? { Origin: origin, "Content-Type": "application/json" } : {}), ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}), ...(cookie ? { Cookie: cookie } : {}), ...(csrfToken ? { "X-Gateway-CSRF": csrfToken } : {}), ...headers } }, res => {
             let text = "";
             res.setEncoding("utf8");
             res.on("data", chunk => text += chunk);
@@ -315,7 +315,8 @@ test("connection limits, credential rotation, logout and server restart invalida
     await gateway.stop();
     assert.equal(gateway.getStatus().running, false);
     await gateway.start();
-    assert.equal((await request("/api/state", third)).status, 401);
+    // Connect to the new listener while the previous keep-alive sockets close.
+    assert.equal((await request("/api/state", { ...third, agent: false })).status, 401);
 });
 
 test("settings persist without access secrets and binding changes require a stopped gateway", async t => {

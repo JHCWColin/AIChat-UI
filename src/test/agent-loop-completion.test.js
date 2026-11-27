@@ -30,7 +30,7 @@ function element() {
     return { value: "", textContent: "", innerHTML: "", dataset: {}, isConnected: true, style: { removeProperty() {} },
         classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
         querySelector(selector) { if (!children.has(selector)) children.set(selector, element()); return children.get(selector); },
-        querySelectorAll: () => [], setAttribute() {}, append() {}, appendChild() {}, replaceChildren() {}, remove() {}, scrollTop: 0, scrollHeight: 0 };
+        querySelectorAll: () => [], setAttribute() {}, append() {}, appendChild() {}, insertBefore() {}, replaceChildren() {}, remove() {}, scrollTop: 0, scrollHeight: 0 };
 }
 
 const outputMessage = text => ({ type: "message", role: "assistant", content: [{ type: "output_text", text }] });
@@ -45,7 +45,7 @@ function streamResponse(events) {
         ? { done: false, value: encoded[index++] } : { done: true } }) } };
 }
 
-function fixture(responses, { memory = false } = {}) {
+function fixture(responses, { memory = false, endpoint = "/responses", insertion } = {}) {
     const nodes = new Map();
     const values = new Map();
     const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
@@ -53,23 +53,31 @@ function fixture(responses, { memory = false } = {}) {
     const requests = [];
     const memoryAtRequest = [];
     const executedTools = [];
+    const retryNotices = [];
+    if (insertion) storage.setItem("agent_message_insertion", insertion);
     const chat = { id: "test-chat", title: "简单总结未来", agentEnabled: true, agentSystemPrompt: "已有用户规则",
         agentFixedPrompt: "严格按照工具定义来调用，你现在不身处于你的官方cli环境！", messages: [{ role: "user", content: "简单总结未来" }] };
     const context = {
-        console, Date, Promise, AbortController, TextDecoder, CSS: { escape: String },
-        setInterval: () => 1, clearInterval() {}, setTimeout: () => 1,
+        console, Date, Promise, AbortController, AbortSignal, TextDecoder, CSS: { escape: String },
+        setInterval: () => 1, clearInterval() {}, clearTimeout: clearImmediate,
+        setTimeout(callback, delay) {
+            if (delay !== 5000) return 1;
+            retryNotices.push(context.agentReconnectNotice);
+            return setImmediate(callback);
+        },
+        requestAnimationFrame: setImmediate, cancelAnimationFrame: clearImmediate, renderAssistantMarkdown: String,
         document: { body: element(), createElement: element, querySelector: () => null,
             getElementById(id) { if (!nodes.has(id)) nodes.set(id, element()); return nodes.get(id); } },
         localStorage: storage, chats: [chat], activeChatId: chat.id,
         queuedAgentMessages: [], isGenerating: false, contextCompactionRunning: false, isImageMode: false,
         currentTemp: 0.7, maxTokensLimit: 0, abortController: null, developerModeEnabled: false, logLevel: "info", lastPromptCacheDebug: null,
         AgentProtocol, AgentActivity, ToolCallNormalizer, AIUIMemory: memoryStore, AIUIMemoryTransport, lucide: { createIcons() {} },
-        renderThinkingText() {}, escapeHtml: String, showVoiceNotification() {}, hideVoiceNotification() {},
+        renderThinkingText() {}, escapeHtml: String, showVoiceNotification() {}, hideVoiceNotification() {}, closeAnimatedModal() {},
         updateSettingsLocks() {}, renderChatHistory() {}, updateAttachMenuButtons() {}, scrollChatToBottom() {},
         renderMessagesWithResolvedRefs: async () => {}, appendMessageToUI: element,
         buildCompactedChatMessages: value => value.messages,
         buildSingleApiMessage: async message => ({ role: message.role, content: message.content }),
-        getRequestEndpoint: () => "/responses", getBaseURL: () => "https://model.test/v1", logPromptCacheDebug() {}, appendLog() {},
+        getRequestEndpoint: () => endpoint, getBaseURL: () => "https://model.test/v1", logPromptCacheDebug() {}, appendLog() {},
         getAgentDetailDefaultBehavior: () => "expanded",
         fetchEndpointWithFallback: async (body, endpoint = "/responses", _signal, options = {}) => {
             const requestBody = options.decorateRequest?.(body, endpoint) || body;
@@ -86,7 +94,7 @@ function fixture(responses, { memory = false } = {}) {
     vm.createContext(context);
     vm.runInContext(adapterSource, context, { filename: "shipped-index-adapters.js" });
     vm.runInContext(agentSource, context, { filename: "agent-ui.js" });
-    return { context, chat, requests, executedTools, memoryStore, memoryAtRequest,
+    return { context, chat, requests, executedTools, memoryStore, memoryAtRequest, retryNotices,
         run: async () => {
             await context.requestAgentLoop("model", chat);
             assert.ok(!chat.messages.some(message => /^Agent 执行失败：.*(?:not defined|is not a function)/.test(message.content)),
@@ -95,6 +103,95 @@ function fixture(responses, { memory = false } = {}) {
         visible: () => chat.messages.filter(message => message.role === "assistant" && !message.hidden),
         successfulFinishes: () => chat.messages.filter(message => message.toolName === "finish_task" && message.result?.success === true) };
 }
+
+test("all backend HTTP failures retry six times and report each status in the transcript", async () => {
+    const statuses = [400, 404, 401, 403, 429, 500];
+    const f = fixture([...statuses.map(status => ({ ok: false, status })), outputResponse("后端恢复后的完整答复。")]);
+    await f.run();
+    assert.equal(f.requests.length, 7);
+    assert.equal(f.retryNotices.length, 6);
+    statuses.forEach((status, index) => assert.match(f.retryNotices[index], new RegExp(`^后端错误：HTTP ${status} .+ 正在重试 （${index + 1}/6）$`)));
+    assert.equal(f.context.agentReconnectNotice, "");
+    assert.equal(f.visible().at(-1).content, "后端恢复后的完整答复。");
+});
+
+test("empty and incomplete backend replies exhaust the same retry budget without running a partial tool", async () => {
+    const partial = streamResponse([event("response.output_text.delta", { delta: '{"tool_call":{"name":"list_dir","arguments":{"path":"."}}}' })]);
+    const f = fixture([partial, payloadResponse({ status: "completed", output: [] })]);
+    await f.run();
+    assert.equal(f.requests.length, 7);
+    assert.equal(f.retryNotices.length, 6);
+    assert.match(f.retryNotices[0], /回复流提前中断/);
+    assert.match(f.retryNotices.at(-1), /后端返回空响应/);
+    assert.equal(f.executedTools.length, 0);
+    assert.match(f.visible().at(-1).content, /已重试 6 次/);
+});
+
+test("backend stream errors and invalid payloads recover without saving the failed attempt", async () => {
+    const broken = streamResponse([
+        event("response.output_text.delta", { delta: "中断前的正文" }),
+        event("response.failed", { response: { error: { message: "暂时无法继续" } } })
+    ]);
+    const f = fixture([broken, streamResponse(["data: {oops}\n\n"]), outputResponse("可用答复。")]);
+    await f.run();
+    assert.equal(f.requests.length, 3);
+    assert.match(f.retryNotices[0], /暂时无法继续/);
+    assert.match(f.retryNotices[1], /无效的响应格式/);
+    assert.doesNotMatch(JSON.stringify(f.chat.messages), /中断前的正文/);
+});
+
+test("network and backend idle timeouts use the retry budget and respect cancellation", async () => {
+    const f = fixture([outputResponse("重试成功。")]);
+    const setTimer = f.context.setTimeout;
+    const send = f.context.fetchEndpointWithFallback;
+    let attempts = 0;
+    f.context.setTimeout = (callback, delay) => delay === 120000 ? setImmediate(callback) : setTimer(callback, delay);
+    f.context.fetchEndpointWithFallback = async (body, endpoint, signal, options) => {
+        attempts += 1;
+        if (attempts === 1) throw new TypeError("Failed to fetch");
+        if (attempts === 2) return new Promise((_, reject) => {
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+        return send(body, endpoint, signal, options);
+    };
+    await f.run();
+    assert.equal(attempts, 3);
+    assert.match(f.retryNotices[0], /网络连接失败或中断/);
+    assert.match(f.retryNotices[1], /等待后端回复超时/);
+    assert.equal(f.visible().at(-1).content, "重试成功。");
+
+    const stopped = fixture([{ ok: false, status: 401 }]);
+    const stoppedTimer = stopped.context.setTimeout;
+    stopped.context.setTimeout = (callback, delay) => {
+        if (delay === 5000) return setImmediate(() => stopped.context.stopAgentTask());
+        return stoppedTimer(callback, delay);
+    };
+    await stopped.run();
+    assert.equal(stopped.requests.length, 1);
+    assert.equal(stopped.context.agentReconnectNotice, "");
+    assert.equal(stopped.visible().at(-1).content, "Agent 已停止。");
+});
+
+test("interrupt sends new messages immediately and discards the aborted model turn", async () => {
+    const f = fixture([outputResponse("未应用新消息。"), outputResponse("这是调整后的答复。")], { insertion: "interrupt" });
+    const send = f.context.fetchEndpointWithFallback;
+    f.context.fetchEndpointWithFallback = async (...args) => {
+        const response = await send(...args);
+        if (f.requests.length > 1) return response;
+        const signal = args[2];
+        const interrupted = new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
+        assert.equal(f.context.queueAgentUserMessage(f.chat, "改用简短的方案"), true);
+        assert.equal(signal.aborted, true);
+        assert.equal(f.context.queueAgentUserMessage(f.chat, "并给出验证步骤"), true);
+        return interrupted;
+    };
+    await f.run();
+    assert.deepEqual(f.requests[1].messages.slice(-2), [
+        { role: "user", content: "改用简短的方案" }, { role: "user", content: "并给出验证步骤" }
+    ]);
+    assert.equal(f.retryNotices.length, 0);
+    assert.deepEqual(f.visible().map(message => message.content), ["这是调整后的答复。"]);
+});
 
 test("private native Agent memory keeps textual finish and the cached conversation prefix", async () => {
     const saved = "用户偏好四格缩进。";

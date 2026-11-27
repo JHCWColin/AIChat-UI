@@ -467,6 +467,15 @@
         return /["“＂](?:tool_calls?|function_call|functionCall|tool_result|function_call_output|functionResponse)["”＂]\s*[:：]|"type"\s*:\s*"(?:tool_use|tool_result|function_call|function_call_output)"/i.test(value);
     }
 
+    function hasIncompleteAgentToolJson(source) {
+        const candidate = scanJsonValues(source, true).at(-1);
+        if (!candidate?.partial) return false;
+        const text = normalizeJsonPunctuation(candidate.raw).replace(/\\"/g, '"');
+        if (hasToolJsonMarker(text)) return true;
+        const key = /^[{\[\s]*"([a-z_]+)"?\s*$/i.exec(text)?.[1]?.toLowerCase();
+        return Boolean(key?.length > 1 && ["tool_call", "function_call", "functioncall"].some(name => name.startsWith(key)));
+    }
+
     function isToolResultJson(value) {
         if (Array.isArray(value)) return value.length > 0 && value.every(isToolResultJson);
         return isRecord(value) && (value.role === "tool" || value.tool_result !== undefined ||
@@ -494,7 +503,11 @@
             }
             // Do not emit a JSON fence while a potential call is still arriving.
             const fence = /(?:^|\n)[ \t]*(?:\x60{1,2}|\x60{3}(?:j(?:s(?:o(?:n)?)?)?)?)\s*$/i.exec(source);
-            if (fence) spans.push({ start: fence.index, end: source.length });
+            if (fence) {
+                const openFences = source.slice(0, fence.index).match(/^[ \t]*\x60{3}[^\r\n]*/gm);
+                const closesFence = /^\s*\x60{3}\s*$/.test(fence[0]) && openFences?.length % 2 === 1;
+                if (!closesFence) spans.push({ start: fence.index, end: source.length });
+            }
         }
         const ordered = spans.sort((a, b) => a.start - b.start);
         const merged = [];
@@ -504,7 +517,8 @@
             else merged.push({ start: span.start, end: span.end });
         }
         const fences = toolCallFenceRanges(source, merged);
-        const hiddenTail = streaming && merged[merged.length - 1]?.end === source.length && merged[merged.length - 1];
+        const lastSpan = merged.at(-1);
+        const hiddenTail = streaming && lastSpan && !source.slice(lastSpan.end).trim() && lastSpan;
         if (hiddenTail) {
             const openFence = /(?:^|\n)[ \t]*\x60{3}(?:json)?[ \t]*\r?\n\s*$/i.exec(source.slice(0, hiddenTail.start));
             if (openFence) fences.push({ start: openFence.index, end: hiddenTail.start });
@@ -607,13 +621,13 @@
             if (insideDsml(candidate)) continue;
             if (candidate.partial) {
                 const resemblesJson = /^[{\[｛［]\s*(?:["“＂{\[｛［]|$)/.test(candidate.raw);
-                if ((replyOptions.streaming && resemblesJson) || hasToolJsonMarker(candidate.raw)) privateSpans.push(candidate);
+                if ((replyOptions.streaming && (replyOptions.agent || resemblesJson)) || hasToolJsonMarker(candidate.raw)) privateSpans.push(candidate);
                 continue;
             }
             let parsed;
             parsed = parseJsonValue(candidate.raw);
             if (parsed === null) {
-                if (replyOptions && hasToolJsonMarker(candidate.raw)) privateSpans.push(candidate);
+                if (replyOptions && hasToolJsonMarker(candidate.raw.replace(/\\"/g, '"'))) privateSpans.push(candidate);
                 continue;
             }
             const classified = classifyStructured(parsed);
@@ -740,7 +754,8 @@
         const tail = cleanText(proseSource.slice(cursor));
         if (tail) segments.push({ type: "text", text: tail });
         const visibleText = segments.filter(item => item.type === "text").map(item => item.text).join("\n\n");
-        const malformed = (emittedCalls.length === 0 && hasMalformedToolCall(source)) || hasMalformedDsmlProtocol(source, acceptedDsmlCalls);
+        const malformed = (emittedCalls.length === 0 && hasMalformedToolCall(source)) || hasIncompleteAgentToolJson(source)
+            || hasMalformedDsmlProtocol(source, acceptedDsmlCalls);
         return { calls: emittedCalls, segments, text: visibleText, hasMalformedToolCall: malformed, diagnostics: diagnoseToolCallResponse(source) };
     }
 
@@ -1031,14 +1046,31 @@
         const parsedText = parseText(text);
         const calls = Array.isArray(structuredCalls) && structuredCalls.length ? structuredCalls : parsedText.calls;
         if (Array.isArray(structuredCalls) && structuredCalls.length) {
-            // Native tool calls already have their own payload. Preserve the
-            // original Markdown while removing any relay-only DSML envelope.
-            let prose = stripDsmlProtocol(String(text || "")).trim();
+            // A relay can repeat the same native call in its text channel.
+            let prose = parseText(text, {}).text.trim();
             if (/^(?:\s*<\/tool_call>\s*)+$/i.test(prose)) prose = '';
             return { calls, segments: [...(prose ? [{ type: "text", text: prose }] : []), ...calls.map(call => ({ type: "tool_call", call }))], text: prose,
                 hasMalformedToolCall: parsedText.hasMalformedToolCall, diagnostics: parsedText.diagnostics };
         }
         return parsedText;
+    }
+
+    function getAgentStreamingText(value) {
+        let source = stripReasoningSections(value);
+        // Legacy wrappers are resolved by the completed response parser. Hold
+        // the entire ambiguous tail, including prefixes split across deltas.
+        const wrapper = /(?:<|&lt;)\s*\/?\s*(?:\|(?:tool_call_|channel\b|analysis\b|reasoning\b|thinking\b)|dots_function_call\b|json\b)/i.exec(source);
+        const routed = /(?:^|\n)[ \t]*(?:Action\s*:|ToolResult\s*:|(?:to|recipient)\s*[:=])/i.exec(source);
+        const encodedJson = /(?:^|\n)[ \t]*"(?=[ \t]*(?:[\[{｛［]|$))/.exec(source);
+        const pendingTag = /(?:<|&lt;)\s*\/?\s*([\w|]*)$/i.exec(source);
+        const pendingLine = /(?:^|\n)[ \t]*([a-z]+)[ \t]*$/i.exec(source);
+        const mayBeTag = pendingTag && ["|tool_call_start|", "|channel|", "|analysis|", "|reasoning|", "|thinking|", "dots_function_call", "json"]
+            .some(name => name.startsWith(pendingTag[1].toLowerCase()));
+        const mayBeRoute = pendingLine && ["action", "toolresult", "to", "recipient"].some(name => name.startsWith(pendingLine[1].toLowerCase()));
+        const end = Math.min(source.length, wrapper?.index ?? Infinity, routed?.index ?? Infinity, encodedJson?.index ?? Infinity,
+            mayBeTag ? pendingTag.index : Infinity, mayBeRoute ? pendingLine.index : Infinity);
+        source = source.slice(0, end);
+        return parseText(source, { streaming: true, agent: true }).text.trim();
     }
 
     return {
@@ -1048,6 +1080,7 @@
         parseText,
         parseVisibleReply: (text, options = {}) => parseText(text, options),
         parseAgentResponse,
+        getAgentStreamingText,
         normalizeEnhancedFormat,
         parseArguments,
         canonicalizeDsmlMarkers,

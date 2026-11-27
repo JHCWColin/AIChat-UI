@@ -479,7 +479,7 @@ function handleMemoryRequest(event, operation, payload) {
         if (operation === "isEnabled") return store.isEnabled();
         if (operation === "getContext" && (chat || collaboration)) {
             const id = collaboration ? audioSession.targetChatId : payload?.chatId;
-            return store.getContext({ id }, { estimateOnly: payload?.estimateOnly === true });
+            return store.getContext({ id }, { estimateOnly: payload?.estimateOnly === true, textConversation: payload?.textConversation === true });
         }
         if (operation === "applyCalls" && (chat || collaboration) && Array.isArray(payload)) {
             const results = store.applyCalls(payload);

@@ -135,7 +135,6 @@ body:not(.preferences-window) *::after { box-shadow:none!important; text-shadow:
 body:not(.preferences-window) :is(button,select,.action-btn,.delete-chat-btn):hover { filter:none!important; }
 body:not(.preferences-window) .attachment-card::before { display:none; }
 body:not(.preferences-window) .attachment-remove { background:#dc2626; }
-body:not(.preferences-window) .agent-reconnect-status { background:none; animation:none; color:var(--activity-removed); }
 
 /* Preserve .chat-row's original 1000px limit, centering, and left padding. */
 .agent-tool-row { min-width:0; }
@@ -459,7 +458,7 @@ body #input-footer .input-area {
 }
 #messages-wrapper .response-activity { padding:0; margin-block-end:10px; }
 #messages-wrapper .agent-round-summary-wrapper + .chat-row { margin-top:12px!important; }
-.agent-round-summary {
+.agent-round-summary,.agent-retry-summary {
     display:flex;
     width:fit-content;
     max-width:100%;
@@ -473,6 +472,13 @@ body #input-footer .input-area {
     border-radius:5px;
 }
 .agent-round-summary:hover { color:var(--conversation-text); }
+#messages-wrapper > .chat-row.agent-backend-retry-row { margin-top:0!important; }
+.agent-retry-summary {
+    --shimmer-base:var(--activity-removed);
+    --shimmer-highlight:color-mix(in srgb,var(--activity-removed) 40%,var(--conversation-text));
+    color:var(--activity-removed);
+}
+.agent-retry-summary .agent-tool-summary-text { white-space:normal; overflow-wrap:anywhere; }
 .agent-round-summary:focus-visible,.user-message-toggle:focus-visible { outline:2px solid var(--composer-check); outline-offset:3px; }
 .agent-round-summary .agent-tool-summary-text { flex:0 1 auto; white-space:normal; }
 .agent-round-summary.running .agent-tool-summary-text { white-space:nowrap; text-overflow:ellipsis; }
@@ -803,9 +809,10 @@ body :is(#agent-workspace-trust-modal,#agent-yolo-warning-modal) > div {
 .theme-light :is(#agent-workspace-trust-path,#agent-auto-compaction-current,#agent-yolo-warning-modal p) { color:var(--conversation-muted); }
 
 @media (prefers-reduced-motion:no-preference) {
-    :is(.agent-round-summary,.agent-tool-row).running .agent-tool-summary-text {
+    :is(.agent-round-summary,.agent-tool-row,.agent-retry-summary).running .agent-tool-summary-text {
         color:transparent;
-        background-image:linear-gradient(100deg,var(--conversation-muted) 39%,var(--activity-shine) 50%,var(--conversation-muted) 61%);
+        background-image:linear-gradient(100deg,var(--shimmer-base,var(--conversation-muted)) 39%,
+            var(--shimmer-highlight,var(--activity-shine)) 50%,var(--shimmer-base,var(--conversation-muted)) 61%);
         background-size:260% 100%;
         background-clip:text;
         animation:agent-activity-shine 1.8s linear infinite;

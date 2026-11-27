@@ -21,7 +21,7 @@ function node() {
                 return enabled;
             } },
         querySelector(selector) { if (!children.has(selector)) children.set(selector, node()); return children.get(selector); },
-        querySelectorAll: () => [], setAttribute() {}, append() {}, appendChild() {}, remove() {},
+        querySelectorAll: () => [], setAttribute() {}, append() {}, appendChild() {}, insertBefore() {}, remove() {},
         addEventListener() {}, scrollTop: 0, scrollHeight: 0 };
 }
 
@@ -34,12 +34,13 @@ function fixture({ agent = true, workspace } = {}) {
     const records = new Map();
     const apiRequests = [];
     const notifications = [];
+    const agentErrors = [];
     const createdNodes = [];
     const chat = { id: "active", title: "当前任务", agentEnabled: agent,
         agentWorkspace: "SECRET_WORKSPACE", agentFixedPrompt: "固定提示词 严格按照工具定义来调用，你现在不身处于你的官方cli环境！",
         messages: [] };
     const context = {
-        console, Date, Promise, AbortController, TextDecoder, setTimeout: () => 1,
+        console, Date, Promise, AbortController, AbortSignal, TextDecoder, setTimeout: () => 1, clearTimeout() {},
         setInterval: callback => { intervals.push(callback); return intervals.length; }, clearInterval() {},
         document: { body: node(), querySelector: () => null,
             getElementById(id) { if (!elements.has(id)) elements.set(id, node()); return elements.get(id); },
@@ -52,7 +53,7 @@ function fixture({ agent = true, workspace } = {}) {
         queuedAgentMessages: [], isImageMode: false, currentAttachments: [{ name: "LOCAL_ATTACHMENT" }],
         AgentProtocol, AgentActivity, ToolCallNormalizer, systemPrompt: "SECRET_SYSTEM_PROMPT", currentTemp: 0.7,
         maxTokensLimit: 0, abortController: null, developerModeEnabled: false, logLevel: "info", lastPromptCacheDebug: null,
-        lucide: { createIcons() {} }, updateSettingsLocks() {}, renderQueuedAgentMessages() {}, scrollChatToBottom() {},
+        lucide: { createIcons() {} }, updateSettingsLocks() {}, scrollChatToBottom() {},
         showVoiceNotification: message => notifications.push(message), hideVoiceNotification() {},
         closeAnimatedModal() {},
         escapeHtml: value => value, renderThinkingText() {}, renderChatHistory() {}, updateAttachMenuButtons() {},
@@ -64,8 +65,10 @@ function fixture({ agent = true, workspace } = {}) {
             apiRequests.push(payload);
             return { response: { ok: true, body: null, json: async () => ({}) }, endpoint: "/responses", requestBody: payload };
         },
-        extractStreamingUpdate: () => ({}), extractNonStreamingResponseText: () => "已完成任务。",
-        logPromptCacheDebug() {}, appendLog() {}, getAgentDetailDefaultBehavior: () => "collapsed",
+        extractStreamingUpdate: () => ({}), extractNonStreamingResponseText: () => "已完成任务。", getStreamingErrorMessage: () => "",
+        mergeStreamingText: (current, delta, snapshot) => snapshot || current + (delta || ""),
+        logPromptCacheDebug() {}, appendLog(level, message) { if (level === "error" || level === "warn") agentErrors.push(message); },
+        getAgentDetailDefaultBehavior: () => "collapsed",
         electronAPI: {
             isElectron: true, publishGatewaySnapshot: snapshot => snapshots.push(snapshot),
             completeGatewayMessage: (requestId, result) => acknowledgements.push({ requestId, ...result }),
@@ -80,7 +83,7 @@ function fixture({ agent = true, workspace } = {}) {
     vm.runInContext(readSource("gateway-renderer.js"), context, { filename: "gateway-renderer.js" });
     context.document.getElementById("model-select").value = "desktop-model";
     context.document.getElementById("user-input").value = "LOCAL_DRAFT";
-    return { context, chat, snapshots, acknowledgements, events, intervals, apiRequests, elements, notifications, createdNodes,
+    return { context, chat, snapshots, acknowledgements, events, intervals, apiRequests, elements, notifications, createdNodes, agentErrors,
         request: (id, text = "继续任务", chatId = "active", role = "write") =>
             events.message({ requestId: id, text, chatId, device: { id: "device", role } }) };
 }
@@ -121,7 +124,7 @@ test("remote plain tasks use desktop Agent queue without changing local draft or
     assert.equal(f.chat.messages.find(message => message.role === "user").content, "/compact 请把它当作任务文本");
     assert.equal(f.apiRequests.length, 1);
     assert.equal(f.apiRequests[0].model, "desktop-model");
-    assert.ok(f.chat.messages.some(message => message.role === "assistant" && !message.hidden && message.content === "已完成任务。"));
+    assert.ok(f.chat.messages.some(message => message.role === "assistant" && !message.hidden && message.content === "已完成任务。"), f.agentErrors.join("\n"));
     assert.ok(!f.chat.messages.some(message => message.failed));
     await f.request("request-1", "/compact 请把它当作任务文本");
     assert.equal(f.chat.messages.filter(message => message.role === "user").length, 1);

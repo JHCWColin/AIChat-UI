@@ -1,8 +1,33 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normalizeToolCalls, parseAgentResponse, stripReasoningSections, extractToolCallEvidence, diagnoseToolCallResponse } = require("../renderer/tool-call-normalizer");
+const { normalizeToolCalls, parseAgentResponse, getAgentStreamingText, stripReasoningSections, extractToolCallEvidence, diagnoseToolCallResponse } = require("../renderer/tool-call-normalizer");
 
 const expected = { name: "read_file", arguments: { path: "test.txt" } };
+
+test("every prefix of Agent tool protocol remains private while surrounding prose streams", () => {
+    const object = JSON.stringify({ tool_call: expected });
+    const examples = [object, `\x60\x60\x60json\n${object}\n\x60\x60\x60`, JSON.stringify(object),
+        '<｜DSML｜invoke name="read_file"><｜DSML｜parameter name="path">test.txt</｜DSML｜parameter></｜DSML｜invoke>',
+        '<|tool_call_start|>read_file(path="test.txt")<|tool_call_end|>',
+        'Action: read_file\nAction Input: {"path":"test.txt"}',
+        '<think>private reasoning</think>'];
+    const prose = "我先读取项目说明。";
+    for (const example of examples) {
+        for (let end = 1; end <= example.length; end += 1) {
+            assert.equal(getAgentStreamingText(`${prose}\n${example.slice(0, end)}`), prose, example.slice(0, end));
+        }
+    }
+    assert.equal(getAgentStreamingText(`${prose}\n${object}\n已读取。`), `${prose}\n\n已读取。`);
+    assert.equal(getAgentStreamingText('普通数据\n\x60\x60\x60json\n{"example":1}\n\x60\x60\x60'), '普通数据\n\x60\x60\x60json\n{"example":1}\n\x60\x60\x60');
+});
+
+test("a terminal response with a dangling call prefix is treated as malformed protocol", () => {
+    const complete = JSON.stringify({ tool_call: expected });
+    const truncated = '我会查看文件。\n{"tool_';
+    assert.equal(parseAgentResponse(truncated).hasMalformedToolCall, true);
+    assert.equal(parseAgentResponse(`${complete}\n${truncated}`).hasMalformedToolCall, true);
+    assert.equal(parseAgentResponse('这是一份 JSON 数据示例\n{"priority":1}').hasMalformedToolCall, false);
+});
 
 // Exact protocol shape captured from the live Agent's final update_plan reply.
 const liveDsmlPlan = [

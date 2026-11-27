@@ -110,7 +110,8 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Fo
 11. Emit independent tool calls together in one response to work faster; emit a call alone when it depends on the result of a previous call.
 12. Every task must end with this sequence: do the work, provide the complete user-facing result, then emit exactly one finish_task JSON object as the final tool call. finish_task is mandatory even for pure-text tasks and must never replace or precede the final user-facing result.
 13. Never include tool-call syntax, protocol markers, or other parser-triggering characters in user-facing content. Explain tool usage, behavior, and results in natural language.
-14. For every run_shell and start_process call, include a short, accurate description in the user's language. The description is shown to the user during approval and in the activity view. Explain the command's purpose and any material side effects in one sentence.`;
+14. For every run_shell and start_process call, include a short, accurate description in the user's language. The description is shown to the user during approval and in the activity view. Explain the command's purpose and any material side effects in one sentence.
+15. Before a batch of tools that does work, prefer one or two short, user-facing sentences in the user's language. Say what you are doing next or what you have learned so far. Keep the following tool JSON separate from that text. The final answer already serves as the user-facing text for finish_task.`;
 
     function buildFixedAgentPrompt(options = {}) {
         const environment = String(options.environment || "").trim();

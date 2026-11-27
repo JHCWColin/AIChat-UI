@@ -137,18 +137,16 @@
         }
         const activeTool = [...messages].reverse().find(message => message.role === "tool" && message.status === "running");
         const waitingApproval = Boolean(document.querySelector(".agent-command-approval-row:not(.leaving)"));
-        const disconnected = window.agentReconnectNotice === "连接已断开";
         const reconnecting = running && Boolean(window.agentReconnectNotice);
         const status = compacting ? "compacting" : waitingApproval ? "waiting-approval"
             : reconnecting ? "reconnecting" : currentlyThinking ? "thinking" : running ? "running" : "idle";
         const activity = compacting ? "正在整理上下文" : waitingApproval ? "等待电脑端确认操作权限"
-            : reconnecting ? "正在恢复模型连接" : disconnected ? "模型连接已断开，等待下一轮任务"
+            : reconnecting ? "正在重试模型请求"
                 : currentlyThinking ? "正在思考" : activeTool ? `${activeTool.content}${activeTool.detail ? ` · ${activeTool.detail}` : ""}`
                     : running ? "Agent 正在运行" : "等待下一轮任务";
         return { chatId: String(chat.id), title: summaryLine(chat.title || "Agent 会话"), agentEnabled: true,
             running, status, activity, messages,
-            queuedCount: Array.isArray(window.queuedAgentMessages) ? window.queuedAgentMessages.filter(entry =>
-                !entry || typeof entry !== "object" || String(entry.gatewayChatId) === String(chat.id)).length : 0 };
+            queuedCount: window.getQueuedAgentMessageCount?.(chat.id) || 0 };
     }
 
     function publish(force = false) {

@@ -3102,37 +3102,6 @@
             margin-bottom: 1rem;
         }
 
-        #queued-agent-messages {
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-            overflow-x: hidden;
-        }
-
-        #queued-agent-messages::-webkit-scrollbar {
-            display: none;
-            width: 0;
-            height: 0;
-        }
-
-        .agent-reconnect-status {
-            color: #f87171;
-            background: linear-gradient(90deg, #f87171 0%, #fff 45%, #f87171 90%);
-            background-size: 220% 100%;
-            -webkit-background-clip: text;
-            background-clip: text;
-            animation: agent-reconnect-scan 1.35s linear infinite;
-            font-weight: 600;
-        }
-
-        @keyframes agent-reconnect-scan {
-            from {
-                background-position: 180% 0;
-            }
-
-            to {
-                background-position: -80% 0;
-            }
-        }
 
         #setup-guide-modal.portrait-layout>div {
             width: 100vw !important;
@@ -3204,7 +3173,6 @@
                 </div>
                 <footer id="input-footer" class="w-full">
                     <div class="max-w-[1000px] mx-auto relative flex flex-col items-start">
-                        <div id="queued-agent-messages" class="w-full hidden mb-2 text-xs text-gray-400"></div>
                         <div id="attachments-preview" class="w-full"></div>
                         <div id="image-detail-container" class="flex items-center gap-2 mb-1.5 w-full">
                             <span
@@ -4245,6 +4213,18 @@
                     <p id="settings-lock-agent" class="hidden text-sm text-red-400">正在执行 Agent Loop，部分设置项暂不可更改。</p>
                     <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
                         <div>
+                            <label for="agent-message-insertion"
+                                class="block text-sm font-medium mb-2 text-gray-300">消息插入时的行为</label>
+                            <select id="agent-message-insertion" aria-describedby="agent-message-insertion-help"
+                                class="w-full bg-[#171717] border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-emerald-500 transition-colors">
+                                <option value="queue" selected>排队发送（默认）</option>
+                                <option value="interrupt">打断发送</option>
+                            </select>
+                            <p id="agent-message-insertion-help" class="text-[11px] text-gray-500 mt-2">排队发送会等待当前回复结束。打断发送会立即取消当前请求。下一次请求会带上插入的消息。</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 bg-[#1a1a1a] rounded-xl p-4 border border-gray-700">
+                        <div>
                             <label for="agent-diff-max-lines"
                                 class="block text-sm font-medium mb-2 text-gray-300">工具与思考详情最大显示行数</label>
                             <select id="agent-diff-max-lines"
@@ -4328,7 +4308,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V10.2.2 Release</span>
+                            <span id="app-version">V10.3.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -6823,7 +6803,7 @@
             }
             const prompt = [
                 typeof chat.promptPrefix === 'string' ? chat.promptPrefix : (systemPrompt || ''),
-                isImageMode || !messages.length ? '' : window.AIUIMemory.getContext(chat, { estimateOnly: true })
+                isImageMode || !messages.length ? '' : window.AIUIMemory.getContext(chat, { estimateOnly: true, textConversation: true })
             ].filter(Boolean).join('\n\n');
             return normalize([{ role: 'system', content: prompt }, ...messages]);
         }
@@ -7466,7 +7446,7 @@
             if (!messages || messages.length === 0) {
                 const greetingText = getGreetingByTime();
                 const welcomeDiv = document.createElement('div');
-                welcomeDiv.className = 'h-full flex flex-col items-center justify-center text-center opacity-90';
+                welcomeDiv.className = 'chat-welcome h-full flex flex-col items-center justify-center text-center opacity-90';
                 welcomeDiv.innerHTML =
                     `<h1 class="text-xl md:text-2xl font-bold mb-3 bg-gradient-to-r from-emerald-400 to-sky-400 bg-clip-text text-transparent">${greetingText}</h1>`;
                 wrapper.appendChild(welcomeDiv);
@@ -7619,6 +7599,7 @@
                 : String(content || '');
             if (isAI && messageOptions.agentMessage && content && !displayContent) return null;
             if (!messageOptions.container) window.endAgentActivityBlock?.();
+            wrapper.querySelector(':scope > .chat-welcome')?.remove();
             const row = document.createElement('div');
             row.className = 'chat-row';
             if (!isAI) row.classList.add('user-message-row');
@@ -7687,7 +7668,9 @@
             }
             contentCol.appendChild(bubble);
             const { voiceMessage, voiceMessageKey } = messageOptions;
-            if (isAI && !messageOptions.agentSegment) {
+            const showAssistantFooter = isAI && (messageOptions.agentMessage
+                ? messageOptions.agentFinal && !messageOptions.failed : !messageOptions.agentSegment);
+            if (showAssistantFooter) {
                 const footer = document.createElement('div');
                 footer.className = "message-footer flex items-center gap-2 mt-1.5 w-full";
                 footer.hidden = messageOptions.thinkingActive === true;
@@ -7723,7 +7706,7 @@
                 }
                 contentCol.appendChild(footer);
                 renderMessageMemoryActivity(footer, messageOptions.memoryActivity);
-            } else if (voiceMessage && voiceMessageKey) {
+            } else if (!isAI && voiceMessage && voiceMessageKey) {
                 const footer = document.createElement('div');
                 footer.className = 'message-footer flex items-center gap-2 mt-1.5';
                 if (addTextVoiceButton(footer, voiceMessage, voiceMessageKey)) contentCol.appendChild(footer);
@@ -9801,23 +9784,27 @@
                 updateCanvasStatus();
             }
         }
+        function getComposerAttachments() {
+            return currentAttachments.map(({ name, type, data, fullDataUrl, size, originalSize, isImage, isText }) => ({
+                name, type, data, fullDataUrl: fullDataUrl || null, size, originalSize, isImage, isText: isText || false
+            }));
+        }
+
         async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const text = input.value.trim();
+            if (!text && currentAttachments.length === 0) return;
+            const chat = chats.find(c => c.id === activeChatId);
+            if (!chat) return;
             if (isGenerating) {
-                const queuedInput = document.getElementById('user-input');
-                const queuedText = queuedInput?.value?.trim();
-                if (queuedText && typeof isAgentTaskRunning === 'function' && isAgentTaskRunning()) {
-                    queuedAgentMessages.push(queuedText); queuedInput.value = ''; renderQueuedAgentMessages();
+                if (window.queueAgentUserMessage?.(chat, text, getComposerAttachments())) {
+                    resetInputState();
+                    clearAttachments();
                 }
                 return;
             }
-            const input = document.getElementById('user-input');
-            const rawText = input.value;
-            const text = rawText.trim();
-            if (!text && currentAttachments.length === 0) return;
             const model = document.getElementById('model-select').value;
             if (apiSettingsDirty) { markApiSettingsDirty(); }
-            const chat = chats.find(c => c.id === activeChatId);
-            if (!chat) return;
             if (chat.agentEnabled && typeof ensureAgentWorkspaceAvailable === 'function' && !(await ensureAgentWorkspaceAvailable(chat))) {
                 return;
             }
@@ -9875,18 +9862,7 @@
                 content: actualMessage
             };
             const attachmentsToSend = [...currentAttachments];
-            if (attachmentsToSend.length > 0) {
-                userMsg.attachments = attachmentsToSend.map(att => ({
-                    name: att.name,
-                    type: att.type,
-                    data: att.data,
-                    fullDataUrl: att.fullDataUrl || null,
-                    size: att.size,
-                    originalSize: att.originalSize,
-                    isImage: att.isImage,
-                    isText: att.isText || false
-                }));
-            }
+            if (attachmentsToSend.length > 0) userMsg.attachments = getComposerAttachments();
             chat.messages.push(userMsg);
             chat.updatedAt = Date.now();
             appendMessageToUI('user', actualMessage, null, false, '', attachmentsToSend, [], '', {
@@ -9909,18 +9885,6 @@
             wrapper.scrollTo({ top: wrapper.scrollHeight, behavior });
         }
 
-        function renderQueuedAgentMessages() {
-            const el = document.getElementById('queued-agent-messages'); if (!el) return;
-            const visibleQueue = queuedAgentMessages.filter(entry => !entry || typeof entry !== 'object' || String(entry.gatewayChatId) === String(activeChatId));
-            const queuedHtml = visibleQueue.map(entry => `<div>↳ ${sanitizeHtml(escapeHtml(String(entry && typeof entry === 'object' ? entry.content || '' : entry || '')))}（将在下次插入时插入）</div>`).join('');
-            const reconnectHtml = window.agentReconnectNotice ? `<div class="agent-reconnect-status">${sanitizeHtml(window.agentReconnectNotice)}</div>` : '';
-            el.classList.toggle('hidden', visibleQueue.length === 0 && !window.agentReconnectNotice);
-            const notice = queuedHtml + reconnectHtml;
-            if (notice === el.innerHTML) return;
-            el.innerHTML = notice;
-            if (notice) scrollChatToBottom();
-        }
-        window.renderQueuedAgentMessages = renderQueuedAgentMessages;
         function onCodeMirrorChange() {
             const chat = activeChatId ? chats.find(c => c.id === activeChatId) : null;
             if (chat && chat.canvasEnabled && cmEditor) {
@@ -10913,7 +10877,7 @@
                 const preferredEndpoint = getRequestEndpoint();
                 const memory = window.AIUIMemory;
                 const memoryTransport = window.AIUIMemoryTransport;
-                const memoryContext = memoryTransport ? memory?.getContext(chat) : '';
+                const memoryContext = memoryTransport ? memory?.getContext(chat, { textConversation: true }) : '';
                 const systemWithMemory = [chatSystemPrompt, memoryContext].filter(Boolean).join('\n\n');
                 const promptCacheKey = getPromptCacheKeyForChat(chat);
                 const cacheControl = String(localStorage.getItem('cache_control') || '').trim();
