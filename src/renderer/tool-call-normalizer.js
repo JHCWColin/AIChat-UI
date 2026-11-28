@@ -483,6 +483,18 @@
             isRecord(value.functionResponse));
     }
 
+    function closesMarkdownFence(source, index) {
+        let opening = "";
+        for (const [, marker, info] of source.slice(0, index).matchAll(/^[ \t]*(\x60{3,}|~{3,})([^\r\n]*)/gm)) {
+            if (opening) {
+                if (marker[0] === opening[0] && marker.length >= opening.length && !info.trim()) opening = "";
+            } else if (marker[0] === "~" || !info.includes("`")) {
+                opening = marker;
+            }
+        }
+        return opening === "```";
+    }
+
     function removeReplyProtocol(source, spans, streaming) {
         const envelopes = [
             /<(tool_call|tool_result|function_response|function_call_output)(?=\s|>|$)[^>]*(?:>[\s\S]*?(?:<\/\1\s*>|$)|$)/gi,
@@ -504,8 +516,7 @@
             // Do not emit a JSON fence while a potential call is still arriving.
             const fence = /(?:^|\n)[ \t]*(?:\x60{1,2}|\x60{3}(?:j(?:s(?:o(?:n)?)?)?)?)\s*$/i.exec(source);
             if (fence) {
-                const openFences = source.slice(0, fence.index).match(/^[ \t]*\x60{3}[^\r\n]*/gm);
-                const closesFence = /^\s*\x60{3}\s*$/.test(fence[0]) && openFences?.length % 2 === 1;
+                const closesFence = /^\s*\x60{3}\s*$/.test(fence[0]) && closesMarkdownFence(source, fence.index);
                 if (!closesFence) spans.push({ start: fence.index, end: source.length });
             }
         }
@@ -520,8 +531,10 @@
         const lastSpan = merged.at(-1);
         const hiddenTail = streaming && lastSpan && !source.slice(lastSpan.end).trim() && lastSpan;
         if (hiddenTail) {
-            const openFence = /(?:^|\n)[ \t]*\x60{3}(?:json)?[ \t]*\r?\n\s*$/i.exec(source.slice(0, hiddenTail.start));
-            if (openFence) fences.push({ start: openFence.index, end: hiddenTail.start });
+            const openFence = /(?:^|\n)[ \t]*\x60{3}(json)?[ \t]*\r?\n\s*$/i.exec(source.slice(0, hiddenTail.start));
+            if (openFence && (openFence[1] || !closesMarkdownFence(source, openFence.index))) {
+                fences.push({ start: openFence.index, end: hiddenTail.start });
+            }
         }
         let text = "";
         let cursor = 0;

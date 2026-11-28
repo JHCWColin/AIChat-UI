@@ -572,7 +572,7 @@
         } else {
             window.electronAPI?.onPreferencesChanged(refreshPreferences);
             window.addEventListener('storage',event => {
-                if (!event.key || ['ai_chats','selected_model','model_reasoning_settings','model_list','api_key','base_url','max_tokens_limit','request_endpoint'].includes(event.key)) return;
+                if (!event.key || ['ai_chats','selected_model','model_reasoning_settings','model_list','api_key','base_url','max_tokens_limit','request_endpoint','log_records'].includes(event.key)) return;
                 clearTimeout(preferencesRefreshTimer); preferencesRefreshTimer = setTimeout(refreshPreferences,80);
             });
             setInterval(() => { if (settingsPending && !isGenerating && !contextCompactionRunning && !window._audioChatRunning && !window._desktopWorkRunning) refreshPreferences(); },400);

@@ -158,7 +158,8 @@ app.whenReady().then(async () => {
         const final = await request(4);
         assert.equal(inputText(final).at(-1), queued);
         assert.match(inputText(final).at(-2), /Tool Result: read_file_range/);
-        const prose = "建议从 `src/index.js` 读起。先核对它在项目说明中的路径，再运行项目自带的测试确认入口能正常加载。";
+        const paragraphs = Array.from({ length: 24 }, (_, index) => `### ${index + 1}. 检查结果\n\n已核对项目路径，测试确认入口能正常加载。`);
+        const prose = ["建议从 `src/index.js` 读起。", ...paragraphs].join("\n\n");
         const openFence = "\n\n```text\n  entry point";
         const answer = `${prose}${openFence}\n\`\`\``;
         await evaluate(main, "setTheme('light', false)");
@@ -169,8 +170,30 @@ app.whenReady().then(async () => {
         })()`), "readable unclosed streamed code fence");
         assert.deepEqual(liveCode, { text: "  entry point\n", color: "rgb(201, 209, 217)" });
         await evaluate(main, "setTheme('dark', false)");
-        finish(final, [message(`${answer}\n${tool("finish_task")}`)]);
+        delta(final, "\n```");
+        await until(() => evaluate(main, "document.querySelectorAll('.agent-streaming-row h3').length === 24"), "long streamed answer");
+        const liveAnswer = await streamText(main);
+        await evaluate(main, `(() => {
+            const wrapper = document.getElementById('messages-wrapper');
+            const expected = ${JSON.stringify(liveAnswer)};
+            window.answerGaps = [];
+            window.observeAnswer = new MutationObserver(() => {
+                const rows = wrapper.querySelectorAll('.ai-content-area');
+                if (![...rows].some(row => row.textContent.trim() === expected)) window.answerGaps.push(wrapper.textContent.slice(-120));
+            });
+            window.observeAnswer.observe(wrapper, { childList: true, subtree: true });
+        })()`);
+        const plan = tool("update_plan", { plan: [{ step: "验证入口文件", status: "completed" }] });
+        delta(final, "\n" + plan.slice(0, 45));
+        await sleep(100);
+        assert.equal(await streamText(main), liveAnswer);
+        delta(final, plan.slice(45) + "\n" + tool("finish_task"));
+        await sleep(100);
+        assert.equal(await streamText(main), liveAnswer);
+        finish(final, [message(`${answer}\n${plan}\n${tool("finish_task")}`)]);
         await until(() => evaluate(main, "!isGenerating && document.querySelector('.agent-final-row .message-time')?.textContent"), "final answer committed");
+        assert.deepEqual(await evaluate(main, "window.observeAnswer.disconnect(); window.answerGaps"), []);
+        assert.equal(await evaluate(main, "chats.find(c => c.id === activeChatId).agentPlan.steps[0].status"), "completed");
         assert.equal(await evaluate(main, "document.querySelector('.agent-final-row pre > code.hljs')?.textContent"), "  entry point\n");
         await until(() => evaluate(main, `(() => {
             const progress = [...document.querySelectorAll('.agent-segment-row')];
@@ -221,9 +244,33 @@ app.whenReady().then(async () => {
         finish(replacement, [message("入口是 src/index.js。运行项目自带的测试即可验证加载。")]);
         await until(() => evaluate(main, "!isGenerating && document.querySelectorAll('.agent-final-row').length === 2"), "interrupted task resumed");
 
+        await send(main, "请给出详细的验证报告并更新计划。");
+        const report = await request(7);
+        const reportMarker = "这份验证报告已经完成。";
+        const reportText = [reportMarker, ...paragraphs].join("\n\n");
+        delta(report, reportText);
+        const reportPreview = await until(async () => {
+            const text = await streamText(main);
+            return text.startsWith(reportMarker) && text.includes("24. 检查结果") && text;
+        }, "long report before final plan update");
+        delta(report, "\n" + plan.slice(0, 45));
+        await sleep(100);
+        assert.equal(await streamText(main), reportPreview);
+        delta(report, plan.slice(45));
+        finish(report, [message(`${reportText}\n${plan}`)]);
+        const finishOnly = await request(8);
+        assert.ok(inputText(finishOnly).some(text => /^\[Tool Result: update_plan\]/.test(text)));
+        assert.equal(await evaluate(main, `document.querySelectorAll('.agent-segment-row h3').length === 24 &&
+            [...document.querySelectorAll('.agent-segment-row .ai-content-area')].some(area =>
+                area.textContent.trim() === ${JSON.stringify(reportPreview)})`), true);
+        finish(finishOnly, [message(tool("finish_task"))]);
+        await until(() => evaluate(main, `!isGenerating &&
+            [...document.querySelectorAll('.agent-final-row .ai-content-area')].at(-1)?.textContent.trim() === ${JSON.stringify(reportPreview)}`),
+            "plan-only round promoted to the final answer");
+
         await evaluate(main, "createNewChat(); AIUIMemory.setEnabled(true)");
         await send(main, "请帮我记住我喜欢四格缩进。");
-        const ordinary = await request(7);
+        const ordinary = await request(9);
         assert.match(ordinary.body.instructions, /explicit consent for that specific change/);
         assert.match(ordinary.body.instructions, /several meaningful sentences/);
         finish(ordinary, [message("我会保留你偏好四格缩进这条设置。下次提供代码示例时，我会按这个格式排版。遇到已有代码风格的项目时，我也会参考项目内的约定。")]);

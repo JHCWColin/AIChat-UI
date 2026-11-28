@@ -16,7 +16,7 @@ const adapterNames = ["extractResponsesTextContent", "extractResponsesOutputText
     "extractChatCompletionUpdate", "extractStreamingUpdate", "extractMessagesStreamUpdate", "extractMessagesOutputText",
     "extractMessagesReasoningText", "mergeStreamingText", "parseSSEEventBlock", "getStreamingErrorMessage", "extractNonStreamingResponseText",
     "buildRequestPayloadForEndpoint", "buildResponsesInputFromMessages", "buildMessagesPayloadFromBase",
-    "buildMessagesContentBlocks", "toAnthropicImageBlock", "cacheControlEnabled",
+    "buildMessagesContentBlocks", "toAnthropicImageBlock",
     "isGeminiEndpoint", "isOllamaEndpoint", "toGeminiParts", "buildGeminiPayloadFromBase", "buildOllamaPayloadFromBase",
     "extractGeminiStreamUpdate", "extractGeminiOutputText", "extractOllamaStreamUpdate", "extractOllamaOutputText"];
 const adapterSource = adapterNames.map(name => {
@@ -24,6 +24,7 @@ const adapterSource = adapterNames.map(name => {
     if (!match) throw new Error(`Cannot extract shipped adapter ${name}`);
     return match[0];
 }).join("\n");
+const requestAdapterSource = html.match(/^        async function fetchEndpointWithFallback\b[\s\S]*?\n        \}/m)?.[0];
 
 function element() {
     const children = new Map();
@@ -38,14 +39,36 @@ const nativeCall = (name, args = {}) => ({ type: "function_call", id: `${name}-i
 const payloadResponse = payload => ({ ok: true, body: null, json: async () => payload });
 const outputResponse = (text, calls = []) => payloadResponse({ status: "completed", output: [...(text ? [outputMessage(text)] : []), ...calls] });
 const event = (type, data, id = "") => `${id ? `id: ${id}\n` : ""}event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-function streamResponse(events) {
+function streamResponse(events, beforeRead) {
     let index = 0;
     const encoded = events.map(value => new TextEncoder().encode(value));
-    return { ok: true, body: { getReader: () => ({ read: async () => index < encoded.length
-        ? { done: false, value: encoded[index++] } : { done: true } }) } };
+    return { ok: true, body: { getReader: () => ({ async read() {
+        if (beforeRead) await beforeRead();
+        return index < encoded.length ? { done: false, value: encoded[index++] } : { done: true };
+    } }) } };
 }
 
-function fixture(responses, { memory = false, endpoint = "/responses", insertion } = {}) {
+function gatewayResponse(deltas, reasoningTokens = 0, beforeRead) {
+    const text = deltas.join("");
+    const item = { ...outputMessage(text), id: "relay-item", status: "completed" };
+    const events = [
+        ["response.created", { response: { status: "in_progress", output: [] } }],
+        ["response.output_item.added", { item: { ...item, status: "in_progress", content: [] } }],
+        ["response.content_part.added", { item_id: item.id, part: { type: "output_text" } }],
+        ...deltas.map(delta => ["response.output_text.delta", { item_id: item.id, delta }]),
+        ["response.output_text.done", { item_id: item.id, text }],
+        ["response.content_part.done", { item_id: item.id, part: item.content[0] }],
+        ["response.output_item.done", { item }],
+        ["response.completed", { response: { status: "completed", output: [],
+            usage: { input_tokens: 3200, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: reasoningTokens } } } }]
+    ];
+    return streamResponse(events.map(([type, data], sequence_number) => event(type, { type, ...data, sequence_number })), beforeRead);
+}
+
+const textCall = (name, args = {}) => JSON.stringify({ tool_call: { name, arguments: args } });
+const claudeModel = "claude-haiku-5-5";
+
+function fixture(responses, { memory = false, endpoint = "/responses", insertion, model = "model", fetch } = {}) {
     const nodes = new Map();
     const values = new Map();
     const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
@@ -93,10 +116,23 @@ function fixture(responses, { memory = false, endpoint = "/responses", insertion
     context.window = context;
     vm.createContext(context);
     vm.runInContext(adapterSource, context, { filename: "shipped-index-adapters.js" });
+    if (fetch) {
+        assert.ok(requestAdapterSource, "Cannot extract shipped fetch adapter");
+        Object.assign(context, {
+            getAPIKey: () => "mock-key",
+            fetch: async (url, options) => {
+                const body = JSON.parse(options.body);
+                requests.push(body);
+                if (requests.length > 8) throw new Error("Unexpected unbounded model loop");
+                return fetch(url, body);
+            }
+        });
+        vm.runInContext(requestAdapterSource, context, { filename: "shipped-index-fetch-adapter.js" });
+    }
     vm.runInContext(agentSource, context, { filename: "agent-ui.js" });
     return { context, chat, requests, executedTools, memoryStore, memoryAtRequest, retryNotices,
         run: async () => {
-            await context.requestAgentLoop("model", chat);
+            await context.requestAgentLoop(model, chat);
             assert.ok(!chat.messages.some(message => /^Agent 执行失败：.*(?:not defined|is not a function)/.test(message.content)),
                 "test fixture must supply the actual renderer environment");
         },
@@ -645,6 +681,156 @@ test("Agent history keeps user/tool chronology and the existing Responses input 
     assert.equal(second.input[1].content[0].text, toolText);
     assert.match(second.input[2].content[0].text, /^\[Tool Result: read_file_range\]/);
     assert.equal(second.input.filter(message => message.content.some(part => part.text === "简单总结未来")).length, 1);
+});
+
+test("Claude relay retains unmarked narration and appends plan updates without changing prior Responses input", async () => {
+    const narration = "I will inspect the workspace.\n\n我先读取配置。";
+    const plan = [{ step: "读取配置", status: "in_progress" }];
+    const firstReply = [narration, "\n", textCall("update_plan", { plan }), "\n",
+        textCall("read_file_range", { path: "config.txt" })];
+    const f = fixture([
+        gatewayResponse(firstReply, 30),
+        gatewayResponse([textCall("update_plan", { plan: [{ ...plan[0], status: "completed" }] }),
+            "\n", textCall("read_file_range", { path: "report.txt" })], 20),
+        gatewayResponse(["Config and report verified.\n\n结果已确认。\n", textCall("finish_task")], 10)
+    ], { model: claudeModel });
+    await f.run();
+
+    assert.equal(f.successfulFinishes().length, 1);
+    assert.deepEqual(f.executedTools.map(request => request.arguments.path), ["config.txt", "report.txt"]);
+    assert.ok(f.visible().some(message => message.content === narration));
+    assert.ok(f.visible().some(message => message.content === "Config and report verified.\n\n结果已确认。"));
+    assert.equal(f.chat.messages.find(message => message.agentThinking && message.reasoning), undefined);
+
+    const [first, second, third] = f.requests.map(body => f.context.buildRequestPayloadForEndpoint(body, "/responses"));
+    assert.equal(second.input[1].content[0].text, firstReply.join(""));
+    assert.match(second.input[2].content[0].text, /^\[Tool Result: update_plan\]/);
+    assert.deepEqual(third.input.slice(0, second.input.length), second.input);
+    assert.deepEqual(second.input.slice(0, first.input.length), first.input);
+    assert.equal(third.instructions, first.instructions);
+});
+
+test("Claude relay separates explicitly tagged thinking across SSE chunks and never replays it as prose", async () => {
+    const thought = `私有思考 ${textCall("read_file_range", { path: "private.txt" })}`;
+    const narration = "我会读取报告。";
+    const read = textCall("read_file_range", { path: "report.txt" });
+    const liveRows = [];
+    const liveTexts = new Set();
+    const f = fixture([
+        gatewayResponse(["<thi", "nking>", thought, "</think", "ing>\n", narration, "\n", read], 30, async () => {
+            await new Promise(resolve => setImmediate(resolve));
+            for (const row of liveRows) {
+                if (row.classList.contains("agent-streaming-row")) liveTexts.add(row.querySelector(".ai-content-area").innerHTML);
+            }
+        }),
+        gatewayResponse(["报告已读取。\n", textCall("finish_task")])
+    ], { model: claudeModel });
+    f.context.appendMessageToUI = () => {
+        const row = element();
+        const classes = new Set();
+        row.classList = { add: name => classes.add(name), contains: name => classes.has(name) };
+        liveRows.push(row);
+        return row;
+    };
+    await f.run();
+
+    assert.equal(f.successfulFinishes().length, 1);
+    assert.deepEqual(f.executedTools.map(request => request.arguments.path), ["report.txt"]);
+    assert.ok(f.chat.messages.some(message => message.agentThinking && message.reasoning.includes(thought)));
+    assert.ok(f.visible().some(message => message.content === narration));
+    assert.ok(liveTexts.has(narration));
+    assert.doesNotMatch([...liveTexts].join("\n"), /私有思考|private\.txt|<\/?thi/);
+    assert.doesNotMatch(f.visible().map(message => message.content).join("\n"), /私有思考|private\.txt|<\/?thinking>/);
+    const replay = f.context.buildRequestPayloadForEndpoint(f.requests[1], "/responses");
+    assert.match(replay.input.find(message => message.role === "assistant").content[0].text, /我会读取报告/);
+    assert.doesNotMatch(JSON.stringify(replay), /私有思考|private\.txt|<\/?thinking>/);
+});
+
+test("Claude with a Responses profile prefers native Messages and reuses its cache prefix", async () => {
+    const urls = [];
+    const read = textCall("read_file_range", { path: "report.txt" });
+    const nativeEvent = (type, data) => event(type, { type, ...data });
+    const f = fixture([], { model: claudeModel, fetch(url) {
+        urls.push(new URL(url).pathname);
+        if (urls.length === 1) return new Response([
+            nativeEvent("message_start", { message: { type: "message", role: "assistant", content: [] } }),
+            nativeEvent("content_block_start", { index: 0, content_block: { type: "thinking", thinking: "" } }),
+            nativeEvent("content_block_delta", { index: 0, delta: { type: "thinking_delta", thinking: "私有思考" } }),
+            nativeEvent("content_block_delta", { index: 0, delta: { type: "signature_delta", signature: "opaque-test-signature" } }),
+            nativeEvent("content_block_stop", { index: 0 }),
+            nativeEvent("content_block_start", { index: 1, content_block: { type: "text", text: "" } }),
+            nativeEvent("content_block_delta", { index: 1, delta: { type: "text_delta", text: `我先读取报告。\n${read}` } }),
+            nativeEvent("content_block_stop", { index: 1 }),
+            nativeEvent("message_delta", { delta: { stop_reason: "end_turn" }, usage: { output_tokens: 65 } }),
+            nativeEvent("message_stop", {})
+        ].join(""), { headers: { "content-type": "text/event-stream" } });
+        return Response.json({ type: "message", role: "assistant", stop_reason: "end_turn",
+            content: [{ type: "text", text: `报告已读取。\n${textCall("finish_task")}` }] });
+    } });
+    await f.run();
+
+    assert.deepEqual(urls, ["/v1/messages", "/v1/messages"]);
+    assert.equal(f.successfulFinishes().length, 1);
+    assert.ok(f.chat.messages.some(message => message.agentThinking && message.reasoning === "私有思考"));
+    assert.ok(f.visible().some(message => message.content === "我先读取报告。"));
+    const [first, second] = f.requests;
+    assert.deepEqual(first.cache_control, { type: "ephemeral" });
+    assert.deepEqual(first.system.at(-1).cache_control, { type: "ephemeral" });
+    assert.deepEqual(second.cache_control, first.cache_control);
+    assert.deepEqual(second.system, first.system);
+    assert.deepEqual(second.messages.slice(0, first.messages.length), first.messages);
+    assert.doesNotMatch(JSON.stringify(second), /私有思考|opaque-test-signature/);
+});
+
+test("Claude stays on Responses after the gateway rejects or misroutes native Messages", async t => {
+    const unsupported = {
+        "HTTP 404": new Response("unsupported endpoint", { status: 404 }),
+        "HTTP 200 with a Chat Completions reply": Response.json({ choices: [{ message: { content: "wrong protocol" } }] }),
+        "SSE error after message_start": new Response(
+            event("message_start", { type: "message_start", message: { role: "assistant", content: [] } })
+            + event("error", { type: "error", error: { message: "Native route unavailable" } }),
+            { headers: { "content-type": "text/event-stream" } }
+        )
+    };
+    for (const [name, nativeResponse] of Object.entries(unsupported)) {
+        await t.test(name, async () => {
+            const urls = [];
+            const responses = [
+                gatewayResponse([textCall("read_file_range", { path: "report.txt" })]),
+                gatewayResponse(["报告已读取。\n", textCall("finish_task")])
+            ];
+            const f = fixture([], { model: claudeModel, fetch(url) {
+                const pathname = new URL(url).pathname;
+                urls.push(pathname);
+                if (pathname === "/v1/messages") return nativeResponse;
+                return responses.shift();
+            } });
+            await f.run();
+
+            assert.deepEqual(urls, ["/v1/messages", "/v1/responses", "/v1/responses"]);
+            assert.equal(f.successfulFinishes().length, 1);
+            assert.equal(f.retryNotices.length, 0);
+            assert.equal(f.requests[1].input[0].role, "user");
+        });
+    }
+});
+
+test("Claude falls back to the configured Chat Completions endpoint when native Messages fails to connect", async () => {
+    const urls = [];
+    const replies = [textCall("read_file_range", { path: "report.txt" }), `报告已读取。\n${textCall("finish_task")}`];
+    const f = fixture([], { model: claudeModel, endpoint: "/chat/completions", fetch(url) {
+        const pathname = new URL(url).pathname;
+        urls.push(pathname);
+        if (pathname === "/v1/messages") throw new TypeError("Failed to fetch");
+        return payloadResponse({ choices: [{ message: { role: "assistant", content: replies.shift() }, finish_reason: "stop" }] });
+    } });
+    await f.run();
+
+    assert.deepEqual(urls, ["/v1/messages", "/v1/chat/completions", "/v1/chat/completions"]);
+    assert.equal(f.successfulFinishes().length, 1);
+    assert.equal(f.retryNotices.length, 0);
+    assert.ok(Array.isArray(f.requests[1].messages));
+    assert.equal("input" in f.requests[1], false);
 });
 
 test("Agent history replays complete opaque reasoning items on Responses without sending them to other protocols", async () => {

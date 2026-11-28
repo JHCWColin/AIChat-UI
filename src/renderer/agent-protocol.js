@@ -241,6 +241,145 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Fo
         return source;
     }
 
+    function isClaudeModel(model) {
+        return /^claude(?:[-_]|$)/i.test(String(model || "").trim().split("/").pop());
+    }
+
+    function getMessagesURL(baseURL) {
+        const root = String(baseURL || "").replace(/\/+$/, "");
+        return `${root}${/\/v1$/i.test(root) ? "/messages" : "/v1/messages"}`;
+    }
+
+    function configureMessagesHeaders(headers, baseURL, apiKey) {
+        headers["anthropic-version"] = "2023-06-01";
+        if (apiKey) headers["x-api-key"] = apiKey;
+        if (/^https:\/\/api\.anthropic\.com(?:\/|$)/i.test(baseURL)) {
+            delete headers.Authorization;
+            headers["anthropic-dangerous-direct-browser-access"] = "true";
+        }
+    }
+
+    function configureMessagesCaching(payload, configuredCacheControl) {
+        const automatic = isClaudeModel(payload.model);
+        const explicit = ["ephemeral", "true", "1"].includes(String(configuredCacheControl ?? "").trim().toLowerCase());
+        if (payload.system && (automatic || explicit)) {
+            // A stable breakpoint remains useful when the last message is too far
+            // from the previous turn's cached boundary or a relay ignores automatic caching.
+            payload.system = [{ type: "text", text: payload.system, cache_control: { type: "ephemeral" } }];
+        }
+        if (automatic) payload.cache_control = { type: "ephemeral" };
+        return payload;
+    }
+
+    async function sendMessagesWithCacheFallback(body, send) {
+        let response = await send(body);
+        if (!body.cache_control || ![400, 422].includes(response.status)) return { body, response };
+        const error = await response.clone().text().catch(() => "");
+        if (!/cache_control/i.test(error)
+            || !/unsupported|not supported|unknown|unrecognized|unexpected|extra(?: inputs|_forbidden)/i.test(error)) {
+            return { body, response };
+        }
+        // Older relays may accept block breakpoints but reject the top-level field.
+        const { cache_control, ...request } = body;
+        const lastMessage = request.messages.at(-1);
+        const lastBlock = lastMessage?.content.at(-1);
+        if (lastBlock) {
+            const content = [...lastMessage.content.slice(0, -1), { ...lastBlock, cache_control }];
+            request.messages = [...request.messages.slice(0, -1), { ...lastMessage, content }];
+        }
+        void response.body?.cancel().catch(() => {});
+        response = await send(request);
+        return { body: request, response };
+    }
+
+    async function isMessagesResponse(response) {
+        const type = response.headers.get("content-type") || "";
+        if (/\bapplication\/(?:json|[\w.+-]+\+json)\b/i.test(type)) {
+            const message = await response.clone().json();
+            return !message?.error && (!message?.type || message.type === "message") && Array.isArray(message?.content);
+        }
+        if (/\btext\/html\b/i.test(type) || !response.body) return false;
+        const reader = response.clone().body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        try {
+            // A gateway can emit message_start and then immediately send an error.
+            // Check for a content block before giving the original stream to the caller.
+            while (buffer.length < 65536) {
+                const { done, value } = await reader.read();
+                if (done) return false;
+                buffer += decoder.decode(value, { stream: true });
+                const blocks = buffer.split(/\r?\n\r?\n/);
+                buffer = blocks.pop();
+                for (const block of blocks) {
+                    const data = block.split(/\r?\n/).filter(line => line.startsWith("data:"))
+                        .map(line => line.slice(5).trimStart()).join("\n");
+                    if (!data) continue;
+                    const event = JSON.parse(data);
+                    const kind = event?.type || /^event:\s*([^\r\n]+)/m.exec(block)?.[1].trim();
+                    if (kind === "ping" || kind === "message_start") continue;
+                    if (kind === "content_block_start") return Boolean(event?.content_block);
+                    return kind === "content_block_delta" && Boolean(event?.delta);
+                }
+            }
+            return false;
+        } finally {
+            void reader.cancel().catch(() => {});
+        }
+    }
+
+    async function tryMessagesRequest(send, signal) {
+        const probe = new AbortController();
+        const timer = setTimeout(() => probe.abort(), 30000);
+        const probeSignal = signal ? AbortSignal.any([signal, probe.signal]) : probe.signal;
+        let status;
+        let accepted = false;
+        try {
+            const result = await send(probeSignal);
+            status = result.response.status;
+            if (result.response.ok && await isMessagesResponse(result.response)) {
+                probeSignal.throwIfAborted();
+                accepted = true;
+                return { result };
+            }
+        } catch {
+            signal?.throwIfAborted();
+        } finally {
+            clearTimeout(timer);
+            if (!accepted) probe.abort();
+        }
+        signal?.throwIfAborted();
+        return { status };
+    }
+
+    // Some Responses relays put explicitly tagged thinking at the start of
+    // output_text. Buffer partial opening tags so they never flash as prose.
+    function splitLeadingTaggedReasoning(value, streaming = false) {
+        let text = value;
+        const thoughts = [];
+        while (text) {
+            const source = text.trimStart();
+            const open = /^<(think|thinking)>/i.exec(source);
+            if (!open) {
+                if (streaming && source.startsWith("<")
+                    && ["<think>", "<thinking>"].some(tag => tag.startsWith(source.toLowerCase()))) text = "";
+                break;
+            }
+            const body = source.slice(open[0].length);
+            const close = `</${open[1].toLowerCase()}>`;
+            const end = body.toLowerCase().indexOf(close);
+            if (end < 0) {
+                const tail = body.lastIndexOf("<");
+                thoughts.push(tail >= 0 && close.startsWith(body.slice(tail).toLowerCase()) ? body.slice(0, tail) : body);
+                text = "";
+                break;
+            }
+            thoughts.push(body.slice(0, end));
+            text = body.slice(end + close.length);
+        }
+        return { text, reasoning: thoughts.join("\n\n") };
+    }
+
     // Responses reasoning items are protocol state. Readable thinking text remains
     // UI-only, but completed opaque items must accompany the next Responses turn.
     function collectResponsesReasoningItems(payloads) {
@@ -403,6 +542,13 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Fo
         canonicalizeDsmlMarkers,
         stripDsmlProtocol,
         stripReasoningSections,
+        isClaudeModel,
+        getMessagesURL,
+        configureMessagesHeaders,
+        configureMessagesCaching,
+        sendMessagesWithCacheFallback,
+        tryMessagesRequest,
+        splitLeadingTaggedReasoning,
         stripAssistantReasoningContent,
         isAssistantReasoningPart,
         extractAssistantReasoningPart,

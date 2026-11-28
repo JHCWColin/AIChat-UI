@@ -45,7 +45,7 @@ function fixture(response) {
         "extractChatCompletionUpdate", "extractStreamingUpdate", "mergeStreamingText", "parseSSEEventBlock",
         "getStreamingErrorMessage", "extractNonStreamingResponseText", "buildSingleApiMessage",
         "buildAPIMessagesWithTemp", "buildAPIMessagesWithContext", "buildResponsesInputFromMessages",
-        "buildMessagesPayloadFromBase", "buildMessagesContentBlocks", "toAnthropicImageBlock", "cacheControlEnabled",
+        "buildMessagesPayloadFromBase", "buildMessagesContentBlocks", "toAnthropicImageBlock",
         "buildRequestPayloadForEndpoint", "prepareAssistantCode", "requestAI",
         "isGeminiEndpoint", "isOllamaEndpoint", "toGeminiParts", "buildGeminiPayloadFromBase", "buildOllamaPayloadFromBase",
         "extractGeminiStreamUpdate", "extractGeminiOutputText", "extractOllamaStreamUpdate", "extractOllamaOutputText"].map(extract).join("\n"), context);

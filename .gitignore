@@ -4,6 +4,7 @@ release/
 www/
 android/
 ios/
+log/
 
 .env
 .env.*

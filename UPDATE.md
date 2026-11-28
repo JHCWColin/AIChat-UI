@@ -1,5 +1,12 @@
 # AIUI 更新日志
 
+## V10.5.0 Release · 2026-11-28
+
+- 修复 Agent 流式长回复末尾调用 `update_plan` 时正文短暂消失的问题，保留 Markdown 代码围栏，并在正式消息渲染后移除预览。
+- Claude 在文本聊天、语音聊天和 Agent Loop 中都会优先尝试原生 `/v1/messages`，无论 API 配置选了哪个接口。原生请求连接失败、超时或返回异常响应时，回退到用户选定的接口。Agent 在同一次任务中会沿用回退后的接口，避免每轮重复探测。
+
+  Agent 会将原生思考块显示在思考区，并启用 Messages 的自动前缀缓存。任务计划改为复用原位置的 `update_plan` 工具结果，避免下一轮挪动上一轮已提交的前缀。若回退后的网关仍把思考和正文混在无标记的 `output_text` 里，客户端无法可靠判断分界，会保留原文。 [Issue #9](https://github.com/JHCWColin/AIChat-UI/issues/9)
+
 ## V10.4.0 Release · 2026-11-28
 
 - 修复流式回复中尚未高亮的 Markdown 代码块文字对比度，在流结束前也能读清代码。[#7](https://github.com/JHCWColin/AIChat-UI/issues/7)

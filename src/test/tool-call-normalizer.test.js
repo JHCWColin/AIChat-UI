@@ -50,6 +50,16 @@ const liveDsmlReply = [
     '</｜｜DSML｜｜ calls>'
 ].join("\n");
 
+test("a trailing plan call preserves the answer's closing Markdown fence throughout streaming", () => {
+    const prose = "这是已验证的结果。\n\n```\nexitCode: 0\n```";
+    const json = JSON.stringify({ tool_call: { name: "update_plan", arguments: { plan: liveDsmlPlan } } });
+    for (const protocol of [json, `\x60\x60\x60json\n${json}\n\x60\x60\x60`, liveDsmlReply]) {
+        for (let end = 1; end <= protocol.length; end += 1) {
+            assert.equal(getAgentStreamingText(`${prose}\n${protocol.slice(0, end)}`), prose, protocol.slice(0, end));
+        }
+    }
+});
+
 test("normalizes the captured DSML update_plan with typed Chinese parameters", () => {
     const parsed = parseAgentResponse(liveDsmlReply);
     assert.deepEqual(parsed.calls, [{ name: "update_plan", arguments: { explanation: liveDsmlExplanation, plan: liveDsmlPlan } }]);

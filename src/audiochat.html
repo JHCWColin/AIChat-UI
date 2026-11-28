@@ -12,6 +12,7 @@
     <title>AIUI 语音聊天</title>
     <script src="../node_modules/onnxruntime-web/dist/ort.min.js"></script>
     <script src="renderer/tool-call-normalizer.js"></script>
+    <script src="renderer/agent-protocol.js"></script>
     <script src="renderer/user-memory.js"></script>
     <script src="renderer/memory-transport.js"></script>
     <script src="renderer/voicechat-api.js"></script>
@@ -1747,7 +1748,7 @@
                             temperature: 0.8
                         },
                         signal: this.responseAbortController.signal,
-                        onFallback: () => this.showToast('Responses 不受支持，已回退 Chat Completions'),
+                        onFallback: endpoint => this.showToast(`正在转接至 ${endpoint}`),
                         onMemoryActivity: counts => {
                             if (serial === this.responseSerial) this.currentMemoryActivity = counts;
                         },

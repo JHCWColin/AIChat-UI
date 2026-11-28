@@ -69,7 +69,7 @@
                 content: buildMessagesContent(message?.content)
             }))
             .filter(message => message.content.length);
-        return payload;
+        return globalThis.AgentProtocol?.configureMessagesCaching(payload, cache_control) ?? payload;
     }
 
     function buildMessagesContent(content) {
@@ -267,7 +267,7 @@
                 const block = payload.content_block || {};
                 return block.type === 'text' ? { snapshot: String(block.text || '') } : {};
             }
-            if (!type) return { snapshot: extractMessagesOutput(payload) };
+            if (!type || type === 'message') return { snapshot: extractMessagesOutput(payload) };
             return {};
         }
         if (endpoint === '/chat/completions' || Array.isArray(payload.choices)) {
@@ -312,7 +312,10 @@
     async function streamText(options) {
         const SUPPORTED_ENDPOINTS = ['/responses', '/chat/completions', '/v1/messages', '/gemini', '/ollama'];
         const nativeEndpoint = endpoint => endpoint === '/gemini' || endpoint === '/ollama';
-        const preferredEndpoint = SUPPORTED_ENDPOINTS.includes(options.endpoint) ? options.endpoint : '/responses';
+        const messagesEndpoint = '/v1/messages';
+        const preferredEndpoint = options.endpoint === '/messages' ? messagesEndpoint
+            : SUPPORTED_ENDPOINTS.includes(options.endpoint) ? options.endpoint : '/responses';
+        const protocol = globalThis.AgentProtocol;
         const memory = window.AIUIMemory;
         const transport = window.AIUIMemoryTransport;
         const memoryContext = options.memoryChat && transport ? memory?.getContext(options.memoryChat) : '';
@@ -326,42 +329,58 @@
                     ? [{ ...messages[0], content: [messages[0].content, memoryContext].filter(Boolean).join('\n\n') }, ...messages.slice(1)]
                     : [{ role: 'system', content: memoryContext }, ...messages]
             } : basePayload;
-        const send = (endpoint, body) => {
+        const baseUrl = String(options.baseUrl || '').replace(/\/+$/, '');
+        const send = (endpoint, body, signal = options.signal) => {
             const headers = {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${options.apiKey || ''}`
             };
-            if (endpoint === '/v1/messages') {
-                headers['anthropic-version'] = '2023-06-01';
-                if (options.apiKey) headers['x-api-key'] = options.apiKey;
+            if (endpoint === messagesEndpoint) {
+                if (protocol?.configureMessagesHeaders) protocol.configureMessagesHeaders(headers, baseUrl, options.apiKey);
+                else {
+                    headers['anthropic-version'] = '2023-06-01';
+                    if (options.apiKey) headers['x-api-key'] = options.apiKey;
+                }
             }
             if (endpoint === '/gemini' && options.apiKey) headers['x-goog-api-key'] = options.apiKey;
             if (endpoint === '/ollama' && !options.apiKey) delete headers.Authorization;
-            const baseUrl = String(options.baseUrl || '').replace(/\/+$/, '');
-            const requestUrl = endpoint === '/gemini'
-                ? `${baseUrl}/models/${encodeURIComponent(String(options.payload?.model || '').replace(/^models\//, ''))}:streamGenerateContent?alt=sse`
-                : endpoint === '/ollama' ? `${baseUrl}/api/chat` : `${baseUrl}${endpoint}`;
+            let requestUrl = `${baseUrl}${endpoint}`;
+            if (endpoint === messagesEndpoint && protocol?.getMessagesURL) requestUrl = protocol.getMessagesURL(baseUrl);
+            if (endpoint === '/gemini') {
+                const model = encodeURIComponent(String(basePayload.model || '').replace(/^models\//, ''));
+                requestUrl = `${baseUrl}/models/${model}:streamGenerateContent?alt=sse`;
+            }
+            if (endpoint === '/ollama') requestUrl = `${baseUrl}/api/chat`;
             return fetch(requestUrl, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(body),
-                signal: options.signal
+                signal
             });
         };
-        async function request(endpoint) {
+        async function request(endpoint, signal) {
             const base = buildPayload(payload, endpoint, { structuredInput: Boolean(tool) });
-            if (!tool) return { response: await send(endpoint, base) };
-            const body = transport.declareTool(base, endpoint, tool);
-            const response = await send(endpoint, body);
-            if (await transport.isUnsupportedToolError(response)) {
-                return { response: await send(endpoint, buildPayload(payload, endpoint)) };
+            const post = body => send(endpoint, body, signal);
+            const postWithCache = async body => endpoint === messagesEndpoint && protocol
+                ? protocol.sendMessagesWithCacheFallback(body, post) : { body, response: await post(body) };
+            if (!tool) return { response: (await postWithCache(base)).response };
+            const result = await postWithCache(transport.declareTool(base, endpoint, tool));
+            if (await transport.isUnsupportedToolError(result.response)) {
+                void result.response.body?.cancel().catch(() => {});
+                return { response: (await postWithCache(buildPayload(payload, endpoint))).response };
             }
-            return { response, body };
+            return result;
         }
 
-        let endpoint = preferredEndpoint;
-        let turn = await request(endpoint);
-        if (turn.response.status === 501 && !nativeEndpoint(preferredEndpoint)) {
+        const isClaude = protocol?.isClaudeModel(basePayload.model);
+        const nativeProbe = isClaude && preferredEndpoint !== messagesEndpoint
+            ? await protocol.tryMessagesRequest(probeSignal => request(messagesEndpoint, probeSignal), options.signal)
+            : null;
+        options.signal?.throwIfAborted();
+        let endpoint = nativeProbe?.result ? messagesEndpoint : preferredEndpoint;
+        if (nativeProbe && !nativeProbe.result) options.onFallback?.(endpoint);
+        let turn = nativeProbe?.result ?? await request(endpoint);
+        if (!isClaude && turn.response.status === 501 && !nativeEndpoint(preferredEndpoint)) {
             // A 501 means the relay does not implement that path at all, so walk the
             // remaining protocols in turn before giving up.
             await turn.response.text().catch(() => '');

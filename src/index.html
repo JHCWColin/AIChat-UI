@@ -3743,7 +3743,7 @@
                                         class="mt-1 accent-emerald-500">
                                     <span><strong class="block text-sm text-gray-200">/v1/messages（Claude 原生）</strong><small
                                             class="block mt-1 text-xs text-gray-500">Anthropic Messages API
-                                            格式，适用于 Claude 官方与 Claude 原生中转。使用独立密钥时请选择此端点。</small></span>
+                                            格式，适用于 Claude 官方与 Claude 原生中转。使用 Claude 模型时优先尝试此接口，失败时回到所选接口。</small></span>
                                 </label>
                                 <label
                                     class="flex items-start gap-3 p-3 rounded-xl border border-gray-700 bg-[#1a1a1a] cursor-pointer hover:border-emerald-500 transition-colors">
@@ -4074,9 +4074,15 @@
                                             onchange="onLogLevelChange(this)">
                                         Error
                                     </label>
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-300">
+                                        <input type="radio" name="log-level" value="body"
+                                            onchange="onLogLevelChange(this)">
+                                        Body
+                                    </label>
                                 </div>
                                 <p class="text-[11px] text-gray-500 mt-2">Trace 模式记录所有日志并输出更多请求/响应详细信息，Debug
-                                    模式输出更多控制台和流式接收日志，Info 模式仅显示基础通知，Error 模式仅记录错误。</p>
+                                    模式输出更多控制台和流式接收日志，Info 模式仅显示基础通知，Error 模式仅记录错误。
+                                    Body 模式记录对话模型的请求体和收到的原始 JSON 或流式响应，可能包含聊天内容、附件和记忆。</p>
                             </div>
                             <div class="flex items-center justify-between">
                                 <div>
@@ -4308,7 +4314,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V10.4.0 Release</span>
+                            <span id="app-version">V10.5.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -5590,10 +5596,6 @@
             return endpoint === '/ollama';
         }
 
-        // Anthropic's Messages API needs a version header; relays mirror the first-party
-        // value, so a fixed current version keeps both working.
-        const ANTHROPIC_API_VERSION = '2023-06-01';
-
         /**
          * Anthropic rejects sampling parameters on current models, so temperature is
          * dropped here rather than forwarded. Callers get one informational log line
@@ -5623,11 +5625,7 @@
                 .filter(Boolean)
                 .join('\n\n')
                 .trim();
-            if (systemText) {
-                payload.system = cacheControlEnabled(cache_control)
-                    ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }]
-                    : systemText;
-            }
+            if (systemText) payload.system = systemText;
             payload.messages = messages
                 .filter(message => message?.role === 'user' || message?.role === 'assistant')
                 .map(message => ({
@@ -5635,13 +5633,7 @@
                     content: buildMessagesContentBlocks(message?.content)
                 }))
                 .filter(message => message.content.length);
-            delete payload.cache_control;
-            return payload;
-        }
-
-        function cacheControlEnabled(value) {
-            const text = String(value || '').trim().toLowerCase();
-            return text === 'ephemeral' || text === 'true' || text === '1';
+            return AgentProtocol.configureMessagesCaching(payload, cache_control);
         }
 
         /** Converts the app's OpenAI-style content into Anthropic content blocks. */
@@ -5991,7 +5983,9 @@
                 ? message.content.length > 0 : Boolean(String(message.content || '').trim())));
             if (isGeminiEndpoint(endpoint)) return buildGeminiPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
             if (isOllamaEndpoint(endpoint)) return buildOllamaPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
-            if (endpoint === '/v1/messages' || endpoint === '/messages') return buildMessagesPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
+            if (endpoint === '/v1/messages' || endpoint === '/messages') {
+                return buildMessagesPayloadFromBase({ ...publicBasePayload, messages: cleanMessages });
+            }
             if (endpoint !== '/responses') return { ...publicBasePayload, messages: cleanMessages };
             const messages = Array.isArray(publicBasePayload?.messages) ? publicBasePayload.messages : [];
             const systemMessage = messages.find(message => message?.role === 'system');
@@ -6165,20 +6159,18 @@
         }
 
         async function fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, options = {}) {
-            const send = async (endpoint, decorate = true) => {
+            const send = async (endpoint, decorate = true, requestSignal = signal) => {
                 let requestBody = buildRequestPayloadForEndpoint(basePayload, endpoint);
                 if (window.AIUIModelCapabilities) requestBody = window.AIUIModelCapabilities.map(requestBody, basePayload.model, endpoint, window.AIUIEnhancements?.reasoningFor(basePayload.model));
                 if (endpoint === '/chat/completions' && requestBody.stream) requestBody.stream_options = { ...requestBody.stream_options,include_usage:true };
-                window.AIUIEnhancements?.modelRequest();
                 const headers = {
                     'Content-Type': 'application/json',
                     Authorization: `Bearer ${getAPIKey()}`
                 };
-                // First-party Anthropic endpoints and most relays require the version
-                // header; sending it elsewhere is harmless.
-                if (endpoint === '/v1/messages' || endpoint === '/messages') {
-                    headers['anthropic-version'] = ANTHROPIC_API_VERSION;
-                    headers['x-api-key'] = getAPIKey();
+                const baseURL = getBaseURL().replace(/\/+$/, '');
+                const messagesEndpoint = endpoint === '/v1/messages' || endpoint === '/messages';
+                if (messagesEndpoint) {
+                    AgentProtocol.configureMessagesHeaders(headers, baseURL, getAPIKey());
                     if (!requestBody.max_tokens) requestBody.max_tokens = 8192;
                 }
                 // Gemini 官方以 x-goog-api-key 鉴权；中转站多数同时接受 Bearer，两者都带上。
@@ -6190,18 +6182,58 @@
                     ? buildGeminiRequestUrl(basePayload.model, streaming)
                     : isOllamaEndpoint(endpoint)
                         ? buildOllamaRequestUrl()
-                        : `${getBaseURL()}${endpoint}`;
+                        : messagesEndpoint
+                            ? AgentProtocol.getMessagesURL(baseURL)
+                            : `${baseURL}${endpoint}`;
                 const requestDecorated = decorate && typeof options.decorateRequest === 'function';
                 if (requestDecorated) requestBody = options.decorateRequest(requestBody, endpoint);
-                const response = await fetch(requestUrl, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(requestBody),
-                    signal
-                });
-                if (requestDecorated && await options.retryWithoutDecoration?.(response)) return send(endpoint, false);
-                return { response, endpoint, requestBody, requestDecorated };
+                const post = async body => {
+                    requestSignal?.throwIfAborted();
+                    window.AIUIEnhancements?.modelRequest();
+                    const serializedBody = JSON.stringify(body);
+                    let bodyLog;
+                    if (developerModeEnabled && recordLogsEnabled && logLevel === 'body') {
+                        const id = crypto.randomUUID();
+                        bodyLog = { id, key: recordBodyLog({ id, type: 'request', time: Date.now(), body: serializedBody }) };
+                    }
+                    const response = await fetch(requestUrl, {
+                        method: 'POST',
+                        headers,
+                        body: serializedBody,
+                        signal: requestSignal
+                    });
+                    if (bodyLog) void recordResponseBody(response, bodyLog);
+                    return response;
+                };
+                const { body, response } = messagesEndpoint
+                    ? await AgentProtocol.sendMessagesWithCacheFallback(requestBody, post)
+                    : { body: requestBody, response: await post(requestBody) };
+                if (requestDecorated && await options.retryWithoutDecoration?.(response)) {
+                    void response.body?.cancel().catch(() => {});
+                    return send(endpoint, false, requestSignal);
+                }
+                return { response, endpoint, requestBody: body, requestDecorated };
             };
+
+            const nativeEndpoint = '/v1/messages';
+            const preferClaudeNative = !options.disableFallback && AgentProtocol.isClaudeModel(basePayload.model);
+            if (preferClaudeNative) {
+                if (preferredEndpoint === nativeEndpoint || preferredEndpoint === '/messages') return send(preferredEndpoint);
+                if (!options.skipClaudeNative) {
+                    const { result, status } = await AgentProtocol.tryMessagesRequest(
+                        probeSignal => send(nativeEndpoint, true, probeSignal), signal
+                    );
+                    if (result) return result;
+                    options.onClaudeNativeUnavailable?.();
+                    const httpStatus = status >= 400 ? status : undefined;
+                    const reason = httpStatus ? `Claude 原生接口返回 ${httpStatus}` : 'Claude 原生接口未正常响应';
+                    const notice = `${reason}，正在转接至 ${preferredEndpoint}`;
+                    appendLog('info', notice);
+                    showVoiceNotification(notice, false, 3000, false, 'warning');
+                    options.onFallback?.({ from: nativeEndpoint, to: preferredEndpoint, status: httpStatus, reason });
+                }
+                return send(preferredEndpoint);
+            }
 
             let result = await send(preferredEndpoint);
             // 原生协议没有对应的等价端点，不参与 501 自动转接。
@@ -6375,6 +6407,16 @@
         let logLevel = localStorage.getItem('log_level') || 'info';
         let recordLogsEnabled = localStorage.getItem('record_logs') === 'true';
         let logRecords = loadLogRecords();
+        window.addEventListener('storage', event => {
+            if (event.storageArea !== localStorage) return;
+            if (event.key === 'log_records') logRecords = loadLogRecords();
+            if (['developer_mode', 'log_level', 'record_logs'].includes(event.key)) {
+                developerModeEnabled = localStorage.getItem('developer_mode') === 'true';
+                logLevel = localStorage.getItem('log_level') || 'info';
+                recordLogsEnabled = localStorage.getItem('record_logs') === 'true';
+                populateAdvancedSettings();
+            }
+        });
         let streamBytesReceived = 0;
         let pendingSettings = null;
         let apiSettingsDirty = false;
@@ -6392,6 +6434,7 @@
         };
 
         function shouldLog(level) {
+            if (logLevel === 'body') return false;
             const currentPriority = LOG_LEVEL_PRIORITIES[logLevel] ?? LOG_LEVEL_PRIORITIES.info;
             const levelPriority = LOG_LEVEL_PRIORITIES[level] ?? LOG_LEVEL_PRIORITIES.info;
             return levelPriority >= currentPriority;
@@ -6791,7 +6834,7 @@
             }
 
             if (chat.agentEnabled && typeof window.buildAgentMessagesForContextEstimate === 'function') {
-                return normalize(await window.buildAgentMessagesForContextEstimate(chat));
+                return normalize(await window.buildAgentMessagesForContextEstimate(chat, model));
             }
 
             const messages = await buildAPIMessagesWithContext(chat);
@@ -10660,18 +10703,90 @@
             localStorage.setItem('log_records', JSON.stringify(logRecords));
         }
 
+        let bodyLogDatabase;
+
+        async function bodyLogTransaction(mode, operation) {
+            bodyLogDatabase ??= new Promise((resolve, reject) => {
+                const request = indexedDB.open('AIChatRequestLogs', 1);
+                request.onupgradeneeded = () => request.result.createObjectStore('bodies', { autoIncrement: true });
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }).catch(error => {
+                bodyLogDatabase = null;
+                throw error;
+            });
+            const db = await bodyLogDatabase;
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction('bodies', mode);
+                const request = operation(transaction.objectStore('bodies'));
+                transaction.oncomplete = () => resolve(request.result);
+                transaction.onabort = () => reject(transaction.error);
+            });
+        }
+
+        function recordBodyLog(entry, requestKey) {
+            return bodyLogTransaction('readwrite', store => {
+                const append = () => {
+                    const request = store.add(entry);
+                    request.onsuccess = () => {
+                        if (request.result > 2000) store.delete(IDBKeyRange.upperBound(request.result - 2000));
+                    };
+                    return request;
+                };
+                if (requestKey === undefined) return append();
+
+                // A response still arriving after the log was cleared should not recreate it.
+                const existing = store.getKey(requestKey);
+                existing.onsuccess = () => { if (existing.result !== undefined) append(); };
+                return existing;
+            }).catch(error => console.warn('Body 日志写入失败。', error));
+        }
+
+        async function recordResponseBody(response, { id, key }) {
+            const type = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+            const jsonOrStream = /^(?:application\/(?:json|[\w.+-]+\+json|(?:x-)?(?:ndjson|jsonlines|jsonl))|text\/event-stream)$/.test(type);
+            if (!jsonOrStream && type && type !== 'text/plain') return;
+
+            try {
+                const reader = response.clone().body?.getReader();
+                if (!reader) return;
+                const decoder = new TextDecoder('utf-8', { ignoreBOM: true });
+                const chunks = [];
+                try {
+                    for (;;) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(decoder.decode(value, { stream: true }));
+                    }
+                } catch {
+                    // Keep data received before the connection was interrupted.
+                } finally {
+                    reader.releaseLock();
+                }
+                chunks.push(decoder.decode());
+                const time = Date.now();
+                const body = chunks.join('');
+                if (!body.trim() || (!jsonOrStream && !/^\s*(?:\{|\[|(?:data|event|id|retry):)/.test(body))) return;
+                const requestKey = await key;
+                if (requestKey !== undefined) await recordBodyLog({ id, type: 'response', time, body }, requestKey);
+            } catch (error) {
+                console.warn('Body 响应记录失败。', error);
+            }
+        }
+
         function appendLog(level, message) {
+            if (!shouldLog(level)) return;
             const entry = {
                 time: new Date().toISOString(),
                 level,
                 message
             };
-            if (recordLogsEnabled && shouldLog(level)) {
+            if (recordLogsEnabled) {
                 logRecords.push(entry);
                 if (logRecords.length > 2000) logRecords.shift();
                 saveLogRecords();
             }
-            if (developerModeEnabled && shouldLog(level)) {
+            if (developerModeEnabled) {
                 const formatted = `[${level.toUpperCase()}] ${entry.time} - ${message}`;
                 if (level === 'error') {
                     console.error(formatted);
@@ -10683,25 +10798,46 @@
             }
         }
 
-        function exportLogs() {
-            if (!logRecords.length) {
+        async function exportLogs() {
+            const exportBodies = logLevel === 'body';
+            let lines;
+            try {
+                lines = exportBodies
+                    ? (await bodyLogTransaction('readonly', store => store.getAll()))
+                        .sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
+                        .flatMap(entry => typeof entry === 'string' ? [entry] : [
+                            `${new Date(entry.time).toISOString()} [${entry.type === 'request' ? '请求' : '响应'} ${entry.id}]`,
+                            entry.body
+                        ])
+                    : logRecords.map(item => `${item.time} [${item.level.toUpperCase()}] ${item.message}`);
+            } catch (error) {
+                console.warn('Body 日志读取失败。', error);
+                alert('无法读取 Body 日志。');
+                return;
+            }
+            if (!lines.length) {
                 alert('当前没有可导出的日志。');
                 return;
             }
-            const lines = logRecords.map(item => `${item.time} [${item.level.toUpperCase()}] ${item.message}`);
             const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `aiui-logs-${Date.now()}.txt`;
+            a.download = `${exportBodies ? 'aiui-body' : 'aiui-logs'}-${Date.now()}.txt`;
             a.click();
             URL.revokeObjectURL(url);
         }
 
-        function clearLogs(silent = false) {
-            logRecords = [];
-            saveLogRecords();
-            if (!silent) alert('日志已清除。');
+        async function clearLogs(silent = false) {
+            try {
+                await bodyLogTransaction('readwrite', store => store.clear());
+                logRecords = [];
+                saveLogRecords();
+                if (!silent) alert('日志已清除。');
+            } catch (error) {
+                console.warn('日志清除失败。', error);
+                if (!silent) alert('无法清除日志。');
+            }
         }
 
         function onMathRenderToggleChange() {

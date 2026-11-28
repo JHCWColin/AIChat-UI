@@ -17,7 +17,6 @@ const root = path.resolve(__dirname, "..");
 function loadInlineAdapter() {
     const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
     const names = [
-        "ANTHROPIC_API_VERSION",
         "getRequestEndpoint",
         "buildMessagesPayloadFromBase",
         "buildMessagesContentBlocks",
@@ -28,7 +27,6 @@ function loadInlineAdapter() {
         "extractResponsesTextContent",
         "extractChatCompletionUpdate",
         "mergeStreamingText",
-        "cacheControlEnabled",
         "extractStreamingUpdate",
         "getStreamingErrorMessage",
         "extractNonStreamingResponseText",
@@ -90,7 +88,6 @@ test("recognizes the messages endpoint from storage in both spellings", () => {
 
 test("moves system messages into the top-level system field", () => {
     const payload = api.buildMessagesPayloadFromBase({
-        model: "claude-opus-5-5",
         max_tokens: 8000,
         messages: [
             { role: "system", content: "You are a coding agent." },
@@ -131,7 +128,7 @@ test("drops sampling parameters that current Claude models reject", () => {
 
 test("keeps max_tokens and does not leak OpenAI-only fields", () => {
     const payload = api.buildMessagesPayloadFromBase({
-        model: "claude-opus-5-5",
+        model: "non-claude-messages-model",
         max_tokens: 4096,
         prompt_cache_key: "cache-key",
         cache_control: "ephemeral",
@@ -221,7 +218,7 @@ test("keeps Claude relay thinking out of streamed prose and the next request pre
     const next = api.buildRequestPayloadForEndpoint({ messages: [...messages, { role: "user", content: "next" }],
         model: "claude-opus-5-5" }, "/v1/messages");
     same(next.messages.slice(0, -1), initial.messages);
-    assert.equal(next.system, initial.system);
+    same(next.system, initial.system);
     assert.doesNotMatch(JSON.stringify(next), /private|opaque|signature/);
 });
 
@@ -263,7 +260,8 @@ test("builds a messages payload through the endpoint dispatcher", () => {
             { role: "user", content: "hi" }
         ]
     }, "/v1/messages");
-    assert.equal(payload.system, "sys");
+    same(payload.system, [{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }]);
+    same(payload.cache_control, { type: "ephemeral" });
     assert.equal(payload.max_tokens, 1000);
     assert.equal(payload.messages.length, 1);
     assert.equal("input" in payload, false);
@@ -278,4 +276,43 @@ test("attach cache_control to the system block when ephemeral caching is on", ()
         ]
     });
     same(payload.system, [{ type: "text", text: "sys", cache_control: { type: "ephemeral" } }]);
+});
+
+test("ordinary Claude chat writes stable system and rolling cache breakpoints on both turns", () => {
+    const firstMessages = [
+        { role: "system", content: "Stable system instructions and memory snapshot" },
+        { role: "user", content: "Hello!" }
+    ];
+    const first = api.buildRequestPayloadForEndpoint({ model: "claude-haiku-5-5", messages: firstMessages }, "/v1/messages");
+    const second = api.buildRequestPayloadForEndpoint({ model: "claude-haiku-5-5", messages: [...firstMessages,
+        { role: "assistant", content: "Hello!", reasoning: "Private thinking" },
+        { role: "user", content: "What do you remember?" }
+    ] }, "/v1/messages");
+    same(first.cache_control, { type: "ephemeral" });
+    same(second.cache_control, first.cache_control);
+    same(first.system, [{ type: "text", text: firstMessages[0].content, cache_control: { type: "ephemeral" } }]);
+    same(second.system, first.system);
+    same(second.messages.slice(0, first.messages.length), first.messages);
+    assert.doesNotMatch(JSON.stringify(second), /Private thinking/);
+});
+
+test("native gateways that reject top-level cache control keep Claude on explicit breakpoints", async () => {
+    const body = api.buildRequestPayloadForEndpoint({ model: "claude-haiku-5-5", messages: [
+        { role: "system", content: "Stable instructions" },
+        { role: "user", content: "Hello!" }
+    ] }, "/v1/messages");
+    const calls = [];
+    const result = await AgentProtocol.sendMessagesWithCacheFallback(body, request => {
+        calls.push(request);
+        return calls.length === 1
+            ? Response.json({ error: { message: "cache_control: Extra inputs are not permitted" } }, { status: 400 })
+            : Response.json({ type: "message", content: [{ type: "text", text: "Hello!" }] });
+    });
+    assert.equal(result.response.status, 200);
+    assert.equal(calls.length, 2);
+    assert.equal(result.body, calls[1]);
+    assert.equal("cache_control" in result.body, false);
+    same(result.body.system, body.system);
+    same(result.body.messages[0].content, [{ type: "text", text: "Hello!", cache_control: { type: "ephemeral" } }]);
+    same(body.messages[0].content, [{ type: "text", text: "Hello!" }]);
 });

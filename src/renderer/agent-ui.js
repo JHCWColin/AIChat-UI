@@ -651,7 +651,8 @@
         if (!wrapper) return null;
         const row = document.createElement("div");
         row.className = "chat-row agent-tool-row-wrapper agent-endpoint-fallback-row";
-        row.innerHTML = `<div class="agent-tool-row warning running"><div class="agent-tool-summary"><i data-lucide="route"></i><span class="agent-tool-summary-text">接口返回 501，正在转接至 ${escapeHtml(info?.to || "备用接口")}</span></div></div>`;
+        row.innerHTML = `<div class="agent-tool-row warning running"><div class="agent-tool-summary"><i data-lucide="route"></i><span class="agent-tool-summary-text"></span></div></div>`;
+        row.querySelector(".agent-tool-summary-text").textContent = `${info.reason || `接口返回 ${info.status}`}，正在转接至 ${info.to}`;
         wrapper.appendChild(row);
         lucide.createIcons();
         placeAgentTaskFooter();
@@ -1335,6 +1336,7 @@
     }
 
     async function buildAgentMessages(chat, options = {}) {
+        const isClaude = AgentProtocol.isClaudeModel(options.model || chat.agentModel);
         const latestUser = [...(chat.messages || [])].reverse().find(message => message?.role === "user" && message.hidden !== true);
         const compacted = buildCompactedChatMessages(chat);
         if (!chat.agentFixedPrompt?.includes(AgentProtocol.CORE_AGENT_RULES)) {
@@ -1349,16 +1351,23 @@
             if (options.estimateOnly !== true) persistAgentChats();
         }
         const memoryContext = options.memoryAllowed === false ? "" : window.AIUIMemory?.getContext(chat, options);
+        const fixedPrompt = isClaude
+            ? `${chat.agentFixedPrompt}\n\nUse the most recent plan from a successful update_plan result or a Current Task Plan notice. Mark a step in_progress before starting it and completed once it is verified.`
+            : chat.agentFixedPrompt;
         const result = [{
             role: "system",
-            content: memoryContext ? [chat.agentFixedPrompt, memoryContext,
+            content: memoryContext ? [fixedPrompt, memoryContext,
                 "The JSON-only Agent rules apply to workspace tools, with finish_task as the last workspace call. When the optional native manage_memory tool is available, it is the sole exception to those rules. Use it only after the complete user-facing answer, and keep its call out of prose and the Agent JSON protocol."
-            ].join("\n\n") : chat.agentFixedPrompt
+            ].join("\n\n") : fixedPrompt
         }];
+        let lastPlanResult;
+        let afterLastPlan = result.length;
         for (const message of compacted) {
             if (message?.agentDisplayOnly === true) continue;
             if (message?.role === "tool") {
-                const content = message.content || (message.contentRef ? await agentResultStore.get(message.contentRef) : "");
+                let content = message.content || (message.contentRef ? await agentResultStore.get(message.contentRef) : "");
+                const isPlan = isClaude && (message.toolName || message.name) === "update_plan";
+                if (isPlan && !content && message.result?.success === true) content = JSON.stringify(message.result);
                 let imageResult = message.result;
                 if (message.toolName === "view_image" && !imageResult && content) {
                     try { imageResult = JSON.parse(content); } catch (_) { /* retain legacy plain-text results */ }
@@ -1376,8 +1385,15 @@
                 }
                 result.push({
                     role: "user",
-                    content: `[Tool Result: ${String(message.toolName || "unknown")}]\n${String(content || "")}`
+                    content: `[Tool Result: ${isPlan ? "update_plan" : String(message.toolName || "unknown")}]\n${String(content || "")}`
                 });
+                if (isPlan) {
+                    const planResult = readAgentPlanResult(content);
+                    if (planResult) {
+                        lastPlanResult = planResult;
+                        afterLastPlan = result.length;
+                    }
+                }
             } else if (message?.role === "user" || message?.role === "assistant" || message?.role === "system") {
                 const built = await buildSingleApiMessage(message, chat, message === latestUser);
                 if (message.role === "assistant") {
@@ -1388,20 +1404,24 @@
                 result.push(built);
             }
         }
-        // The live plan changes every few turns, so it goes after the cached history
-        // prefix rather than inside the fixed prompt or reordering prior turns.
-        const planContext = formatAgentPlanForContext(chat);
-        if (planContext) result.splice(result.length - (options.queuedCount || 0), 0, { role: "user", content: planContext });
+        const plan = agentPlansByChat.get(chat.id) || chat.agentPlan;
+        if (!isClaude || !agentPlanMatchesResult(plan, lastPlanResult)) {
+            const planContext = formatAgentPlanForContext(plan);
+            // Keep a saved Claude plan with no matching tool result at a fixed location.
+            const planIndex = isClaude ? afterLastPlan : result.length - (options.queuedCount || 0);
+            if (planContext) result.splice(planIndex, 0, { role: "user", content: planContext });
+        }
         return result;
     }
 
     async function requestAgentModel(chat, model, signal, options) {
         const requestMetrics = window.AIUIRequestMetrics?.create();
-        const { memoryAllowed, memoryFollowup, onText, onReasoning, onBackendProgress } = options;
+        const { memoryAllowed, memoryFollowup, onText, onReasoning, onBackendProgress, claudeRoute } = options;
         const transport = window.AIUIMemoryTransport;
         const memoryEnabled = memoryAllowed && window.AIUIMemory?.isEnabled();
         const memoryTool = memoryEnabled && transport && window.AIUIMemory.getTool();
-        const messages = await buildAgentMessages(chat, { memoryAllowed, queuedCount: options.queuedCount });
+        const isClaude = AgentProtocol.isClaudeModel(model);
+        const messages = await buildAgentMessages(chat, { model, memoryAllowed, queuedCount: options.queuedCount });
         if (memoryFollowup) messages.push({ role: "user",
             content: "The previous response contained a housekeeping tool call but no complete answer. Provide the actual final answer now, then finish the Agent task. Do not repeat the housekeeping call."
         });
@@ -1427,6 +1447,8 @@
         let fallbackRow;
         const { response, endpoint, requestBody, requestDecorated } = await fetchEndpointWithFallback(basePayload, preferredEndpoint, signal, {
             redactDiagnostics: Boolean(memoryEnabled),
+            skipClaudeNative: claudeRoute?.nativeUnavailable === true,
+            onClaudeNativeUnavailable: () => { if (claudeRoute) claudeRoute.nativeUnavailable = true; },
             ...(memoryTool ? {
                 decorateRequest: (body, targetEndpoint) => transport.declareTool(body, targetEndpoint, memoryTool),
                 retryWithoutDecoration: transport.isUnsupportedToolError
@@ -1454,6 +1476,9 @@
         const debugStream = developerModeEnabled && (logLevel === "debug" || logLevel === "trace");
         const traceStream = developerModeEnabled && logLevel === "trace" && !memoryEnabled;
         const ndjsonStream = typeof isOllamaEndpoint === "function" && isOllamaEndpoint(endpoint);
+        const splitTaggedThinking = isClaude && (endpoint === "/responses" || endpoint === "/chat/completions");
+        let wireText = "";
+        let structuredReasoning = "";
         let fullText = "";
         let reasoningText = "";
         const responsePayloads = [];
@@ -1464,6 +1489,18 @@
         let sawStreamEvent = false;
         let sawDoneMarker = false;
         let lastOutputComplete = false;
+        const publishText = (streaming = false) => {
+            const extracted = splitTaggedThinking ? AgentProtocol.splitLeadingTaggedReasoning(wireText, streaming) : { text: wireText };
+            const nextReasoning = [structuredReasoning, extracted.reasoning].filter(Boolean).join("\n\n");
+            if (nextReasoning !== reasoningText) {
+                reasoningText = nextReasoning;
+                onReasoning(reasoningText);
+            }
+            if (extracted.text !== fullText) {
+                fullText = extracted.text;
+                if (streaming) onText(fullText);
+            }
+        };
         const applyPayload = (payload, streaming, eventType = "") => {
             if (!payload || typeof payload !== "object") throw new Error("模型返回了无效的响应格式");
             if (!payload.type && eventType) payload = { ...payload, type: eventType };
@@ -1487,21 +1524,14 @@
             lastOutputComplete = ["response.output_item.done", "response.output_text.done", "response.content_part.done"].includes(payload.type)
                 || Boolean(payload.choices?.[0]?.message);
             const update = extractStreamingUpdate(payload, endpoint, messageBlockTypes);
-            if (requestMetrics) {
-                window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
-                window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
-            }
-            const nextText = streaming
-                ? mergeStreamingText(fullText, update.contentDelta, update.contentSnapshot)
+            wireText = streaming ? mergeStreamingText(wireText, update.contentDelta, update.contentSnapshot)
                 : extractNonStreamingResponseText(payload, endpoint);
-            if (nextText !== fullText) {
-                fullText = nextText;
-                if (streaming) onText(fullText);
-            }
-            const nextReasoning = mergeStreamingText(reasoningText, update.reasoningDelta, update.reasoningSnapshot);
-            if (nextReasoning !== reasoningText) {
-                reasoningText = nextReasoning;
-                onReasoning(reasoningText);
+            structuredReasoning = mergeStreamingText(structuredReasoning, update.reasoningDelta, update.reasoningSnapshot);
+            publishText(streaming);
+            if (requestMetrics) {
+                window.AIUIRequestMetrics.ingest(requestMetrics, payload, splitTaggedThinking
+                    ? { contentSnapshot: fullText, reasoningSnapshot: reasoningText } : update);
+                window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
             }
         };
         const consume = block => {
@@ -1548,6 +1578,7 @@
             appendLog("debug", `Agent 流式输出接收完毕，累计 ${bytes} 字节`);
         }
         signal.throwIfAborted();
+        publishText();
         const memoryCalls = memoryCollector?.finish() || [];
         const toolCalls = ToolCallNormalizer.canonicalizeToolCalls(ToolCallNormalizer.normalizeToolCalls(responsePayloads));
         if (!fullText.trim() && !reasoningText.trim() && !toolCalls.length && !memoryCalls.length && !completion.tokenLimited) {
@@ -1656,10 +1687,9 @@
         };
     }
 
-    async function requestAgentModelWithRetry(chat, model, options) {
+    async function requestAgentModelWithRetry(chat, model, preview, options) {
         agentModelController = new AbortController();
         const { signal } = agentModelController;
-        const preview = createAgentTextPreview(model);
         let retryRow;
         let thinkingRow = appendAgentThinkingRow();
         try {
@@ -1701,7 +1731,6 @@
             }
         } finally {
             agentModelController = null;
-            preview.clear();
             retryRow?.remove();
             window.agentReconnectNotice = "";
         }
@@ -2184,8 +2213,22 @@
         return lines;
     }
 
-    function formatAgentPlanForContext(chat) {
-        const plan = agentPlansByChat.get(chat.id) || chat.agentPlan;
+    function readAgentPlanResult(content) {
+        try {
+            const result = JSON.parse(content);
+            if (result?.success === true && Array.isArray(result.plan)) return result;
+        } catch (_) { /* legacy tool output can be plain text */ }
+        return null;
+    }
+
+    function agentPlanMatchesResult(plan, result) {
+        return result && Array.isArray(plan?.steps) && (plan.explanation || "") === (result.explanation || "")
+            && plan.steps.length === result.plan.length
+            && plan.steps.every((step, index) =>
+                step.step === result.plan[index]?.step && step.status === result.plan[index]?.status);
+    }
+
+    function formatAgentPlanForContext(plan) {
         const steps = Array.isArray(plan?.steps) ? plan.steps : [];
         if (!steps.length) return "";
         const lines = steps.map((step, index) => {
@@ -2354,8 +2397,11 @@
         resetUserTurn();
         let compactionCheckedAt = 0;
         let queuedCount = 0;
+        const claudeRoute = { nativeUnavailable: false };
+        const preview = createAgentTextPreview(model);
         try {
             while (!agentStopRequested) {
+                preview.clear();
                 // Check the context budget once per user-visible turn boundary rather
                 // than on every internal loop iteration.
                 if (Date.now() - compactionCheckedAt > 3000) {
@@ -2366,7 +2412,7 @@
                 const queued = consumeAgentMessages(chat);
                 if (queued.count) resetUserTurn(queued.gatewayInput);
                 queuedCount += queued.count;
-                const reply = await requestAgentModelWithRetry(chat, model, { memoryAllowed, memoryFollowup, queuedCount });
+                const reply = await requestAgentModelWithRetry(chat, model, preview, { memoryAllowed, memoryFollowup, queuedCount, claudeRoute });
                 if (!reply || agentStopRequested) continue;
                 queuedCount = 0;
                 const { result, thinkingRow } = reply;
@@ -2395,6 +2441,7 @@
                     }
                 }
                 if (!parsed.calls.length || parsed.hasMalformedToolCall) {
+                    preview.clear();
                     planOnlyResponses = 0;
                     const responseText = parsed.hasMalformedToolCall
                         ? ""
@@ -2458,8 +2505,12 @@
                 let lastVisibleText = null;
                 let retryMissingFinal = false;
                 const deferredAnswerSegments = [];
-                const deferAnswer = finishSegmentIndex >= 0 && parsed.segments.slice(0, finishSegmentIndex)
-                    .some(segment => segment.type === "tool_call");
+                const toolsBeforeFinish = finishSegmentIndex < 0 ? [] : parsed.segments.slice(0, finishSegmentIndex)
+                    .filter(segment => segment.type === "tool_call");
+                const deferAnswer = toolsBeforeFinish.length > 0;
+                // Plan updates can finish while the already-visible answer stays on screen.
+                // Final transcript rendering replaces this preview once the answer is committed.
+                if (!deferAnswer || toolsBeforeFinish.some(segment => segment.call.name !== "update_plan")) preview.clear();
                 // Tool rows are rendered immediately in segment order so the transcript
                 // stays readable, then executed as one batch (reads in parallel).
                 const pendingToolItems = [];
@@ -2486,6 +2537,7 @@
                         const failedTools = pendingToolItems.filter(item => item.message.status === "error" || item.message.result?.success === false);
                         pendingToolItems.length = 0;
                         if (failedTools.length) {
+                            preview.clear();
                             pendingMemoryCalls = [];
                             finishBatchFailures += 1;
                             const failedNames = [...new Set(failedTools.map(item => item.call.name))].join("、");
@@ -2524,6 +2576,7 @@
                             finalTextAdded = true;
                         }
                         if (!finalTextAdded) {
+                            preview.clear();
                             missingFinalResponses += 1;
                             const rejectedFinish = prepareAgentToolMessage(chat, call);
                             await finalizeAgentToolResult(chat, call, rejectedFinish, { success: false, incomplete: true,
@@ -2572,6 +2625,7 @@
                 } else planOnlyResponses = 0;
             }
         } catch (error) {
+            preview.clear();
             autoRead?.finish(true);
             if (error?.name !== "AbortError" && !agentStopRequested) {
                 window.AIUIEnhancements?.failed(chat);
@@ -2580,6 +2634,7 @@
                 persistAgentChats();
             }
         } finally {
+            if (agentStopRequested) preview.clear();
             autoRead?.finish(agentStopRequested);
             hideVoiceNotification();
             if (agentStopRequested && !chat.messages.at(-1)?.agentFinal) {
@@ -2599,7 +2654,7 @@
             document.getElementById("send-btn")?.classList.remove("hidden");
             document.getElementById("stop-btn")?.classList.add("hidden");
             renderChatHistory();
-            await renderMessagesWithResolvedRefs(chat.messages);
+            await renderMessagesWithResolvedRefs(chat.messages).finally(preview.clear);
             updateAgentUIForChat(chat);
             if (!agentStopRequested && getQueuedAgentMessages(chat.id).length) {
                 setTimeout(() => {
@@ -2795,7 +2850,7 @@
         queueAgentMessage(chat, content, attachments);
         return true;
     };
-    window.buildAgentMessagesForContextEstimate = chat => buildAgentMessages(chat, { estimateOnly: true });
+    window.buildAgentMessagesForContextEstimate = (chat, model) => buildAgentMessages(chat, { model, estimateOnly: true });
     window.submitGatewayAgentMessage = submitGatewayAgentMessage;
     window.getAgentStoredResult = key => agentResultStore.get(key);
     // The gateway reads only the active reasoning text, never raw model payloads.
