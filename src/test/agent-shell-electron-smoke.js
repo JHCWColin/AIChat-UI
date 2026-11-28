@@ -119,6 +119,22 @@ app.whenReady().then(async () => {
         assert.ok(view.lines <= 2);
         assert.equal(view.hasBrokenChar, false);
 
+        phase = "plain command preview";
+        const commandPreview = await evaluate(() => {
+            const command = 'Write-Output "<tag>"\n  next line';
+            const row = window.appendAgentToolMessageToUI({ toolId: "plain-text", toolName: "run_shell", status: "done",
+                arguments: { command }, result: { stdout: "output" } });
+            const preview = row.querySelector(".agent-command-preview");
+            return ["light", "dark"].map(theme => {
+                setTheme(theme, false);
+                const style = getComputedStyle(preview);
+                return { text: preview.textContent, nodes: preview.children.length, background: style.backgroundColor,
+                    whitespace: style.whiteSpace, color: style.color };
+            });
+        });
+        const previewText = { text: '$ Write-Output "<tag>"\n  next line', nodes: 0, background: "rgba(0, 0, 0, 0)", whitespace: "pre-wrap" };
+        assert.deepEqual(commandPreview, ["rgb(39, 38, 36)", "rgb(231, 231, 231)"].map(color => ({ ...previewText, color })));
+
         phase = "foreground cancellation";
         const cancel = async (id, wait) => evaluate(async (id, command, wait) => {
             let off;

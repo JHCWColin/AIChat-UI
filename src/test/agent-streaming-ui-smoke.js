@@ -158,10 +158,20 @@ app.whenReady().then(async () => {
         const final = await request(4);
         assert.equal(inputText(final).at(-1), queued);
         assert.match(inputText(final).at(-2), /Tool Result: read_file_range/);
-        const answer = "建议从 `src/index.js` 读起。先核对它在项目说明中的路径，再运行项目自带的测试确认入口能正常加载。";
-        delta(final, answer);
+        const prose = "建议从 `src/index.js` 读起。先核对它在项目说明中的路径，再运行项目自带的测试确认入口能正常加载。";
+        const openFence = "\n\n```text\n  entry point";
+        const answer = `${prose}${openFence}\n\`\`\``;
+        await evaluate(main, "setTheme('light', false)");
+        delta(final, prose + openFence);
+        const liveCode = await until(() => evaluate(main, `(() => {
+            const code = document.querySelector('.agent-streaming-row pre > code');
+            return code && { text: code.textContent, color: getComputedStyle(code).color };
+        })()`), "readable unclosed streamed code fence");
+        assert.deepEqual(liveCode, { text: "  entry point\n", color: "rgb(201, 209, 217)" });
+        await evaluate(main, "setTheme('dark', false)");
         finish(final, [message(`${answer}\n${tool("finish_task")}`)]);
         await until(() => evaluate(main, "!isGenerating && document.querySelector('.agent-final-row .message-time')?.textContent"), "final answer committed");
+        assert.equal(await evaluate(main, "document.querySelector('.agent-final-row pre > code.hljs')?.textContent"), "  entry point\n");
         await until(() => evaluate(main, `(() => {
             const progress = [...document.querySelectorAll('.agent-segment-row')];
             const final = document.querySelector('.agent-final-row');
@@ -176,7 +186,7 @@ app.whenReady().then(async () => {
         const { root } = await cdp.sendCommand("DOM.getDocument");
         const { nodeId } = await cdp.sendCommand("DOM.querySelector", { nodeId: root.nodeId, selector: ".agent-final-row .message-footer" });
         await cdp.sendCommand("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: ["hover"] });
-        await until(() => evaluate(main, "getComputedStyle(document.querySelector('.agent-final-row .copy-icon-btn')).opacity === '1'"), "visible final copy and playback buttons");
+        await until(() => evaluate(main, "getComputedStyle(document.querySelector('.agent-final-row .message-footer .copy-icon-btn')).opacity === '1'"), "visible final copy and playback buttons");
         await capture(main, "AIUI-V10.3.0-Agent-final.png");
         await cdp.sendCommand("CSS.forcePseudoState", { nodeId, forcedPseudoClasses: [] });
 

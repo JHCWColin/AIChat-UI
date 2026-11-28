@@ -278,10 +278,20 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Fo
         return collectResponsesReasoningItems({ output: state.items });
     }
 
+    function isAssistantReasoningPart(part) {
+        return /^(?:thinking|redacted_thinking|reasoning(?:[._](?:text|summary|encrypted))?)$/.test(part?.type || '');
+    }
+
+    function extractAssistantReasoningPart(part) {
+        if (!isAssistantReasoningPart(part) || /redacted|encrypted/.test(part.type)) return "";
+        const text = part.thinking ?? part.text ?? part.summary;
+        return typeof text === "string" ? text : "";
+    }
+
     function stripAssistantReasoningContent(content) {
         if (typeof content === "string") return stripReasoningSections(content);
         if (!Array.isArray(content)) return content;
-        return content.filter(part => !["thinking", "reasoning", "redacted_thinking"].includes(part?.type))
+        return content.filter(part => !isAssistantReasoningPart(part))
             .map(part => part && typeof part === "object" && typeof part.text === "string"
                 ? { ...part, text: stripReasoningSections(part.text) } : part);
     }
@@ -394,6 +404,8 @@ IMPORTANT: These rules define the tool-calling protocol for this environment. Fo
         stripDsmlProtocol,
         stripReasoningSections,
         stripAssistantReasoningContent,
+        isAssistantReasoningPart,
+        extractAssistantReasoningPart,
         collectResponsesReasoningItems,
         createResponsesReasoningState,
         getResponsesReasoningItems,

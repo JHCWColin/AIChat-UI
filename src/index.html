@@ -4308,7 +4308,7 @@
                         </p>
                         <p class="leading-relaxed">
                             <strong class="text-gray-300">版本</strong><br>
-                            <span id="app-version">V10.3.0 Release</span>
+                            <span id="app-version">V10.4.0 Release</span>
                             <span id="available-update-version" class="hidden ml-2 text-emerald-400"></span>
                             <button type="button" onclick="checkForUpdatesManually()"
                                 class="ml-2 px-2 py-1 rounded-lg border border-gray-700 text-[11px] hover:border-emerald-500 hover:text-emerald-400">检查更新</button>
@@ -5695,38 +5695,38 @@
             if (!payload || typeof payload !== 'object') return '';
             const blocks = Array.isArray(payload.content) ? payload.content : [];
             return blocks
-                .filter(block => block?.type === 'thinking' || block?.type === 'redacted_thinking')
-                .map(block => String(block.thinking || block.data || ''))
-                .filter(Boolean)
+                .map(AgentProtocol.extractAssistantReasoningPart)
                 .join('');
         }
 
-        function extractMessagesStreamUpdate(payload) {
+        function extractMessagesStreamUpdate(payload, blockTypes) {
             const type = String(payload?.type || '');
             const delta = payload?.delta && typeof payload.delta === 'object' ? payload.delta : {};
             if (type === 'content_block_delta') {
-                if (delta.type === 'text_delta' || typeof delta.text === 'string') {
-                    return { contentDelta: String(delta.text || '') };
+                const blockType = blockTypes?.get(payload.index);
+                if (blockType === 'redacted_thinking' || (delta.type && !['text_delta', 'thinking_delta'].includes(delta.type))) {
+                    return {};
                 }
-                if (delta.type === 'thinking_delta' || typeof delta.thinking === 'string') {
-                    return { reasoningDelta: String(delta.thinking || '') };
+                if (blockType === 'thinking' || delta.type === 'thinking_delta' || typeof delta.thinking === 'string') {
+                    return { reasoningDelta: String(delta.thinking || delta.text || '') };
                 }
-                return {};
+                return (!blockType || blockType === 'text') && typeof delta.text === 'string' ? { contentDelta: delta.text } : {};
             }
             if (type === 'content_block_start') {
                 const block = payload?.content_block || {};
-                if (block.type === 'text') return { contentSnapshot: String(block.text || '') };
-                if (block.type === 'thinking') return { reasoningSnapshot: String(block.thinking || '') };
+                if (Number.isInteger(payload.index)) blockTypes?.set(payload.index, block.type);
+                if (block.type === 'text') return { contentDelta: String(block.text || '') };
+                if (AgentProtocol.isAssistantReasoningPart(block)) {
+                    const reasoningDelta = AgentProtocol.extractAssistantReasoningPart(block);
+                    if (reasoningDelta) return { reasoningDelta };
+                }
                 return {};
             }
-            if (type === 'message_start' || type === 'message_delta') {
-                // message_delta carries only stop_reason/usage, never user-visible text.
-                return {};
-            }
-            if (!type) {
+            if (!type || type === 'message' || (type === 'message_start' && Array.isArray(payload.message?.content))) {
+                const message = type === 'message_start' ? payload.message : payload;
                 return {
-                    contentSnapshot: extractMessagesOutputText(payload),
-                    reasoningSnapshot: extractMessagesReasoningText(payload)
+                    contentSnapshot: extractMessagesOutputText(message),
+                    reasoningSnapshot: extractMessagesReasoningText(message)
                 };
             }
             return {};
@@ -6055,23 +6055,31 @@
             if (!choice || typeof choice !== 'object') return {};
             const delta = choice.delta && typeof choice.delta === 'object' ? choice.delta : {};
             const message = choice.message && typeof choice.message === 'object' ? choice.message : {};
+            const extractContent = content => extractResponsesTextContent(Array.isArray(content)
+                ? content.filter(part => !AgentProtocol.isAssistantReasoningPart(part))
+                : AgentProtocol.isAssistantReasoningPart(content) ? '' : content);
+            const extractReasoning = part => {
+                const explicit = [part.reasoning_content, part.reasoning, part.thinking]
+                    .find(text => typeof text === 'string' && text);
+                if (explicit) return explicit;
+                const details = Array.isArray(part.reasoning_details) ? part.reasoning_details : [];
+                const content = Array.isArray(part.content) ? part.content : [part.content];
+                return details.map(AgentProtocol.extractAssistantReasoningPart).join('')
+                    || content.map(AgentProtocol.extractAssistantReasoningPart).join('');
+            };
             return {
-                contentDelta: extractResponsesTextContent(delta.content || choice.text),
-                reasoningDelta: typeof delta.reasoning_content === 'string'
-                    ? delta.reasoning_content
-                    : (typeof delta.reasoning === 'string' ? delta.reasoning : ''),
-                contentSnapshot: extractResponsesTextContent(message.content),
-                reasoningSnapshot: typeof message.reasoning_content === 'string'
-                    ? message.reasoning_content
-                    : (typeof message.reasoning === 'string' ? message.reasoning : '')
+                contentDelta: extractContent(delta.content || choice.text),
+                reasoningDelta: extractReasoning(delta),
+                contentSnapshot: extractContent(message.content),
+                reasoningSnapshot: extractReasoning(message)
             };
         }
 
-        function extractStreamingUpdate(payload, endpoint) {
+        function extractStreamingUpdate(payload, endpoint, messageBlockTypes) {
             if (!payload || typeof payload !== 'object') return {};
             if (isGeminiEndpoint(endpoint)) return extractGeminiStreamUpdate(payload);
             if (isOllamaEndpoint(endpoint)) return extractOllamaStreamUpdate(payload);
-            if (endpoint === '/v1/messages' || endpoint === '/messages') return extractMessagesStreamUpdate(payload);
+            if (endpoint === '/v1/messages' || endpoint === '/messages') return extractMessagesStreamUpdate(payload, messageBlockTypes);
             if (endpoint === '/chat/completions' || Array.isArray(payload.choices)) {
                 return extractChatCompletionUpdate(payload);
             }
@@ -10944,6 +10952,7 @@
                     let sseBuffer = '';
                     let sawSSEEvent = false;
                     const seenStreamEvents = new Set();
+                    const messageBlockTypes = new Map();
                     const renderLiveContent = () => {
                         if (rawFullContent) activity?.replying();
                         autoRead?.update({ role: 'assistant', content: rawFullContent }, voiceMessageKey, false);
@@ -10977,7 +10986,7 @@
                         responsePayloads.push(normalizedPayload);
                         memoryCollector?.ingest(normalizedPayload);
 
-                        const update = extractStreamingUpdate(normalizedPayload, endpoint);
+                        const update = extractStreamingUpdate(normalizedPayload, endpoint, messageBlockTypes);
                         if (requestMetrics) {
                             window.AIUIRequestMetrics.ingest(requestMetrics, normalizedPayload, update);
                             window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);

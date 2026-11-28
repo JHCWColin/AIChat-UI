@@ -10,7 +10,7 @@
 一个绑定了令牌后即可像大型AI官网那样Agent服务、文字畅聊、语音聊天、共享屏幕、修改代码的前端AI聊天框架。不依赖任何realtime模型，用http调用方法配合STT、TTS、VAD、预设语音等技术实现实时功能。
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-V10.3.0_Release-blue)]()
+[![Version](https://img.shields.io/badge/version-V10.4.0_Release-blue)]()
 [![Agent](https://img.shields.io/badge/Agent-AVALIABLE-f5f0e6)]()
 
 </div>
@@ -39,6 +39,10 @@ AIUI 是一个以单页前端为核心、同时提供 Electron 桌面壳的 AI �
 ---
 
 ## 最近更新
+
+### V10.4.0 Release
+
+- 修复流式代码块的文字对比度，Agent 命令详情改为纯文本，并将 Claude 思考内容从正文和后续请求历史中分离。[完整更新日志](UPDATE.md#v1040-release--2026-11-28)
 
 ### V10.3.0 Release
 
@@ -291,7 +295,7 @@ Android APK 使用仓库内的 `android-release.p12` 签名（alias `aiui`，口
 
 ## 版本信息
 
-- 当前版本：`V10.3.0 Release`
+- 当前版本：`V10.4.0 Release`
 - 当前构建标识：`build20261119`
 
 ---

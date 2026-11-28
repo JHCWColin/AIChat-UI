@@ -10,6 +10,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const AgentProtocol = require("../renderer/agent-protocol");
 
 const root = path.resolve(__dirname, "..");
 
@@ -25,6 +26,8 @@ function loadInlineAdapter() {
         "extractMessagesReasoningText",
         "extractMessagesStreamUpdate",
         "extractResponsesTextContent",
+        "extractChatCompletionUpdate",
+        "mergeStreamingText",
         "cacheControlEnabled",
         "extractStreamingUpdate",
         "getStreamingErrorMessage",
@@ -41,6 +44,7 @@ function loadInlineAdapter() {
         "extractOllamaOutputText"
     ];
     const context = {
+        AgentProtocol,
         localStorage: { getItem: () => null },
         document: { querySelectorAll: () => [], querySelector: () => null },
         console
@@ -182,11 +186,58 @@ test("routes streaming events to deltas by block type", () => {
     );
     same(
         api.extractMessagesStreamUpdate({ type: "content_block_start", content_block: { type: "text", text: "start" } }),
-        { contentSnapshot: "start" }
+        { contentDelta: "start" }
     );
     // message_delta carries only stop_reason/usage - it must never contribute text.
     same(api.extractMessagesStreamUpdate({ type: "message_delta", delta: { stop_reason: "end_turn" } }), {});
     same(api.extractMessagesStreamUpdate({ type: "message_start" }), {});
+});
+
+test("keeps Claude relay thinking out of streamed prose and the next request prefix", () => {
+    const blockTypes = new Map();
+    const events = [
+        { type: "content_block_start", index: 0, content_block: { type: "thinking", thinking: "private " } },
+        { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "thought" } },
+        { type: "content_block_delta", index: 0, delta: { type: "signature_delta", text: "signature" } },
+        { type: "content_block_start", index: 1, content_block: { type: "redacted_thinking", data: "opaque" } },
+        { type: "content_block_delta", index: 1, delta: { type: "text_delta", text: "opaque" } },
+        { type: "content_block_start", index: 2, content_block: { type: "text", text: "visible " } },
+        { type: "content_block_delta", index: 2, delta: { type: "text_delta", text: "answer" } },
+        { type: "content_block_start", index: 3, content_block: { type: "text", text: " again" } }
+    ];
+    let content = "";
+    let reasoning = "";
+    for (const event of events) {
+        const update = api.extractStreamingUpdate(event, "/v1/messages", blockTypes);
+        content = api.mergeStreamingText(content, update.contentDelta, update.contentSnapshot);
+        reasoning = api.mergeStreamingText(reasoning, update.reasoningDelta, update.reasoningSnapshot);
+    }
+    assert.equal(content, "visible answer again");
+    assert.equal(reasoning, "private thought");
+
+    const messages = [{ role: "system", content: "fixed prompt" }, { role: "user", content: "hello" },
+        { role: "assistant", content, reasoning_content: reasoning }];
+    const initial = api.buildRequestPayloadForEndpoint({ messages, model: "claude-opus-5-5" }, "/v1/messages");
+    const next = api.buildRequestPayloadForEndpoint({ messages: [...messages, { role: "user", content: "next" }],
+        model: "claude-opus-5-5" }, "/v1/messages");
+    same(next.messages.slice(0, -1), initial.messages);
+    assert.equal(next.system, initial.system);
+    assert.doesNotMatch(JSON.stringify(next), /private|opaque|signature/);
+});
+
+test("keeps reasoning and opaque data separate from completed and compatible Claude answers", () => {
+    const content = [{ type: "thinking", text: "separate thought" }, { type: "text", text: "answer" },
+        { type: "redacted_thinking", data: "opaque" }];
+    same(api.extractStreamingUpdate({ type: "message", content }, "/v1/messages"), {
+        contentSnapshot: "answer", reasoningSnapshot: "separate thought"
+    });
+    same(api.extractChatCompletionUpdate({ choices: [{ delta: { content }, message: { content: "answer",
+        reasoning_details: [{ type: "reasoning.encrypted", data: "opaque" }, { type: "reasoning.summary", summary: "summary" }] } }] }), {
+        contentDelta: "answer", reasoningDelta: "separate thought", contentSnapshot: "answer", reasoningSnapshot: "summary"
+    });
+    const request = api.buildRequestPayloadForEndpoint({ model: "claude-opus-5-5", messages: [{ role: "assistant",
+        content: [...content, { type: "reasoning.text", text: "old thought" }] }] }, "/chat/completions");
+    same(request.messages, [{ role: "assistant", content: [{ type: "text", text: "answer" }] }]);
 });
 
 test("surfaces Anthropic top-level error events as stream errors", () => {

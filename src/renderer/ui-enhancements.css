@@ -533,8 +533,7 @@ body:is(.theme-dark,.theme-light) .agent-round-detail .agent-tool-summary {
 @media (prefers-reduced-motion:reduce) {
     .agent-round-detail,.agent-round-detail .agent-tool-preview { transition:none; }
 }
-.agent-round-detail .agent-tool-preview-content,
-.agent-command-preview {
+.agent-round-detail .agent-tool-preview-content {
     font-family:"IBM Plex Mono",Consolas,monospace;
     font-size:inherit;
     line-height:1.55;
@@ -542,14 +541,11 @@ body:is(.theme-dark,.theme-light) .agent-round-detail .agent-tool-summary {
 }
 .agent-command-preview {
     margin:0 0 8px;
-    padding:8px 10px;
-    background:transparent;
-    border:1px solid var(--conversation-line);
-    border-radius:8px;
     color:var(--conversation-text);
     white-space:pre-wrap;
     overflow-wrap:anywhere;
 }
+.ai-content-area pre > code:not(.hljs) { color:#c9d1d9; }
 .agent-preview-output {
     max-height:280px;
     overflow:auto;

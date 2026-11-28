@@ -1,5 +1,11 @@
 # AIUI 更新日志
 
+## V10.4.0 Release · 2026-11-28
+
+- 修复流式回复中尚未高亮的 Markdown 代码块文字对比度，在流结束前也能读清代码。[#7](https://github.com/JHCWColin/AIChat-UI/issues/7)
+- Agent 工具详情中的命令改为纯文本，保留换行和缩进。[#8](https://github.com/JHCWColin/AIChat-UI/issues/8)
+- Claude Messages 与兼容接口单独解析思考和正文，后续请求历史只携带正文，避免思考内容污染缓存前缀。[#9](https://github.com/JHCWColin/AIChat-UI/issues/9)
+
 ## V10.3.0 Release · 2026-11-27
 
 - Agent 后端请求失败时最多自动重试 6 次，覆盖 HTTP 400、401、403、404、429、500 等错误，以及网络异常、空响应、无效响应和中断的回复流。重试原因与次数以红色扫光显示在聊天记录的活动区域中。

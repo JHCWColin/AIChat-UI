@@ -935,10 +935,10 @@
         toolRow.classList.remove("show-full-output");
         const command = ["run_shell", "start_process"].includes(message.toolName) && toolArguments(message).command;
         if (command) {
-            const code = document.createElement("pre");
-            code.className = "agent-command-preview";
-            code.textContent = "$ " + command;
-            previewContent.append(code);
+            const commandText = document.createElement("div");
+            commandText.className = "agent-command-preview";
+            commandText.textContent = "$ " + command;
+            previewContent.append(commandText);
         }
         const image = message.toolName === "view_image" && message.result?.success && message.result.dataUrl;
         if (image) {
@@ -1457,6 +1457,7 @@
         let fullText = "";
         let reasoningText = "";
         const responsePayloads = [];
+        const messageBlockTypes = new Map();
         const seenStreamEvents = new Set();
         let completion = {};
         let sawCompletion = false;
@@ -1485,7 +1486,7 @@
             sawCompletion ||= !streaming || isAgentStreamEnd(payload, completion);
             lastOutputComplete = ["response.output_item.done", "response.output_text.done", "response.content_part.done"].includes(payload.type)
                 || Boolean(payload.choices?.[0]?.message);
-            const update = extractStreamingUpdate(payload, endpoint);
+            const update = extractStreamingUpdate(payload, endpoint, messageBlockTypes);
             if (requestMetrics) {
                 window.AIUIRequestMetrics.ingest(requestMetrics, payload, update);
                 window.AIUIEnhancements?.requestMetrics(chat, requestMetrics);
